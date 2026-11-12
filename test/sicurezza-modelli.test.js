@@ -86,3 +86,51 @@ describe('password e permessi', () => {
     expect(hasRestrictions(p)).toBe(true);
   });
 });
+
+describe('modelli che non si sovrappongono (terzo giro della segreteria)', () => {
+  const trova = (t, models) => findMatches(t, buildMatchers({ models })).map((h) => `${h.matcher}: ${h.text}`);
+  const INCARICO = [
+    'DETERMINA DI AFFIDAMENTO INCARICO PROFESSIONALE',
+    'Il sottoscritto Mario Rossi, nato a Pisa (PI) il 10/12/1985, codice fiscale RSSMRA85T10A562S,',
+    'residente in Via Verdi 3, 56124 Pisa, tel. 050 315 2111, cellulare 333 123 4567 / +39 347 9876543,',
+    'email mario.rossi@example.it, IBAN IT60 X054 2811 1010 0000 0123 456.',
+    'Ente: ICCOM-CNR, C.F. 80054330586 – P.IVA 02118311006, Via Moruzzi 1, Pisa.',
+    'Ditta: Alfa Srl, Partita IVA 12345678903, con sede in Piazza dei Miracoli 12/B 56126 Pisa (PI).',
+    'Prot. n. 0012345 del 01/02/2026, CIG Z9F8E7D6C5. Fattura n. 0503152111 del 3 marzo 2026.',
+  ].join('\n');
+  it('con «Partita IVA» non spuntata le P.IVA restano visibili (nessun telefono falso)', () => {
+    const r = trova(INCARICO, ['cf', 'iban', 'email', 'tel']);
+    expect(r).toEqual([
+      'Codice fiscale: RSSMRA85T10A562S',
+      'Numero di telefono: 050 315 2111',
+      'Numero di telefono: 333 123 4567',
+      'Numero di telefono: +39 347 9876543',
+      'Indirizzo email: mario.rossi@example.it',
+      'IBAN: IT60 X054 2811 1010 0000 0123 456',
+    ]);
+    expect(r.join(' ')).not.toMatch(/12345678903|02118311006|80054330586|0012345|0503152111/);
+  });
+  it('con «Partita IVA» spuntata si trovano le P.IVA, come P.IVA', () => {
+    const r = trova(INCARICO, ['piva', 'tel']);
+    expect(r).toContain('Partita IVA: 12345678903');
+    expect(r).toContain('Partita IVA: 02118311006');
+    expect(r.filter((x) => x.startsWith('Numero di telefono'))).toHaveLength(3);
+  });
+  it('indirizzi e date di nascita (modelli facoltativi)', () => {
+    const r = trova(INCARICO, ['indirizzo', 'nascita']);
+    expect(r).toContain('Luogo e data di nascita: Pisa (PI) il 10/12/1985');
+    expect(r).toContain('Indirizzo (via e numero, CAP e comune): Via Verdi 3, 56124 Pisa');
+    expect(r).toContain('Indirizzo (via e numero, CAP e comune): Piazza dei Miracoli 12/B 56126 Pisa (PI)');
+    expect(r).toContain('Indirizzo (via e numero, CAP e comune): Via Moruzzi 1');
+    expect(trova('Data di nascita: 05/06/1970. Nata a San Giuliano Terme il 3 marzo 1990.', ['nascita']))
+      .toEqual(['Luogo e data di nascita: 05/06/1970', 'Luogo e data di nascita: San Giuliano Terme il 3 marzo 1990']);
+    // le date dei documenti non sono date di nascita
+    expect(trova('Determina del 01/02/2026, scadenza 31/12/2026.', ['nascita'])).toEqual([]);
+    expect(trova('Totale 12345 Euro', ['indirizzo'])).toEqual([]);
+  });
+  it('telefono: date, importi e numeri di protocollo non sono telefoni', () => {
+    expect(trova('il 01/02/2026 alle 10', ['tel'])).toEqual([]);
+    expect(trova('Prot. n. 0012345678', ['tel'])).toEqual([]);
+    expect(trova('chiamare lo 055 2345678 o lo 0039 06 12345678', ['tel'])).toHaveLength(2);
+  });
+});
