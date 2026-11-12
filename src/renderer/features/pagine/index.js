@@ -34,9 +34,7 @@ registerIcon('duplicate', '<rect x="8" y="8" width="12" height="13" rx="1.5"/><p
 
 export default function register(app) {
   installaOrganizza(app);
-  correggiDestroyPdfJs(app);
   installaTrascinamento(app);
-  correggiRiordinoNucleo(app);
 
   const T = (def) => app.registerTool({ category: 'pagine', ...def, run: async (a) => { try { await def.run(a); } catch (err) { mostraErrore(app, err, def.name); } } });
 
@@ -102,27 +100,3 @@ export default function register(app) {
   A({ id: 'delete-pages', label: 'Elimina', icon: 'trash', danger: true, run: (a, sel) => U.eliminaPagine(a, sel) });
 }
 
-/**
- * pdf.js 6 non ha più PDFDocumentProxy.destroy(): il nucleo (Doc.load, Doc.destroy, stampa) lo chiama
- * e ogni modifica fallisce dopo il salvataggio dei byte. Finché il nucleo non usa loadingTask.destroy(),
- * aggiungiamo il metodo mancante al prototipo (nessun effetto se esiste già).
- */
-function correggiDestroyPdfJs(app) {
-  const ripara = (pdf) => {
-    const proto = pdf && Object.getPrototypeOf(pdf);
-    if (proto && typeof proto.destroy !== 'function') Object.defineProperty(proto, 'destroy', { configurable: true, writable: true, value() { return this.loadingTask?.destroy(); } });
-  };
-  app.bus.on('document:loaded', ({ doc }) => ripara(doc.pdf));
-}
-
-/**
- * Il riordino del nucleo (app.reorderPages) toglie tutte le pagine e le reinserisce: con pdf-lib
- * questo fallisce ("corrupt page tree") e il trascinamento delle miniature non funziona.
- * Finché il nucleo non viene corretto, lo sostituiamo con la versione sicura dell'area pagine.
- */
-function correggiRiordinoNucleo(app) {
-  app.reorderPages = async (order, label = 'Pagine riordinate') => {
-    try { return await modificaDoc(app, label, (src) => S.riordina(src, order)); }
-    catch (err) { mostraErrore(app, err, 'Riordino delle pagine'); return false; }
-  };
-}

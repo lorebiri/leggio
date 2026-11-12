@@ -44,12 +44,15 @@ const GEN = {
     const d = await PDFDocument.create(); const f = await d.embedFont(StandardFonts.Helvetica);
     textPages(d, f, 5000, '5000 pagine'); await save('pagine-5000.pdf', d);
   },
-  async 'immagini-300mb.pdf'() {
-    if (skip300) return;
+  async 'immagini-300mb.pdf'() { if (!skip300) await immagini('immagini-300mb.pdf', 50); },
+  async 'immagini-400mb.pdf'() { if (!skip300 && args.includes('--400mb')) await immagini('immagini-400mb.pdf', 67); },
+};
+async function immagini(nome, pagine) {
+  {
     // immagini RGB non compresse con rumore (non comprimibili): ~6 MB ciascuna, 50 pagine ≈ 300 MB
     const d = await PDFDocument.create(); const f = await d.embedFont(StandardFonts.Helvetica);
     const W = 1500, H = 1400; const r = rng(42);
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < pagine; i++) {
       const px = new Uint8Array(W * H * 3);
       // gradiente + rumore: visibile e non comprimibile
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const k = (y * W + x) * 3; const n = (r() * 60) | 0; px[k] = (x * 255 / W + n) & 255; px[k + 1] = (y * 255 / H + n) & 255; px[k + 2] = ((i * 5) + n) & 255; }
@@ -58,10 +61,12 @@ const GEN = {
       const page = d.addPage([595, 842]);
       const name = page.node.newXObject('Im', ref);
       page.pushOperators(pushGraphicsState(), concatTransformationMatrix(535, 0, 0, 500, 30, 300), drawObject(name), popGraphicsState());
-      page.drawText(`Immagine ${i + 1} di 50 (${W}×${H} px, ${(W * H * 3 / MB).toFixed(1)} MB)`, { x: 30, y: 260, size: 14, font: f });
+      page.drawText(`Immagine ${i + 1} di ${pagine} (${W}×${H} px, ${(W * H * 3 / MB).toFixed(1)} MB)`, { x: 30, y: 260, size: 14, font: f });
     }
-    await save('immagini-300mb.pdf', d, { useObjectStreams: false });
-  },
+    await save(nome, d, { useObjectStreams: false });
+  }
+}
+const GEN2 = {
   async 'pagine-giganti.pdf'() {
     const d = await PDFDocument.create(); const f = await d.embedFont(StandardFonts.Helvetica);
     const a0 = d.addPage([2384, 3370]); // A0 in punti
@@ -140,6 +145,7 @@ const GEN = {
 
 console.log(`Genero in ${outDir}`);
 const t0 = performance.now();
+Object.assign(GEN, GEN2);
 for (const [name, fn] of Object.entries(GEN)) {
   if (only.length && !only.includes(name)) continue;
   if (existsSync(join(outDir, name)) && !args.includes('--rigenera')) { console.log(`  ${name}: già presente (${(statSync(join(outDir, name)).size / MB).toFixed(1)} MB)`); continue; }

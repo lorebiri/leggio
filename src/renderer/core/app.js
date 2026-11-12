@@ -14,6 +14,7 @@ import { Settings } from './settings.js';
 import { platform, isMac, modKey } from './platform.js';
 import { openPdfLib, savePdfLib, renderPageToCanvas, openPdfJs, verifyPdfBytes, destroyPdf, PDFLib, pdfjs, fontkit } from './pdf.js';
 import { isSignedPdf } from './signature.js';
+import { reorderPdfPages } from './pagetree.js';
 import * as ui from './ui.js';
 import { h, toast, dialog, confirm, withProgress, parsePageRanges, formatBytes, escapeHtml } from './ui.js';
 import { icon } from './icons.js';
@@ -89,8 +90,15 @@ export class App {
     return doc.data.__signed;
   }
 
-  /** fn(bytes, doc) → bytes: trasformazioni applicate al momento del salvataggio. */
-  registerSaveHook(fn) { this.saveHooks.push(fn); }
+  /**
+   * fn(bytes, doc) → bytes: trasformazioni applicate al momento del salvataggio, in ordine crescente
+   * di `order` (predefinito 50; la cifratura dell'area sicurezza usa 100 per girare per ultima).
+   * Un hook può aggiornare doc.password: la verifica del file salvato usa il valore aggiornato.
+   */
+  registerSaveHook(fn, { order = 50 } = {}) {
+    this.saveHooks.push(Object.assign(fn, { __order: order }));
+    this.saveHooks.sort((a, b) => (a.__order ?? 50) - (b.__order ?? 50));
+  }
 
   /** Byte correnti del documento, compresi i valori dei moduli compilati a schermo. */
   async currentBytes(doc = this.activeDoc) {
@@ -113,6 +121,7 @@ export class App {
   async applyEdit(label, fn, doc = this.activeDoc, { signatureWarning = true } = {}) {
     if (!doc) throw new Error('Nessun documento aperto');
     if (signatureWarning && !(await this.#confirmSignedEdit(doc))) return false;
+    if (!(await this.#confirmRestrictedEdit(doc))) return false;
     return this.#exclusive(doc, label, async () => {
       const before = await this.currentBytes(doc);
       const after = await fn(before, doc);
@@ -147,6 +156,23 @@ export class App {
    * Prima modifica a un documento firmato: avvisa una volta per documento.
    * «Lavora su una copia» toglie il percorso (il salvataggio chiederà un nuovo nome: l'originale firmato resta intatto).
    */
+  /** Permessi del PDF che vietano la modifica: per ora solo un avviso, una volta per documento. */
+  async #confirmRestrictedEdit(doc) {
+    if (doc.data.__permAck || !doc.pdf) return true;
+    let perms = null;
+    try { perms = await doc.pdf.getPermissions(); } catch { perms = null; }
+    const F = pdfjs.PermissionFlag || {};
+    if (!perms || perms.includes(F.MODIFY_CONTENTS ?? 8)) { doc.data.__permAck = true; return true; }
+    const v = await ui.choice({
+      title: 'Modifiche limitate dall\'autore',
+      message: `L'autore ha limitato le modifiche a «${doc.name}». Vuoi continuare comunque?`,
+      buttons: [{ value: 'cancel', label: 'Annulla' }, { value: 'ok', label: 'Continua', primary: true }],
+    });
+    if (v !== 'ok') return false;
+    doc.data.__permAck = true;
+    return true;
+  }
+
   async #confirmSignedEdit(doc) {
     if (doc.data.__signatureAck || !this.isSigned(doc)) return true;
     const v = await ui.choice({
@@ -377,13 +403,10 @@ export class App {
     await this.reorderPages(order, moving.length === 1 ? 'Pagina spostata' : 'Pagine spostate');
   }
   /** Riordina secondo order (array di indici 0-based vecchi). */
-  async reorderPages(order, label = 'Pagine riordinate') {
-    await this.editWithPdfLib(label, async (src) => {
-      // riordino "in place": stessi oggetti pagina, così annotazioni e campi modulo restano validi
-      const pages = src.getPages();
-      for (let i = pages.length - 1; i >= 0; i--) src.removePage(i);
-      order.forEach((oldIndex, k) => src.insertPage(k, pages[oldIndex]));
-    });
+  async reorderPages(order, label = 'Pagine riordinate', doc = this.activeDoc) {
+    // riordino "in place" ricostruendo l'albero delle pagine (core/pagetree.js): stessi oggetti pagina,
+    // così annotazioni e campi modulo restano validi
+    return this.editWithPdfLib(label, async (src) => { reorderPdfPages(src, order); }, doc);
   }
 
   reportError(err, context = 'Errore') {

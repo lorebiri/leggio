@@ -94,7 +94,7 @@ export { openPdfLib } from './pdflib.js';
 
 /** Salva un PDFDocument di pdf-lib con impostazioni compatte. */
 export async function savePdfLib(doc, opts = {}) {
-  return doc.save({ useObjectStreams: true, ...opts });
+  return doc.save({ useObjectStreams: true, objectsPerTick: 1500, ...opts });
 }
 
 /** Byte di un nuovo PDF vuoto. */

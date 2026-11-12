@@ -43,6 +43,24 @@ describe('openPdfLib e cifratura', () => {
     expect(pages[1].rotate).toBe(180);
     expect(pages[0].text).toBe('Pagina 1');
   });
+  it('modifiche ripetute (anche dopo una riprotezione al salvataggio): nessun /Encrypt incoerente', async () => {
+    for (const pw of ['', 'utente']) {
+      let bytes = await make(pw);
+      for (let k = 0; k < 3; k++) {
+        const doc = await openPdfLib(bytes, pw || undefined);
+        doc.getPage(k % 2).setRotation(degrees(90 * (k + 1)));
+        bytes = await doc.save({ useObjectStreams: true });
+        if (k === 1) { // come il save hook dell'area sicurezza: si cifra di nuovo
+          const again = await openPdfLib(bytes, pw || undefined);
+          again.encrypt({ userPassword: pw, ownerPassword: 'proprietario' });
+          bytes = await again.save();
+        }
+      }
+      const pages = await read(bytes, pw || undefined);
+      expect(pages.map((p) => p.text)).toEqual(['Pagina 1', 'Pagina 2']);
+      expect(pages[0].rotate).toBe(270);
+    }
+  });
   it('password di apertura mancante: errore chiaro, nessun file misto', async () => {
     const enc = await make('utente');
     await expect(openPdfLib(enc)).rejects.toThrow(/protetto|cifrato|password/i);

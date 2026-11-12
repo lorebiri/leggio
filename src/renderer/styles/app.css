@@ -250,7 +250,7 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 15
 .progress-text { color: var(--muted); font-size: 13px; }
 @keyframes indet { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
 @keyframes fade { from { opacity: 0; } }
-@keyframes pop { from { opacity: 0; transform: translateY(6px) scale(.985); } }
+@keyframes pop { from { opacity: 0; } }
 
 .ctx-menu { position: fixed; min-width: 210px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-pop); padding: 5px; animation: pop .12s var(--ease); }
 .ctx-menu button { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 6px; width: 100%; border: 0; background: none; padding: 6px 8px; border-radius: 6px; text-align: left; cursor: pointer; }
