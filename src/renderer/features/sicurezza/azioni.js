@@ -3,6 +3,7 @@
 // Un errore lanciato = file «non elaborato» e NON salvato (così un oscuramento non verificato non esce mai).
 import { PDFJS_ASSETS } from '../../core/pdf.js';
 import { buildMatchers, MODELLI } from './logica/modelli.js';
+import { PRESET, getPreset, preselect, FIRMA } from './logica/preset.js';
 import { VOCI, sanitize } from './logica/sanifica.js';
 import { LIVELLI } from './logica/comprimi.js';
 import { openDecrypted, PasswordError } from './logica/cifratura.js';
@@ -87,6 +88,7 @@ export function operazioniSicurezza(app) {
     {
       id: 'oscura-modelli', label: 'Oscura dati personali (Redazione)', description: 'Trova e oscura davvero codici fiscali, IBAN, email, telefoni… con verifica obbligatoria',
       fields: [
+        { name: 'modello', label: 'Modello pronto', type: 'select', value: '', options: [{ value: '', label: 'Scelgo io i dati (caselle qui sotto)' }, ...PRESET.map((p) => ({ value: p.id, label: p.nome }))], help: 'Con un modello pronto le caselle qui sotto non contano. «Incarichi e assegni»: oscura indirizzo, telefono, email personale, nascita, codice fiscale, IBAN e firma; lascia nome, partita IVA e compenso.' },
         ...MODELLI.map((m) => ({ name: 'm_' + m.id, label: m.label, type: 'checkbox', value: ['cf', 'iban', 'email', 'tel'].includes(m.id) })),
         { name: 'parole', label: 'Altre parole da oscurare (separate da virgola, es. Mario Rossi)', type: 'text', value: '' },
         { name: 'etichetta', label: 'Testo sui riquadri (facoltativo)', type: 'text', value: '' },
@@ -96,18 +98,21 @@ export function operazioniSicurezza(app) {
           { value: 'ferma', label: 'Non salvare il file e segnalarlo' },
           { value: 'ignora', label: 'Ignorale (i dati nelle scansioni restano visibili)' }] },
       ],
-      summary: (p) => `Oscura: ${[...MODELLI.filter((m) => p['m_' + m.id]).map((m) => m.label), p.parole ? 'parole scelte' : null].filter(Boolean).join(', ') || 'niente'}`,
-      validate: (p) => (MODELLI.some((m) => p['m_' + m.id]) || String(p.parole || '').trim() ? null : 'Scegli almeno un tipo di dato o scrivi una parola.'),
+      summary: (p) => (getPreset(p.modello) ? `Oscura con il modello «${getPreset(p.modello).nome}»` : `Oscura: ${[...MODELLI.filter((m) => p['m_' + m.id]).map((m) => m.label), p.parole ? 'parole scelte' : null].filter(Boolean).join(', ') || 'niente'}`),
+      validate: (p) => (getPreset(p.modello) || MODELLI.some((m) => p['m_' + m.id]) || String(p.parole || '').trim() ? null : 'Scegli un modello pronto, almeno un tipo di dato o una parola.'),
       async runBytes(bytes, p, ctx = {}) {
         const { pdfjs } = app.lib;
-        const matchers = buildMatchers({ models: MODELLI.filter((m) => p['m_' + m.id]).map((m) => m.id), terms: String(p.parole || '').split(/[,;\n]/), wholeWord: true });
+        const preset = getPreset(p.modello);
+        const matchers = buildMatchers({ models: preset ? preset.cerca : MODELLI.filter((m) => p['m_' + m.id]).map((m) => m.id), terms: String(p.parole || '').split(/[,;\n]/), wholeWord: true });
         await apri(bytes); // controlla cifratura e leggibilità con messaggi chiari
         let cur = bytes; let ocrNote = '';
         const run = async (data) => {
           const task = pdfjs.getDocument({ data: data.slice(), isEvalSupported: false, ...PDFJS_ASSETS });
           const pdf = await task.promise;
           try {
-            const found = await findInPdf(pdf, matchers, { signal: ctx.signal, OPS: pdfjs.OPS });
+            const found = await findInPdf(pdf, matchers, { signal: ctx.signal, OPS: pdfjs.OPS, signatures: !!preset?.firma });
+            // senza conferma: valgono le scelte del modello (P.IVA, email istituzionali… restano visibili)
+            if (preset) { found.hits = found.hits.filter((h) => preselect(preset, h) || h.matcher.startsWith('«')); found.byPage = new Map(); for (const h of found.hits) { if (!found.byPage.has(h.page)) found.byPage.set(h.page, []); found.byPage.get(h.page).push(...h.rects); } }
             return { pdf, task, found };
           } catch (e) { await task.destroy(); throw e; }
         };
@@ -126,7 +131,7 @@ export function operazioniSicurezza(app) {
             if (p.sanifica) { const { doc } = await openDecrypted(cur, ''); sanitize(doc, {}); return doc.save({ useObjectStreams: true }); }
             return cur;
           }
-          const terms = [...new Set(r.found.hits.map((h) => h.text))];
+          const terms = [...new Set(r.found.hits.filter((h) => !h.noTerm).map((h) => h.text))];
           const res = await applyRedaction({ pdfjs, pdf: r.pdf, bytes: cur, byPage: r.found.byPage, globalTerms: terms, label: String(p.etichetta || '').trim(), doSanitize: !!p.sanifica, signal: ctx.signal });
           if (!res.ver.ok) {
             const ex = res.ver.problems.slice(0, 3).map((x) => `${x.page ? 'pag. ' + x.page + ': ' : ''}${x.where} «${x.text}»`).join('; ');
@@ -134,7 +139,7 @@ export function operazioniSicurezza(app) {
           }
           const per = {};
           for (const h of r.found.hits) per[h.matcher] = (per[h.matcher] || 0) + 1;
-          ctx.note = ocrNote + `oscurati ${r.found.hits.length} dati (${Object.entries(per).map(([k, n]) => `${k}: ${n}`).join(', ')}) su ${res.pages} pagine; verifica superata` + (r.found.textless.length ? `; ${r.found.textless.length} pagine senza testo ignorate` : '');
+          ctx.note = ocrNote + `oscurati ${r.found.hits.length} dati (${Object.entries(per).map(([k, n]) => `${k}: ${n}`).join(', ')}) su ${res.pages} pagine; verifica superata` + (preset?.firma && !per[FIRMA] ? '; nessuna firma riconosciuta come immagine: controllare a mano' : '') + (r.found.textless.length ? `; ${r.found.textless.length} pagine senza testo ignorate` : '');
           return res.out;
         } finally { await r.task.destroy(); }
       },
