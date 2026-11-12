@@ -3,6 +3,7 @@ import { tutteLeOperazioni, validaSequenza, eseguiSequenza, nomeUscita, SkipErro
 import { chooseFolder, chooseFiles, writeOut, isDesktop, call, fileItem, dirname, basename } from '../native.js';
 import { preferenze as prefProtocollo } from './protocollo.js';
 import { contatoreCorrente } from '../lib/protocollo.js';
+import { nomeDalContenuto } from './coda.js';
 
 const KEY_SEQ = 'avanzati.sequenze';
 const MAX_FILE = 500 * 1024 * 1024;
@@ -119,7 +120,7 @@ export function openBatch(app, deps, preset = null) {
         renderDest();
       } }), h('span', {}, l))));
   const nameSel = h('select', { 'aria-label': 'Nome dei file', onchange: () => { state.nome = nameSel.value; } },
-    h('option', { value: 'stesso' }, 'Stesso nome dell\'originale'), h('option', { value: 'suffisso' }, 'Nome con «_elaborato»'));
+    h('option', { value: 'stesso' }, 'Stesso nome dell\'originale'), h('option', { value: 'suffisso' }, 'Nome con «_elaborato»'), h('option', { value: 'contenuto' }, 'Proposto dal contenuto (es. Fattura_FORNITORE_n123_data)'));
   const renderDest = () => {
     destNote.textContent = !isDesktop() ? 'Nell\'anteprima web i file elaborati vengono scaricati.' :
       state.dest === 'other' ? (state.destFolder ? `Cartella: ${state.destFolder}` : 'Nessuna cartella scelta.') :
@@ -161,7 +162,8 @@ export function openBatch(app, deps, preset = null) {
           if (it.size > MAX_FILE) throw new SkipError('Il file è troppo grande (oltre 500 MB).');
           const bytes = await it.read();
           const out = await eseguiSequenza(bytes, state.passi, { PDFLib: app.lib.PDFLib, openPdfLib: (b) => app.lib.openPdfLib(b), savePdfLib: (d) => app.lib.savePdfLib(d), ops, ctx, signal: p.signal });
-          const name = nomeUscita(it.name, { modo: state.nome });
+          const name = state.nome === 'contenuto' ? await nomeDalContenuto(out, it.name, app.settings.get('avanzati.rinomina.regola')) : nomeUscita(it.name, { modo: state.nome });
+          if (state.nome === 'contenuto') ctx.note = [ctx.note, `nuovo nome: ${name}`].filter(Boolean).join(' — ');
           let dove;
           if (state.dest === 'overwrite' && it.path) dove = await call(app, 'write', { folder: dirname(it.path), name: basename(it.path), bytes: out, overwrite: true });
           else if (state.dest === 'other' && state.destFolder) dove = await writeOut(app, state.destFolder, { name, bytes: out });

@@ -38,7 +38,8 @@ export async function openSignedFile(app, { bytes, name, path = null }, deps) {
   const info = { result, stato, sourceName: name, sourcePath: path, sourceSize: bytes.length, sourceBytes: bytes };
   const inner = innerName(name, result.kind);
   if (result.kind === 'pdf') {
-    const doc = await app.openBytes(result.content, { name: inner });
+    // il nome della scheda ricorda che il PDF viene da un file firmato («Salva il PDF contenuto» usa il nome originale)
+    const doc = await app.openBytes(result.content, { name: inner.replace(/\.pdf$/i, '') + ' (da .p7m).pdf' });
     if (!doc) {
       // il PDF contenuto non si apre (danneggiato o alterato): mostriamo comunque l'esito della firma
       showSignaturePane(app, info, deps);

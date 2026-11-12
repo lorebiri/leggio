@@ -1,8 +1,13 @@
-// Visualizzazione della fattura elettronica (FatturaPA) con stampa, salvataggio in PDF e allegati.
+// Fattura elettronica (FatturaPA).
+// Nell'app desktop la fattura diventa un documento in una SCHEDA SUA (PDF impaginato da Leggio) con accanto il
+// pannello «Fattura elettronica» (CIG/CUP, avvisi, allegati, firma). Nell'anteprima web, senza printToPDF,
+// si mostra impaginata in uno spazio di lavoro con «Stampa».
 import { parseFattura, fatturaDocument, nomeProposto, allegatoBytes, allegatoNome, euro, dataIt } from '../lib/fattura.js';
 import { looksLikeP7m } from '../lib/cades.js';
 import { ESITI } from '../lib/report.js';
 import { isDesktop, call } from '../native.js';
+
+const firmaTesto = (firma) => (firma ? `Firmato digitalmente: ${firma.result.levels.flatMap((l) => l.signers.map((s) => s.name)).join(', ')} — esito verifica: ${ESITI[firma.stato].titolo}` : '');
 
 export async function openFattura(app, bytes, name, { firma = null } = {}, deps) {
   let f;
@@ -10,35 +15,52 @@ export async function openFattura(app, bytes, name, { firma = null } = {}, deps)
   catch (err) {
     return app.ui.dialog({ title: 'Fattura non leggibile', message: `«${name}» non può essere visualizzato: ${err.message}`, cancelLabel: null, okLabel: 'Chiudi' });
   }
-  let compatta = app.settings.get('avanzati.fattura.compatta', false);
+  const compatta = app.settings.get('avanzati.fattura.compatta', false);
+  if (isDesktop()) {
+    try {
+      const pdf = await creaPdf(app, f, { compatta, firma, nomeFile: name });
+      if (pdf) {
+        const doc = await app.openBytes(pdf, { name: nomeProposto(f) });
+        if (doc) {
+          doc.data.fattura = { f, xmlName: name, xmlBytes: bytes, firma, compatta };
+          if (firma) doc.data.p7m = firma;
+          app.sidebar.show('fattura');
+          const avvisi = f.corpi.flatMap((c) => c.avvisi.filter((a) => a.livello !== 'info'));
+          if (avvisi.length) app.ui.toast(`Controlla la fattura: ${avvisi[0].testo}${avvisi.length > 1 ? ` (e altri ${avvisi.length - 1} avvisi nel pannello)` : ''}`, { kind: 'warning', timeout: 9000 });
+          return doc;
+        }
+      }
+    } catch (err) { console.error('[avanzati] fattura come PDF', err); }
+  }
+  return paneFattura(app, f, name, { firma, compatta }, deps);
+}
+
+/** PDF impaginato della fattura (solo app desktop). */
+async function creaPdf(app, f, { compatta, firma, nomeFile }) {
+  const html = fatturaDocument(f, { compatta, firma: firmaTesto(firma), nomeFile });
+  const bytes = await app.ui.withProgress('Impaginazione della fattura', async (p) => { p.set(null, 'Creazione del PDF della fattura…'); return call(app, 'html-to-pdf', { html, pageSize: 'A4', margins: 0 }); }, { cancellable: false });
+  if (!bytes) return null;
+  try { const d = await app.lib.openPdfLib(bytes); d.setTitle(nomeProposto(f).replace(/\.pdf$/, '')); d.setLanguage('it-IT'); d.setCreator('Leggio'); return await app.lib.savePdfLib(d); } catch { return bytes; }
+}
+
+/** Riepilogo (CIG/CUP, totali, avvisi, allegati, firma): usato dal pannello e dallo spazio di lavoro. */
+function riepilogo(app, f, firma, deps) {
   const { h } = app.ui;
-  const c0 = f.corpi[0];
-  const pane = deps.openPane(app, { title: `Fattura n. ${c0.numero || '—'} del ${dataIt(c0.data) || '—'}`, subtitle: `${f.cedente?.nome || ''} — ${name}${f.corpi.length > 1 ? ` — ${f.corpi.length} documenti nel file` : ''}`, id: 'fattura' });
-  const firmaTesto = firma ? `Firmato digitalmente: ${firma.result.levels.flatMap((l) => l.signers.map((s) => s.name)).join(', ')} — esito verifica: ${ESITI[firma.stato].titolo}` : '';
-  const frame = h('iframe', { class: 'av-fattura-frame', title: 'Fattura impaginata', sandbox: 'allow-same-origin allow-modals' });
-  const html = () => fatturaDocument(f, { compatta, firma: firmaTesto, nomeFile: name });
-  const render = () => { frame.srcdoc = html(); };
-  const toggle = h('button', { class: 'btn', onclick: () => { compatta = !compatta; app.settings.set('avanzati.fattura.compatta', compatta); toggle.textContent = compatta ? 'Vista completa' : 'Vista compatta'; render(); } }, compatta ? 'Vista completa' : 'Vista compatta');
-  pane.actions.append(
-    h('button', { class: 'btn primary', onclick: () => salvaPdf(app, f, html(), { apri: false }) }, 'Salva come PDF…'),
-    isDesktop() ? h('button', { class: 'btn', onclick: () => salvaPdf(app, f, html(), { apri: true }) }, 'Apri come PDF') : null,
-    h('button', { class: 'btn', onclick: () => { try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch (e) { app.reportError(e, 'Stampa non riuscita'); } } }, 'Stampa…'),
-    toggle);
-  const side = h('aside', { class: 'av-fattura-side' });
-  // riepilogo veloce: CIG/CUP, totali, avvisi, allegati, firma
+  const out = [];
   f.corpi.forEach((c, i) => {
-    const box = h('div', { class: 'av-box' },
-      f.corpi.length > 1 ? h('h3', {}, `Documento ${i + 1}: n. ${c.numero}`) : h('h3', {}, 'In breve'),
+    out.push(h('div', { class: 'av-box' },
+      f.corpi.length > 1 ? h('h3', {}, `Documento ${i + 1}: n. ${c.numero}`) : h('h3', {}, `Fattura n. ${c.numero || '—'} del ${dataIt(c.data) || '—'}`),
       h('dl', { class: 'av-dl' },
+        h('dt', {}, 'Fornitore'), h('dd', {}, f.cedente?.nome || '—'),
         h('dt', {}, 'CIG'), h('dd', { class: c.cig.length ? 'av-code' : 'av-missing' }, c.cig.join(', ') || 'non indicato'),
         h('dt', {}, 'CUP'), h('dd', { class: c.cup.length ? 'av-code' : 'av-missing' }, c.cup.join(', ') || 'non indicato'),
         h('dt', {}, 'Totale'), h('dd', {}, euro(c.calcoli.totale, c.divisa)),
         c.calcoli.split ? [h('dt', {}, 'Da pagare al fornitore'), h('dd', {}, euro(c.calcoli.nettoAPagare, c.divisa) + ' (scissione dei pagamenti)')] : null,
-        c.pagamenti[0]?.dettagli[0]?.scadenza ? [h('dt', {}, 'Scadenza'), h('dd', {}, dataIt(c.pagamenti[0].dettagli[0].scadenza))] : null),
-      c.avvisi.filter((a) => a.livello !== 'info').map((a) => h('p', { class: 'av-warn' }, a.testo)));
-    side.append(box);
+        c.pagamenti[0]?.dettagli[0]?.scadenza ? [h('dt', {}, 'Scadenza'), h('dd', {}, dataIt(c.pagamenti[0].dettagli[0].scadenza))] : null,
+        c.pagamenti[0]?.dettagli[0]?.iban ? [h('dt', {}, 'IBAN'), h('dd', { class: 'av-code av-small' }, c.pagamenti[0].dettagli[0].iban)] : null),
+      c.avvisi.filter((a) => a.livello !== 'info').map((a) => h('p', { class: 'av-warn' }, a.testo))));
     if (c.allegati.length) {
-      side.append(h('div', { class: 'av-box' }, h('h3', {}, `Allegati nella fattura (${c.allegati.length})`),
+      out.push(h('div', { class: 'av-box' }, h('h3', {}, `Allegati nella fattura (${c.allegati.length})`),
         h('ul', { class: 'av-list' }, c.allegati.map((a) => h('li', {},
           h('div', { class: 'av-list-name' }, allegatoNome(a)), a.descrizione ? h('small', {}, a.descrizione) : null,
           h('div', { class: 'av-row' },
@@ -47,35 +69,66 @@ export async function openFattura(app, bytes, name, { firma = null } = {}, deps)
     }
   });
   if (firma) {
-    side.append(h('div', { class: 'av-box' }, h('h3', {}, 'Firma digitale'),
+    out.push(h('div', { class: 'av-box' }, h('h3', {}, 'Firma digitale'),
       deps.signatureView(app, firma, { compact: true }),
       h('div', { class: 'av-btn-col' },
-        h('button', { class: 'btn small', onclick: () => deps.saveContent(app, firma) }, 'Salva l\'XML della fattura…'),
         h('button', { class: 'btn small', onclick: () => deps.saveReport(app, firma) }, 'Salva rapporto di verifica (PDF)…'))));
   }
+  return out;
+}
+
+/** Pannello laterale «Fattura elettronica» per i documenti nati da un XML. */
+export function registerFatturaPanel(app, deps) {
+  app.registerPanel({
+    id: 'fattura', title: 'Fattura elettronica', icon: 'file', order: 61,
+    render(c) {
+      const { h } = app.ui;
+      const doc = app.activeDoc;
+      const info = doc?.data?.fattura;
+      if (!info) {
+        c.append(h('div', { class: 'pad av-side' }, h('p', {}, 'Questo documento non è una fattura elettronica.'),
+          h('button', { class: 'btn', onclick: () => app.tools.run('fattura-elettronica') }, 'Apri fattura elettronica (XML)…')));
+        return;
+      }
+      const toggle = async () => {
+        try {
+          const compatta = !info.compatta;
+          const pdf = await creaPdf(app, info.f, { compatta, firma: info.firma, nomeFile: info.xmlName });
+          if (!pdf) return;
+          await app.applyEdit(compatta ? 'Vista compatta della fattura' : 'Vista completa della fattura', async () => pdf, doc);
+          info.compatta = compatta; app.settings.set('avanzati.fattura.compatta', compatta);
+          app.sidebar.show('fattura');
+        } catch (err) { app.reportError(err, 'Impaginazione non riuscita'); }
+      };
+      c.append(h('div', { class: 'pad av-side' },
+        h('div', { class: 'av-btn-col' },
+          h('button', { class: 'btn primary', onclick: () => app.save(doc, { as: true }) }, 'Salva come PDF…'),
+          h('button', { class: 'btn', onclick: () => app.print() }, 'Stampa…'),
+          h('button', { class: 'btn', onclick: toggle }, info.compatta ? 'Vista completa' : 'Vista compatta'),
+          h('button', { class: 'btn', onclick: () => app.exportFile(info.xmlBytes, info.xmlName.replace(/(\.p7m)+$/i, ''), [{ name: 'XML', extensions: ['xml'] }]) }, 'Salva l\'XML originale…')),
+        h('p', { class: 'av-note' }, `Copia leggibile del file ${info.xmlName}. Il documento con valore fiscale resta il file XML.`),
+        ...riepilogo(app, info.f, info.firma, deps)));
+    },
+  });
+}
+
+/** Spazio di lavoro con la fattura impaginata (anteprima web o ripiego). */
+function paneFattura(app, f, name, { firma, compatta }, deps) {
+  const { h } = app.ui;
+  const c0 = f.corpi[0];
+  const pane = deps.openPane(app, { title: `Fattura n. ${c0.numero || '—'} del ${dataIt(c0.data) || '—'}`, subtitle: `${f.cedente?.nome || ''} — ${name}${f.corpi.length > 1 ? ` — ${f.corpi.length} documenti nel file` : ''}`, id: 'fattura' });
+  const frame = h('iframe', { class: 'av-fattura-frame', title: 'Fattura impaginata', sandbox: 'allow-same-origin allow-modals' });
+  const render = () => { frame.srcdoc = fatturaDocument(f, { compatta, firma: firmaTesto(firma), nomeFile: name }); };
+  const toggle = h('button', { class: 'btn', onclick: () => { compatta = !compatta; app.settings.set('avanzati.fattura.compatta', compatta); toggle.textContent = compatta ? 'Vista completa' : 'Vista compatta'; render(); } }, compatta ? 'Vista completa' : 'Vista compatta');
+  const stampa = () => { try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch (e) { app.reportError(e, 'Stampa non riuscita'); } };
+  pane.actions.append(
+    h('button', { class: 'btn primary', onclick: () => { app.ui.toast('Nella finestra di stampa scegli «Salva come PDF» come stampante.', { kind: 'info', timeout: 7000 }); stampa(); } }, 'Salva come PDF…'),
+    h('button', { class: 'btn', onclick: stampa }, 'Stampa…'),
+    toggle);
   pane.body.classList.add('av-fattura-body');
-  pane.body.append(h('div', { class: 'av-fattura-doc' }, frame), side);
+  pane.body.append(h('div', { class: 'av-fattura-doc' }, frame), h('aside', { class: 'av-fattura-side' }, ...riepilogo(app, f, firma, deps)));
   render();
   return pane;
-}
-
-async function salvaPdf(app, f, html, { apri }) {
-  const nome = nomeProposto(f);
-  if (!isDesktop()) {
-    app.ui.toast('Nell\'anteprima web usa «Stampa…» e scegli «Salva come PDF» come stampante.', { kind: 'info', timeout: 7000 });
-    return;
-  }
-  try {
-    const bytes = await app.ui.withProgress('Creazione del PDF della fattura', async (p) => { p.set(null, 'Impaginazione…'); return call(app, 'html-to-pdf', { html, pageSize: 'A4', margins: 0 }); }, { cancellable: false });
-    if (!bytes) return;
-    const named = await setTitle(app, bytes, nome.replace(/\.pdf$/, ''));
-    if (apri) await app.openBytes(named, { name: nome });
-    else await app.exportFile(named, nome, [{ name: 'PDF', extensions: ['pdf'] }]);
-  } catch (err) { app.reportError(err, 'PDF della fattura non creato'); }
-}
-
-async function setTitle(app, bytes, title) {
-  try { const d = await app.lib.openPdfLib(bytes); d.setTitle(title); d.setLanguage('it-IT'); d.setCreator('Leggio'); return await app.lib.savePdfLib(d); } catch { return bytes; }
 }
 
 async function apriAllegato(app, a, deps) {

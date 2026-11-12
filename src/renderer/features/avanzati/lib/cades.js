@@ -131,7 +131,7 @@ export function parseCertificate(b, n) {
     serial, issuer, subject,
     notBefore: time(b, child(validity, 0)), notAfter: time(b, child(validity, 1)),
     keyAlgorithm: SIGALGS[spkiAlg]?.kind === 'ecdsa' ? 'ECDSA' : SIGALGS[spkiAlg] ? 'RSA' : spkiAlg,
-    qualified, nonRepudiation,
+    qualified, nonRepudiation, selfSigned: issuer.text === subject.text,
     _spki: whole(b, spki), _spkiAlg: spkiAlg, _curve: curve, _der: whole(b, n),
     _tbs: whole(b, tbs), _sigAlg: oid(b, child(child(n, 1), 0)), _sig: bitString(b, child(n, 2)),
   };
@@ -449,7 +449,7 @@ async function certSignedBy(cert, issuer) {
 }
 
 function publicCert(c) {
-  return { subject: c.subject, issuer: c.issuer, serial: c.serial, notBefore: c.notBefore, notAfter: c.notAfter, qualified: c.qualified, keyAlgorithm: c.keyAlgorithm, nonRepudiation: c.nonRepudiation, der: c._der };
+  return { subject: c.subject, issuer: c.issuer, serial: c.serial, notBefore: c.notBefore, notAfter: c.notAfter, qualified: c.qualified, selfSigned: c.selfSigned, keyAlgorithm: c.keyAlgorithm, nonRepudiation: c.nonRepudiation, der: c._der };
 }
 function publicSigner(s) {
   const c = s.cert;

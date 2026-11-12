@@ -4,7 +4,7 @@
 import './avanzati.css';
 import { openPane } from './pane.js';
 import { openSignedFile, signatureView, saveContent, saveReport, registerP7mPanel, SIGNED_EXT } from './ui/p7m.js';
-import { openFattura } from './ui/fattura.js';
+import { openFattura, registerFatturaPanel } from './ui/fattura.js';
 import { timbroProtocollo } from './ui/protocollo.js';
 import { openBatch } from './ui/batch.js';
 import { openSearchFolder } from './ui/search-folder.js';
@@ -18,6 +18,7 @@ import { openScans } from './ui/scans.js';
 import { isFattura } from './lib/fattura.js';
 import { looksLikeP7m } from './lib/cades.js';
 import { extOf } from './native.js';
+import { dichiarazioneConformita, rinominaIntelligente, apriEml } from './ui/coda.js';
 
 export default function register(app) {
   const deps = {};
@@ -26,6 +27,7 @@ export default function register(app) {
     openSignedFile: (a, f) => openSignedFile(a, f, deps),
     openFattura: (a, b, n, o) => openFattura(a, b, n, o || {}, deps),
     chooseSigned: (a) => chooseSigned(a, deps),
+    openEml: (a, b, n) => apriEml(a, b, n, deps),
   });
   app.avanzati = deps; // usato dai test e dalle altre parti dell'area
 
@@ -44,6 +46,19 @@ export default function register(app) {
     description: 'Riquadro «Prot. n. … del …» con numerazione progressiva',
     keywords: 'protocollo segnatura numero protocollo timbro entrata uscita classificazione',
     run: () => timbroProtocollo(app, deps) });
+
+  app.registerTool({ id: 'conformity-declaration', name: 'Dichiarazione di conformità all\'originale', category: 'avanzati', icon: 'signature',
+    description: 'Aggiunge il testo di attestazione dell\'ufficio con nome, qualifica e data, pronto per la firma',
+    keywords: 'conformità originale copia conforme attestazione dichiarazione autentica',
+    run: () => dichiarazioneConformita(app) });
+  app.registerTool({ id: 'smart-rename', name: 'Rinomina dal contenuto', category: 'avanzati', icon: 'file',
+    description: 'Propone un nome come Fattura_FORNITORE_n123_2026-10-31.pdf leggendo il documento',
+    keywords: 'rinomina nome file intelligente automatico fattura durc salva con nome',
+    run: () => rinominaIntelligente(app) });
+  app.registerTool({ id: 'open-eml', name: 'Apri messaggio PEC (.eml)…', category: 'avanzati', icon: 'paperclip', needsDoc: false,
+    description: 'Mostra ricevute e messaggi PEC salvati (daticert.xml) e ne apre gli allegati',
+    keywords: 'pec posta certificata eml daticert ricevuta accettazione consegna allegati email',
+    run: async () => { const files = await app.platform.openFiles({ multiple: true, raw: true, title: 'Apri messaggio PEC', filters: [{ name: 'Messaggi di posta', extensions: ['eml'] }] }); for (const f of files || []) await deps.openEml(app, f.bytes, f.name); } });
 
   // ---------- azioni guidate, creazione, ricerca ----------
   app.registerTool({ id: 'batch', name: 'Azioni guidate (elaborazione in blocco)', category: 'avanzati', icon: 'layers', needsDoc: false,
@@ -81,6 +96,16 @@ export default function register(app) {
     keywords: 'accessibilità tag struttura testo alternativo lingua titolo screen reader pdf/ua amministrazione trasparente',
     run: () => prepareAccessibility(app, deps) });
   registerP7mPanel(app, deps);
+  registerFatturaPanel(app, deps);
+  // i pannelli «Firme (.p7m)» e «Fattura elettronica» appartengono al loro documento:
+  // passando a un documento che non li riguarda si torna alle miniature
+  app.bus.on('document:activated', ({ doc }) => {
+    const cur = app.sidebar.current;
+    if (app.el.root.classList.contains('sidebar-closed')) return;
+    if (cur === 'p7m' && !doc?.data?.p7m) app.sidebar.show(doc?.data?.fattura ? 'fattura' : 'thumbs');
+    else if (cur === 'fattura' && !doc?.data?.fattura) app.sidebar.show(doc?.data?.p7m ? 'p7m' : 'thumbs');
+    else if (cur === 'thumbs' && doc?.data?.fattura) app.sidebar.show('fattura');
+  });
   registerLayersPanel(app, deps);
   setupPortfolio(app, deps);
   setupSession(app, deps);
@@ -97,6 +122,7 @@ export default function register(app) {
         : looksLikeP7m(f.bytes) ? deps.openSignedFile(app, { bytes: f.bytes, name: f.name, path: f.path })
         : app.ui.toast(`«${f.name}» non è una fattura elettronica.`, { kind: 'warning' })),
     });
+    app.registerOpener({ id: 'avanzati-eml', name: 'Messaggi PEC (.eml)', extensions: ['eml'], open: (f) => deps.openEml(app, f.bytes, f.name) });
     app.registerOpener({
       id: 'avanzati-office', name: 'Documenti Office', extensions: [...OFFICE_EXT],
       open: (f) => convertOfficeBytes(app, f.bytes, f.name),
@@ -115,6 +141,7 @@ export default function register(app) {
         else app.ui.toast(`«${f.name}» non è una fattura elettronica.`, { kind: 'warning' });
         continue;
       }
+      if (ext === 'eml') { await deps.openEml(app, new Uint8Array(await f.arrayBuffer()), f.name); continue; }
       if (OFFICE_EXT.includes(ext)) { await convertOfficeBytes(app, new Uint8Array(await f.arrayBuffer()), f.name); continue; }
     }
   }));

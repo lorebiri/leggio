@@ -2,12 +2,18 @@
 
 /** Testo di una pagina dagli elementi di pdf.js getTextContent(). */
 export function pageText(items) {
-  let s = '';
+  let s = ''; let prev = null;
   for (const it of items) {
     if (typeof it.str !== 'string') continue;
+    // niente spazio tra pezzi della stessa parola (molti PDF spezzano le parole in più elementi)
+    if (prev && !prev.hasEOL && prev.str && !/\s$/.test(prev.str) && it.str && !/^\s/.test(it.str)) {
+      const t0 = prev.transform; const t1 = it.transform;
+      const attaccati = Array.isArray(t0) && Array.isArray(t1) && Math.abs(t1[5] - t0[5]) < 1 && Math.abs(t1[4] - (t0[4] + (prev.width || 0))) < Math.max(0.6, 0.12 * Math.abs(t0[3] || 10));
+      if (!attaccati) s += ' ';
+    }
     s += it.str;
     if (it.hasEOL) s += '\n';
-    else if (it.str && !/\s$/.test(it.str)) s += ' ';
+    prev = it;
   }
   return s.replace(/[ \t]+/g, ' ');
 }

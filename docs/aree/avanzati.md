@@ -8,7 +8,10 @@ Tutto funziona senza rete (tranne «Crea PDF da pagina web», che scarica la pag
 | id | Nome | Note |
 |---|---|---|
 | `open-p7m` | Apri file firmato (.p7m)… | CAdES, buste annidate (.p7m.p7m), base64/PEM, `.tsd`, `.m7m`. Verifica crittografica (RSA, RSA-PSS, ECDSA) in un Worker. Il PDF si apre in una scheda con il pannello **Firme (.p7m)**; una fattura XML firmata si apre impaginata. |
-| `fattura-elettronica` | Apri fattura elettronica (XML)… | FPA12, FPR12, FSM10, più corpi per file, qualsiasi prefisso di namespace. CIG/CUP evidenziati, scissione dei pagamenti, ritenute, IBAN, allegati estraibili, controlli di coerenza. Salva come PDF (`printToPDF` nel main). |
+| `fattura-elettronica` | Apri fattura elettronica (XML)… | FPA12, FPR12, FSM10, più corpi per file, qualsiasi prefisso di namespace. CIG/CUP evidenziati, scissione dei pagamenti, ritenute, IBAN, allegati estraibili, controlli di coerenza. Nell'app la fattura apre una **scheda sua** (PDF impaginato con `printToPDF`) con il pannello «Fattura elettronica»; nell'anteprima web uno spazio di lavoro con Stampa. |
+| `conformity-declaration` | Dichiarazione di conformità all'originale | Testo dell'ufficio (mai inventato), salvato come modello; segnaposto {nome} {qualifica} {data} {luogo} {pagine} {file} {ente}; pagina aggiunta o in calce; spazio firma. |
+| `smart-rename` | Rinomina dal contenuto | Tipo, soggetto, numero, data, scadenza (DURC) dal testo; regola personalizzabile; anche nelle azioni guidate («Nome proposto dal contenuto»). |
+| `open-eml` | Apri messaggio PEC (.eml)… | daticert.xml in chiaro, messaggio originale (postacert.eml), allegati apribili (PDF, .p7m, fatture, .eml annidati). La firma S/MIME del gestore non è verificata. |
 | `protocol-stamp` | Timbro di protocollo | Ente, ufficio, numero (contatore annuale nelle impostazioni), data, entrata/uscita, classificazione, posizione, prima pagina o tutte. Gestisce le pagine ruotate. |
 | `batch` | Azioni guidate | Cartella (anche sottocartelle) o file; sequenze salvabili; scrive in «Elaborati» (mai sugli originali senza conferma); rapporto finale. |
 | `create-from-web` | Crea PDF da pagina web o HTML… | BrowserWindow nascosta, sandbox, senza JavaScript per i file locali, timeout. |
@@ -19,7 +22,7 @@ Tutto funziona senza rete (tranne «Crea PDF da pagina web», che scarica la pag
 | `portfolio` | File del portfolio PDF | Avviso automatico all'apertura dei portfolio. |
 | `accessibility-prepare` | Prepara per l'accessibilità | Titolo, lingua, testo alternativo, struttura di tag di base (H1/H2/P/Figure/Artifact). Non sostituisce la verifica dell'area che fa il controllo. |
 
-Pannelli: `p7m` (Firme .p7m), `layers` (Livelli). Impostazione: «riapri i documenti dell'ultima volta» (`avanzati.restoreSession`, attiva).
+Pannelli: `p7m` (Firme .p7m), `fattura` (Fattura elettronica), `layers` (Livelli). I pannelli `p7m` e `fattura` appartengono al loro documento: passando a un altro documento si torna alle miniature. Impostazione: «riapri i documenti dell'ultima volta» (`avanzati.restoreSession`, attiva).
 
 ## Per le altre aree
 - **Operazioni nelle azioni guidate**: `app.bus.on('batch:operations', (list) => list.push({ id, label, description, fields, summary(params), runBytes: async (bytes, params, ctx) => nuoviBytes }))`. Così OCR, compressione vera e PDF/A compaiono nell'elenco.
