@@ -60,7 +60,7 @@ export async function verifyRedaction(pdfjs, bytes, marks, terms = [], { passwor
       walk(outline);
       found(titles.join(' '), 'segnalibri', null);
       const att = await doc.getAttachments().catch(() => null);
-      if (att) found(Object.keys(att).join(' '), 'nomi degli allegati', null);
+      if (att) found((att instanceof Map ? [...att.keys()] : Object.keys(att)).join(' '), 'nomi degli allegati', null);
     }
   } finally { await task.destroy(); }
   // un problema per (pagina, luogo, testo)

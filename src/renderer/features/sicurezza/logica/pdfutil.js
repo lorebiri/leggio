@@ -92,3 +92,12 @@ export function encryptionInfo(pdfDoc) {
   else if (V === 1) algorithm = 'RC4-40';
   return { V, R, P, length, filter: nameOf(ctx, enc.get(N('Filter'))), algorithm };
 }
+
+/** Il documento contiene firme digitali (campi firma compilati o /ByteRange)? → numero di firme */
+export function countSignatures(pdfDoc) {
+  const ctx = pdfDoc.context; let n = 0;
+  for (const [, obj] of ctx.enumerateIndirectObjects()) {
+    if (obj instanceof PDFDict && obj.get(N('ByteRange')) && obj.get(N('Contents'))) n++;
+  }
+  return n;
+}
