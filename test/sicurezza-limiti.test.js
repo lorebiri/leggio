@@ -12,7 +12,8 @@ import { verifyRedaction } from '../src/renderer/features/sicurezza/logica/verif
 import { analyze, sanitize } from '../src/renderer/features/sicurezza/logica/sanifica.js';
 import { compressImages } from '../src/renderer/features/sicurezza/logica/comprimi.js';
 
-const FONTS = fileURLToPath(new URL('../node_modules/pdfjs-dist/standard_fonts/', import.meta.url));
+// pdf.js vuole la barra finale «/» anche su Windows
+const FONTS = fileURLToPath(new URL('../node_modules/pdfjs-dist/standard_fonts/', import.meta.url)).replace(/\\/g, '/');
 const prova = new Uint8Array(readFileSync(new URL('./fixtures/prova.pdf', import.meta.url)));
 const PNG = Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64'));
 

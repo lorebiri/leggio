@@ -10,7 +10,8 @@ import { readProperties, writeProperties } from '../src/renderer/features/sicure
 import { listAttachments, addAttachment, removeAttachment, readAttachment } from '../src/renderer/features/sicurezza/logica/allegati.js';
 import { compressImages, cleanupStructure, classifyImage, unpredictPng, searchUnderLimit, imageUsage } from '../src/renderer/features/sicurezza/logica/comprimi.js';
 
-const FONTS = fileURLToPath(new URL('../node_modules/pdfjs-dist/standard_fonts/', import.meta.url));
+// pdf.js vuole la barra finale «/» anche su Windows
+const FONTS = fileURLToPath(new URL('../node_modules/pdfjs-dist/standard_fonts/', import.meta.url)).replace(/\\/g, '/');
 const prova = new Uint8Array(readFileSync(new URL('./fixtures/prova.pdf', import.meta.url)));
 const keys = (x) => (x instanceof Map ? [...x.keys()] : Object.keys(x || {}));
 const open = (data, password) => pdfjs.getDocument({ data: new Uint8Array(data), password, isEvalSupported: false, standardFontDataUrl: FONTS });

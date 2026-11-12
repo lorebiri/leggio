@@ -56,7 +56,8 @@ describe('modulo main «avanzati»', () => {
     expect(m.safeName('...')).toBe('documento');
   });
 
-  it('converte con LibreOffice (simulato) e gestisce gli errori', async () => {
+  // il finto soffice è uno script sh: su Windows non si può eseguire direttamente
+  it.skipIf(process.platform === 'win32')('converte con LibreOffice (simulato) e gestisce gli errori', async () => {
     const fake = path.join(dir, 'soffice-finto.sh');
     // simula soffice: crea <outdir>/<nome>.pdf
     fs.writeFileSync(fake, '#!/bin/sh\nwhile [ "$1" != "--outdir" ]; do shift; done\nout="$2"; in="$3"\nb=$(basename "$in"); b="${b%.*}"\nprintf "%%PDF-1.7 finto" > "$out/$b.pdf"\n');

@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { PDFDocument, StandardFonts, PDFStream, PDFString } from '@cantoo/pdf-lib';
 import { fileURLToPath } from 'node:url';
-const FONTS = fileURLToPath(new URL('../node_modules/pdfjs-dist/standard_fonts/', import.meta.url));
+// pdf.js vuole la barra finale «/» anche su Windows
+const FONTS = fileURLToPath(new URL('../node_modules/pdfjs-dist/standard_fonts/', import.meta.url)).replace(/\\/g, '/');
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { buildPageText, rangeRects, pageWords, wordsOutside } from '../src/renderer/features/sicurezza/logica/testo.js';
 import { buildMatchers, findMatches } from '../src/renderer/features/sicurezza/logica/modelli.js';
