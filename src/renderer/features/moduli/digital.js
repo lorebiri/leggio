@@ -68,7 +68,7 @@ async function loadSystemIds(app) {
 }
 
 /** Sceglie il certificato e lo controlla. → { ...valori, credential, cert } | { ...valori, external:true } | null */
-async function askCertificate(app, store, { title, extraFields = [], okLabel = 'Firma', allowExternal = true }) {
+export async function askCertificate(app, store, { title, extraFields = [], okLabel = 'Firma', allowExternal = true }) {
   const systemList = await loadSystemIds(app);
   let values = {};
   for (;;) {
@@ -226,29 +226,12 @@ export function registerDigital(app, store) {
     id: 'sign-batch', name: 'Firma più file', category: 'moduli', icon: 'lock', needsDoc: false,
     description: 'Firma digitalmente molti PDF (o altri file in .p7m) in una volta, con una sola password',
     keywords: 'firma in blocco più file massiva multipla p7m pades cartella',
-    async run() {
-      if (!isDesktop()) return desktopOnly(app, 'Firma più file');
-      const v = await askCertificate(app, store, { title: 'Firma più file', okLabel: 'Scegli i file…', allowExternal: false, extraFields: [
-        { name: 'format', label: 'Tipo di firma', type: 'radio', value: store.getPref('batchFmt', 'pdf'), options: [{ value: 'pdf', label: 'Firma nei PDF (PAdES, invisibile) → nome_firmato.pdf' }, { value: 'p7m', label: 'Buste .p7m (CAdES), anche per file non PDF → nome.pdf.p7m' }] },
-        { name: 'reason', label: 'Motivo (facoltativo)', type: 'text', value: store.getPref('dsReason', '') },
-        { name: 'info', type: 'info', text: 'I file originali non vengono modificati: le copie firmate sono salvate accanto agli originali.' },
-      ] });
-      if (!v) return;
-      store.setPref('batchFmt', v.format);
-      let off = null;
-      const r = await app.ui.withProgress('Firma dei file', async (p) => {
-        p.set(null, 'Scegli i file da firmare…');
-        off = onProgress((x) => p.set(x.index / Math.max(1, x.total), `${x.index + 1} di ${x.total}: ${x.name}`));
-        return invoke('moduli:sign-batch', { credential: v.credential, format: v.format, options: { reason: v.reason || '', subFilter: 'cades', name: v.cert.subject } });
-      }, { cancellable: false }).finally(() => off?.());
-      if (!r?.ok) return app.ui.dialog({ title: 'Firma non riuscita', message: r?.error || 'Errore', cancelLabel: null, okLabel: 'Chiudi' });
-      if (r.result.cancelled) return;
-      const { h } = app.ui;
-      const list = h('ul', { class: 'mod-batch' }, r.result.results.map((x) => h('li', { class: x.ok ? 'ok' : 'bad' }, h('strong', {}, (x.ok ? '✔ ' : '✖ ') + x.name), x.ok ? h('small', {}, ' → ' + x.output) : h('small', {}, ' — ' + x.error))));
-      const okN = r.result.results.filter((x) => x.ok).length;
-      app.ui.dialog({ title: `Firmati ${okN} file su ${r.result.results.length}`, body: list, cancelLabel: null, okLabel: 'Chiudi', width: 620 });
-    },
+    run: () => firmaFile(app, store, null),
   });
+
+  // servizio per le altre aree (es. l'archivio: «Firma…» sui documenti selezionati)
+  app.services ||= {};
+  app.services.firmaFile = (files, opzioni) => firmaFile(app, store, files, opzioni);
 
   // ------------------------------------------------------------------ ID digitale autofirmato
   app.registerTool({
@@ -335,6 +318,60 @@ async function externalSign(app, store, doc) {
     try { await (app.openFile ? app.openFile({ path: res.path, name: res.name, bytes: res.bytes }) : app.openBytes(res.bytes, { name: res.name, path: res.path })); }
     catch (e) { app.reportError(e, 'Apertura del file firmato'); }
   });
+}
+
+/**
+ * «Firma più file». Con files = null i file si scelgono nella finestra del sistema (come oggi);
+ * con files = [{ path, name }] si firmano quelli, senza altre finestre: il certificato si sceglie una volta sola.
+ * → [{ path, ok, uscita, errore }] (con files = null: undefined). Per ogni file firmato emette «archivio:stato».
+ * opzioni: { formato: 'pdf'|'p7m', motivo, mostraEsito (predefinito: solo se ci sono errori), deps (per i test) }
+ */
+export async function firmaFile(app, store, files, opzioni = {}) {
+  const d = { invoke, onProgress, askCertificate, isDesktop, ...(opzioni.deps || {}) };
+  const list = files == null ? null : (Array.isArray(files) ? files : [files])
+    .map((f) => (typeof f === 'string' ? { path: f } : f))
+    .filter((f) => f && typeof f.path === 'string' && f.path);
+  if (list && !list.length) return [];
+  const fail = (msg) => (list ? list.map((f) => ({ path: f.path, ok: false, uscita: null, errore: msg })) : undefined);
+  if (!d.isDesktop()) { desktopOnly(app, 'Firma più file'); return fail('Funzione disponibile solo nell\'app desktop.'); }
+  const n = list?.length;
+  const fmtDefault = opzioni.formato === 'p7m' || opzioni.formato === 'pdf' ? opzioni.formato : store.getPref('batchFmt', 'pdf');
+  const v = await d.askCertificate(app, store, {
+    title: n ? (n === 1 ? 'Firma 1 file' : `Firma ${n} file`) : 'Firma più file',
+    okLabel: n ? 'Firma' : 'Scegli i file…', allowExternal: false,
+    extraFields: [
+      { name: 'format', label: 'Tipo di firma', type: 'radio', value: fmtDefault, options: [{ value: 'pdf', label: 'Firma nei PDF (PAdES, invisibile) → nome_firmato.pdf' }, { value: 'p7m', label: 'Buste .p7m (CAdES), anche per file non PDF → nome.pdf.p7m' }] },
+      { name: 'reason', label: 'Motivo (facoltativo)', type: 'text', value: opzioni.motivo ?? store.getPref('dsReason', '') },
+      { name: 'info', type: 'info', text: 'I file originali non vengono modificati: le copie firmate sono salvate accanto agli originali.' },
+    ],
+  });
+  if (!v) return fail('Firma annullata.');
+  store.setPref('batchFmt', v.format);
+  let off = null;
+  const payload = { credential: v.credential, format: v.format, options: { reason: v.reason || '', subFilter: 'cades', name: v.cert.subject } };
+  const r = await app.ui.withProgress(n ? 'Firma dei documenti' : 'Firma dei file', async (p) => {
+    p.set(null, n ? 'Preparazione…' : 'Scegli i file da firmare…');
+    off = d.onProgress((x) => p.set(x.index / Math.max(1, x.total), `${x.phase === 'firma' ? 'Firma (il PIN può essere chiesto una volta)' : `${x.index + 1} di ${x.total}: ${x.name}`}`));
+    return n ? d.invoke('moduli:sign-files', { ...payload, paths: list.map((f) => f.path) }) : d.invoke('moduli:sign-batch', payload);
+  }, { cancellable: false }).finally(() => off?.());
+  if (!r?.ok) { app.ui.dialog({ title: 'Firma non riuscita', message: r?.error || 'Errore', cancelLabel: null, okLabel: 'Chiudi' }); return fail(r?.error || 'Firma non riuscita.'); }
+  if (r.result.cancelled) return undefined;
+  const results = r.result.results || [];
+  // stato «firmato» nell'archivio, per ogni documento firmato
+  for (const x of results) {
+    if (!x.ok || !x.path) continue;
+    try { app.bus.emit('archivio:stato', { path: x.path, nome: x.name, modifica: { imposta: 'firmato' }, origine: 'firma', copia: x.output, ricevuto: false }); } catch {}
+  }
+  const okN = results.filter((x) => x.ok).length;
+  const showDialog = opzioni.mostraEsito ?? (okN < results.length || !n);
+  if (showDialog) {
+    const { h } = app.ui;
+    const ul = h('ul', { class: 'mod-batch' }, results.map((x) => h('li', { class: x.ok ? 'ok' : 'bad' }, h('strong', {}, (x.ok ? '✔ ' : '✖ ') + x.name), x.ok ? h('small', {}, ' → ' + x.output) : h('small', {}, ' — ' + x.error))));
+    app.ui.dialog({ title: `Firmati ${okN} file su ${results.length}`, body: ul, cancelLabel: null, okLabel: 'Chiudi', width: 620 });
+  } else app.ui.toast(okN === 1 ? 'Documento firmato: la copia firmata è accanto all\'originale.' : `Firmati ${okN} documenti: le copie firmate sono accanto agli originali.`, { kind: 'success', timeout: 6000 });
+  if (!list) return undefined;
+  const byPath = new Map(results.map((x) => [x.path, x]));
+  return list.map((f) => { const x = byPath.get(f.path); return x ? { path: f.path, ok: !!x.ok, uscita: x.output || null, errore: x.ok ? null : x.error || 'Errore' } : { path: f.path, ok: false, uscita: null, errore: 'File non elaborato.' }; });
 }
 
 async function openP7m(app, f) {
