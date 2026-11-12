@@ -324,7 +324,7 @@ async function applyRedactions(app) {
     const pdfDoc = await openForEdit(bytes, doc);
     const font = await embedTextFont(pdfDoc);
     const pages = [...byPage.keys()].sort((a, b) => a - b);
-    const removedTexts = new Set(); let annots = 0; let fields = 0;
+    let removedWords = 0; let annots = 0; let fields = 0;
     // termini da cercare ovunque nella verifica: risultati della ricerca e testo selezionato,
     // esclusi quelli che l'utente ha deliberatamente lasciato visibili altrove
     const offTexts = new Set(marks(app).filter((m) => !m.on && m.text).map((m) => m.text.toLowerCase()));
@@ -338,7 +338,7 @@ async function applyRedactions(app) {
       page.cleanup();
       const words = pageWords(tc.items, tc.styles);
       const keep = wordsOutside(words, rects);
-      for (const w of words) if (wordHit(w, rects)) removedTexts.add(w.text);
+      removedWords += words.length - keep.length;
       const img = await renderRedactedPage(pdfjs, doc.pdf, i, rects, { color: v.color, label: v.label.trim(), dpi: pages.length > 60 ? 200 : 300, quality: pages.length > 60 ? 0.85 : 0.92, signal: p.signal });
       const r = await redactPage(pdfDoc, i, { image: img, view: img.view, rects, keepWords: keep, font });
       annots += r.annots; fields += r.fields;
@@ -360,7 +360,7 @@ async function applyRedactions(app) {
     p.set((pages.length + 1) / (pages.length + 2), 'Verifica: controllo che i dati oscurati non siano più presenti…');
     const marksMap = new Map([...byPage.entries()].map(([i, rs]) => [i, rs]));
     const ver = await verifyRedaction(pdfjs, out, marksMap, globalTerms, { signal: p.signal, getDocumentOptions: PDFJS_ASSETS });
-    return { out, ver, pages: pages.length, areas: on.length, removedTexts: removedTexts.size, annots, fields, outlineChanged, structure, san, ms: performance.now() - t0 };
+    return { out, ver, pages: pages.length, areas: on.length, removedTexts: removedWords, annots, fields, outlineChanged, structure, san, ms: performance.now() - t0 };
   });
   if (!result) return;
   const { h } = app.ui;
