@@ -1,0 +1,59 @@
+name: Segnala un problema
+description: Qualcosa non funziona come dovrebbe
+title: "[Problema] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Grazie per la segnalazione! Più dettagli ci dai, prima riusciamo a sistemare.
+        **Non allegare documenti riservati**: se il problema riguarda un PDF particolare, prova a riprodurlo con un file che puoi condividere.
+  - type: textarea
+    id: cosa
+    attributes:
+      label: Cosa è successo?
+      description: Descrivi il problema e cosa ti aspettavi invece.
+      placeholder: Quando faccio clic su «Unisci», Leggio…
+    validations:
+      required: true
+  - type: textarea
+    id: passi
+    attributes:
+      label: Come si riproduce?
+      description: I passi per far ricomparire il problema.
+      placeholder: |
+        1. Apri un PDF
+        2. Scegli lo strumento…
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: versione
+    attributes:
+      label: Versione di Leggio
+      description: La trovi in Leggio → Informazioni su Leggio (macOS) o nel nome del file che hai scaricato.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: sistema
+    attributes:
+      label: Sistema operativo
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS (Apple Silicon, M1/M2/M3/M4…)
+        - macOS (Intel)
+        - Altro
+    validations:
+      required: true
+  - type: input
+    id: versione-sistema
+    attributes:
+      label: Versione del sistema
+      placeholder: "es. macOS 15.3, Windows 11 24H2"
+  - type: textarea
+    id: allegati
+    attributes:
+      label: Schermate o file di esempio
+      description: Trascina qui eventuali immagini o un PDF di prova non riservato.

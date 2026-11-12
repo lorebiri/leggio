@@ -139,6 +139,7 @@ function buildMenu() {
       { label: 'Sito di Leggio', click: () => shell.openExternal('https://github.com/lorebiri/leggio') },
       { label: 'Segnala un problema', click: () => shell.openExternal('https://github.com/lorebiri/leggio/issues') },
       { label: 'Scorciatoie da tastiera', click: cmd('shortcuts') },
+      { type: 'separator' }, { label: 'Controlla aggiornamenti…', click: () => require('./updater.cjs').checkInteractive(mainWindow) },
     ] },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
@@ -214,6 +215,7 @@ else {
     registerFeatureModules();
     buildMenu();
     createWindow();
+    require('./updater.cjs').setup({ getWindow: () => mainWindow });
     sendOpen(process.argv.slice(app.isPackaged ? 1 : 2));
     app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) createWindow(); });
   });

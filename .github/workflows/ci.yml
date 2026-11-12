@@ -1,0 +1,40 @@
+# Controlli automatici a ogni push e pull request: test e compilazione dell'interfaccia.
+# Nota: Node 22 porta npm 10, che esegue gli script di installazione dei pacchetti.
+# (Con npm 11 in locale alcuni script vengono saltati: vedi docs/RILASCIO.md, «npm 11».)
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test e build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      # per test e build web non serve il binario di Electron
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Prepara i dati OCR
+        if: hashFiles('scripts/prepara-ocr.mjs') != ''
+        run: node scripts/prepara-ocr.mjs
+      - run: npm test
+      - run: npx vite build
