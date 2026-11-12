@@ -108,7 +108,8 @@ export function pgmGrigio(rgba, width, height) {
 export function stimaTempo(msTrascorsi, fatte, totali) {
   if (!fatte || fatte >= totali) return '';
   const resto = (msTrascorsi / fatte) * (totali - fatte) / 1000;
-  if (resto < 60) return `circa ${Math.max(1, Math.round(resto / 5) * 5)} secondi`;
+  if (resto < 10) return 'pochi secondi';
+  if (resto < 60) return `circa ${Math.round(resto / 5) * 5} secondi`;
   const min = Math.round(resto / 60);
   return min === 1 ? 'circa 1 minuto' : `circa ${min} minuti`;
 }

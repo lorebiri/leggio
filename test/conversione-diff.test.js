@@ -52,7 +52,7 @@ describe('diff a parole', () => {
     }
   });
 
-  it('documenti grandi: veloce e corretto', () => {
+  it('documenti grandi: corretto e senza esplosioni di tempo', () => {
     const a = Array.from({ length: 200000 }, (_, i) => 'parola' + (i % 5000));
     const b = [...a];
     b.splice(1000, 3, 'nuovo', 'testo');
@@ -63,7 +63,8 @@ describe('diff a parole', () => {
     const ms = Date.now() - t0;
     expect(applica(a, b, ops)).toEqual(b);
     expect(modifiche(ops, a, b)).toHaveLength(3);
-    expect(ms).toBeLessThan(15000); // di solito < 1 s; margine per macchine cariche (CI)
+    // solo i casi patologici (es. complessità quadratica): la misura vera è in test/conversione-benchmark.mjs
+    expect(ms).toBeLessThan(60000);
   });
 
   it('blocco totalmente diverso oltre il tetto: sostituito in blocco senza esplodere', () => {
