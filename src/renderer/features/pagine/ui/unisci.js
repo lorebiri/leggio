@@ -41,7 +41,15 @@ async function miniaturaPdf(bytes, password) {
   } catch { return null; } finally { pdf?.loadingTask?.destroy(); }
 }
 
-export async function apriUnisci(app, { file = [], includiAttivo = true, titolo = 'Unisci PDF (Combina file)', nomeRisultato } = {}) {
+let aperto = false; // una sola finestra «Unisci» alla volta
+
+export async function apriUnisci(app, opzioni = {}) {
+  if (aperto) { app.ui.toast('La finestra «Unisci» è già aperta'); return; }
+  aperto = true;
+  try { return await apriUnisciInterno(app, opzioni); } finally { aperto = false; }
+}
+
+async function apriUnisciInterno(app, { file = [], includiAttivo = true, titolo = 'Unisci PDF (Combina file)', nomeRisultato } = {}) {
   const { h } = app.ui;
   const voci = []; // { id, nome, tipo, bytes, lib, pagine, intervallo, thumb, firmato, url }
   let seq = 0;
@@ -54,7 +62,7 @@ export async function apriUnisci(app, { file = [], includiAttivo = true, titolo 
     const lib = await apriVeloce(bytes, d.password);
     voci.push({ id: ++seq, nome: d.name, tipo: 'pdf', bytes, lib, pagine: lib.getPageCount(), intervallo: '', firmato: firmato(lib), password: d.password });
     disegna();
-    const cv = await miniaturaPdf(bytes, d.password); const v = voci.find((x) => x.lib === lib); if (v) { v.thumb = cv; disegna(); }
+    miniaturaPdf(bytes, d.password).then((cv) => { const v = voci.find((x) => x.lib === lib); if (v) { v.thumb = cv; disegna(); } });
   };
   const aggiungiFile = async (files) => {
     for (const f of files) {
@@ -81,7 +89,7 @@ export async function apriUnisci(app, { file = [], includiAttivo = true, titolo 
   let trascinata = null;
   function disegna() {
     lista.innerHTML = '';
-    if (!voci.length) lista.append(h('div', { class: 'pg-lista-vuota' }, h('p', {}, 'Nessun file. Usa «Aggiungi file…» oppure trascina qui PDF e foto (JPG, PNG, HEIC).')));
+    if (!voci.length) lista.append(h('div', { class: 'pg-lista-vuota' }, h('span', { class: 'pg-drop-ico', html: icon('plus', 34) }), h('strong', {}, 'Trascina qui i PDF e le foto'), h('p', {}, 'oppure usa il pulsante «Aggiungi file…» qui sopra (JPG, PNG, HEIC e altre foto).')));
     voci.forEach((v, k) => {
       let errore = '';
       if (v.tipo === 'pdf' && v.intervallo.trim()) { try { intervalli(v.intervallo, v.pagine); } catch (e) { errore = e.message; } }
@@ -113,14 +121,24 @@ export async function apriUnisci(app, { file = [], includiAttivo = true, titolo 
     if (firmati.length) avvisi.append(h('div', { class: 'pg-avviso' }, `Attenzione: ${firmati.map((v) => `«${v.nome}»`).join(', ')} ${firmati.length === 1 ? 'è firmato' : 'sono firmati'} digitalmente. Nel PDF unito la firma non sarà più verificabile: conserva anche l'originale.`));
   }
   // file trascinati dal computer sull'elenco
-  lista.addEventListener('dragover', (e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); e.stopPropagation(); lista.classList.add('drop'); } });
-  lista.addEventListener('dragleave', (e) => { if (!lista.contains(e.relatedTarget)) lista.classList.remove('drop'); });
-  lista.addEventListener('drop', async (e) => {
-    if (!e.dataTransfer.files?.length) return;
+  // File trascinati: finché la finestra è aperta, OVUNQUE si lascino cadere finiscono nell'elenco
+  // (mai nel documento aperto dietro). Intercettati in cattura, prima di ogni altro gestore.
+  let spegni = null;
+  const trasporto = (e) => e.dataTransfer?.types?.includes('Files');
+  const suTrascina = (e) => {
+    if (!trasporto(e)) return;
+    e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'copy';
+    lista.classList.add('drop'); clearTimeout(spegni); spegni = setTimeout(() => lista.classList.remove('drop'), 250);
+  };
+  const suRilascio = async (e) => {
+    if (!trasporto(e)) return;
     e.preventDefault(); e.stopPropagation(); lista.classList.remove('drop');
+    app.el?.root?.classList.remove('dragging');
     const fs = []; for (const f of e.dataTransfer.files) fs.push(await leggiFile(f));
-    await aggiungiFile(fs);
-  });
+    if (fs.length) await aggiungiFile(fs);
+  };
+  const ascolta = (on) => { for (const t of ['dragenter', 'dragover']) document[on ? 'addEventListener' : 'removeEventListener'](t, suTrascina, true); document[on ? 'addEventListener' : 'removeEventListener']('drop', suRilascio, true); };
+  ascolta(true);
 
   const altriAperti = () => app.docs.filter((d) => !voci.some((v) => v.nome === d.name && v.tipo === 'pdf'));
   const corpo = h('div', {},
@@ -133,6 +151,7 @@ export async function apriUnisci(app, { file = [], includiAttivo = true, titolo 
     lista, avvisi);
 
   if (includiAttivo && app.activeDoc) await aggiungiDoc(app.activeDoc).catch((err) => mostraErrore(app, err, 'Unisci PDF'));
+  lista.dataset.suggerimento = 'Rilascia per aggiungere all\'elenco';
   if (file.length) await aggiungiFile(file);
   disegna();
 
@@ -147,6 +166,7 @@ export async function apriUnisci(app, { file = [], includiAttivo = true, titolo 
     for (const x of voci) if (x.tipo === 'pdf' && x.intervallo.trim()) { try { intervalli(x.intervallo, x.pagine); } catch (e) { return `«${x.nome}»: ${e.message}`; } }
     return null;
   } });
+  ascolta(false);
   const pulisci = () => voci.forEach((x) => x.url && URL.revokeObjectURL(x.url));
   if (!v) return pulisci();
   app.settings.set('pagine.unisci', { segnalibri: v.segnalibri, originali: v.originali, formato: v.formato });

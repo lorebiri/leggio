@@ -22,6 +22,18 @@ Codice: `src/renderer/features/pagine/` (logica pura in `logica/`, interfaccia i
 | Pannello Segnalibri (`outline`) | — | Sostituisce quello di base. Aggiungi dalla pagina corrente (il testo selezionato diventa il titolo), sotto-segnalibro, rinomina (anche F2 o doppio clic), «Imposta pagina», elimina, trascina sopra/sotto/dentro. Ogni modifica è annullabile. |
 | Azioni sulle miniature | — | Ruota a destra/sinistra, Duplica, Estrai, Inserisci pagina vuota dopo, Inserisci da file, Sostituisci, Apri in Organizza, Elimina (`delete-pages`, anche con il tasto Canc). |
 
+## Secondo giro (prova d'uso del 12/11/2026)
+- In Organizza, «Pagine bianche» lega i risultati al documento pdf.js, cioè alla versione del file. Il modello
+  si ricostruisce se il documento è cambiato mentre la vista era chiusa.
+- La barra di Organizza non si sposta più: il titolo ha larghezza fissa e il numero di pagine selezionate sta
+  nella riga in basso. A 1366 px la barra sta su una riga. Con Organizza aperto, «Annulla» della barra
+  principale annulla prima i passi della griglia.
+- In Unisci, un file lasciato cadere ovunque mentre la finestra è aperta finisce nell'elenco, mai nel documento
+  dietro. La zona di rilascio è grande e evidenziata, le frecce sono più grandi e si apre una sola finestra
+  alla volta.
+- Le pagine si possono scrivere anche come «da 1 a 3», «pag. 5», «2 e 4», «dalla 5 in poi».
+- Testi corretti: niente più «biancahe», singolare e plurale concordati.
+
 ## Come funziona
 - Le pagine si spostano **in place**: l'albero /Pages viene ricostruito piatto con gli stessi oggetti pagina
   (`impostaOrdine`). Così annotazioni, link e campi modulo restano validi. I campi delle pagine eliminate

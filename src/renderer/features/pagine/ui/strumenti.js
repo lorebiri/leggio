@@ -13,6 +13,8 @@ import { modificaDoc } from './comune.js';
 const pagineDi = (app, s) => intervalli(s, app.activeDoc.pageCount);
 const valida = (app, s) => { try { pagineDi(app, s); return null; } catch (e) { return e.message; } };
 const conta = (n) => (n === 1 ? '1 pagina' : `${n} pagine`);
+/** Etichetta concordata: f(n, 'Ruotata', 'Ruotate') → «Ruotata 1 pagina» / «Ruotate 3 pagine». */
+const fatte = (n, sing, plur) => (n === 1 ? `${sing} 1 pagina` : `${plur} ${n} pagine`);
 
 /** Esegue una modifica annullabile con pdf-lib mostrando l'avanzamento per i documenti grandi. */
 export async function modifica(app, etichetta, fn) {
@@ -76,7 +78,7 @@ export async function estrai(app, preset) {
     }
     return true;
   });
-  if (ok && v.elimina) { const orig = app.docs.find((d) => d === doc); if (orig) { app.activate(orig); await modifica(app, `Tolte ${conta(indici.length)} estratte`, (d) => S.elimina(d, indici)); } }
+  if (ok && v.elimina) { const orig = app.docs.find((d) => d === doc); if (orig) { app.activate(orig); await modifica(app, (indici.length === 1 ? 'Tolta la pagina estratta' : `Tolte le ${indici.length} pagine estratte`), (d) => S.elimina(d, indici)); } }
 }
 
 // ---------------- elimina ----------------
@@ -102,7 +104,8 @@ export async function eliminaBianche(app) {
   if (!bianche) return;
   if (!bianche.length) return app.ui.toast('Nessuna pagina bianca trovata', { kind: 'success' });
   if (bianche.length >= doc.pageCount) return app.ui.toast('Tutte le pagine sembrano bianche: non elimino nulla.', { kind: 'warning' });
-  const ok = await app.ui.confirm(`Ho trovato ${conta(bianche.length)} bianca${bianche.length === 1 ? '' : 'he'}: ${indiciInTesto(bianche)}.\nVuoi eliminarle?`, { title: 'Pagine bianche', okLabel: 'Elimina', danger: true });
+  const una = bianche.length === 1;
+  const ok = await app.ui.confirm(`Ho trovato ${una ? 'una pagina bianca' : `${bianche.length} pagine bianche`}: ${una ? 'pagina' : 'pagine'} ${indiciInTesto(bianche)}.\nVuoi ${una ? 'eliminarla' : 'eliminarle'}? Potrai sempre annullare.`, { title: 'Pagine bianche', okLabel: una ? 'Elimina la pagina' : `Elimina ${bianche.length} pagine`, danger: true });
   if (ok) await eliminaPagine(app, bianche);
 }
 
@@ -114,7 +117,7 @@ export async function ruotaDialogo(app) {
   ], okLabel: 'Ruota', validate: (x) => valida(app, x.pages) });
   if (!v) return;
   const indici = pagineDi(app, v.pages);
-  await modifica(app, `Ruotate ${conta(indici.length)}`, (d) => S.ruota(d, indici, +v.gradi));
+  await modifica(app, fatte(indici.length, 'Ruotata', 'Ruotate'), (d) => S.ruota(d, indici, +v.gradi));
 }
 
 // ---------------- inserisci ----------------
@@ -148,7 +151,7 @@ export async function inserisci(app, { dopo = app.viewer.pageIndex, sorgente } =
     if (!w) return;
     indici = intervalli(w.p, indici.length);
   }
-  await modifica(app, `Inserite ${conta(indici.length)} da «${scelto.nome}»`, (d) => S.inserisciDaPdf(d, scelto.lib, indici, at));
+  await modifica(app, `${fatte(indici.length, 'Inserita', 'Inserite')} da «${scelto.nome}»`, (d) => S.inserisciDaPdf(d, scelto.lib, indici, at));
 }
 
 // ---------------- sostituisci ----------------
@@ -165,7 +168,7 @@ export async function sostituisci(app, preset) {
   const m = scelto.lib.getPageCount();
   if (v.da - 1 + target.length > m) return app.ui.dialog({ title: 'Sostituisci pagine', message: `«${scelto.nome}» ha ${m} pagine: non bastano per sostituirne ${target.length} partendo dalla ${v.da}.`, cancelLabel: null, okLabel: 'Ho capito' });
   const src = target.map((_, k) => v.da - 1 + k);
-  await modifica(app, `Sostituite ${conta(target.length)}`, (d) => S.sostituisci(d, target, scelto.lib, src));
+  await modifica(app, fatte(target.length, 'Sostituita', 'Sostituite'), (d) => S.sostituisci(d, target, scelto.lib, src));
 }
 
 // ---------------- duplica / inverti ----------------
@@ -177,7 +180,7 @@ export async function duplicaDialogo(app, preset) {
   ], okLabel: 'Duplica', validate: (x) => valida(app, x.pages) || (!(Number.isInteger(x.copie) && x.copie >= 1 && x.copie <= 100) ? 'Le copie vanno da 1 a 100.' : null) });
   if (!v) return;
   const indici = pagineDi(app, v.pages);
-  await modifica(app, `Duplicate ${conta(indici.length)}`, (d) => S.duplica(d, indici, { copie: v.copie, dove: v.dove }));
+  await modifica(app, fatte(indici.length, 'Duplicata', 'Duplicate'), (d) => S.duplica(d, indici, { copie: v.copie, dove: v.dove }));
 }
 export async function invertiDialogo(app) {
   const v = await app.ui.dialog({ title: 'Inverti ordine delle pagine', message: 'Utile per le scansioni fatte dall\'ultima pagina alla prima.', fields: [
