@@ -1,0 +1,6 @@
+/* Area «conversione»: stili propri (prefisso conv-) */
+.conv-banner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 14px; background: var(--accent-soft); color: var(--ink); border-bottom: 1px solid var(--border); font-size: 14px; }
+.conv-banner-ico { color: var(--accent); display: flex; }
+.conv-banner-txt { flex: 1 1 280px; }
+.conv-link { border: 0; background: none; color: var(--muted); text-decoration: underline; cursor: pointer; font: inherit; padding: 4px; }
+.conv-check { display: inline-flex; align-items: center; gap: 4px; margin: 2px 14px 2px 0; cursor: pointer; }
