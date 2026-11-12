@@ -1,5 +1,5 @@
 // Azioni guidate: file → sequenza di operazioni → dove salvare → avanzamento → rapporto finale.
-import { tutteLeOperazioni, validaSequenza, eseguiSequenza, nomeUscita, SkipError } from '../lib/batch-ops.js';
+import { tutteLeOperazioni, validaSequenza, eseguiSequenza, nomeUscita, SkipError, operazioneProteggi, destinazione } from '../lib/batch-ops.js';
 import { chooseFolder, chooseFiles, writeOut, isDesktop, call, fileItem, dirname, basename } from '../native.js';
 import { preferenze as prefProtocollo } from './protocollo.js';
 import { contatoreCorrente } from '../lib/protocollo.js';
@@ -25,9 +25,10 @@ export function operazioni(app) {
   const sv = app.services || {};
   const prog = (ctx) => ({ set() {}, signal: ctx.signal, get cancelled() { return !!ctx.signal?.aborted; } });
   if (typeof sv.ocr === 'function' && !ha('ocr')) esterne.push({ id: 'ocr', label: 'Rendi ricercabile (OCR)', description: 'Riconosce il testo delle scansioni (italiano e inglese)', fields: [{ name: 'info', type: 'info', text: 'Le pagine che hanno già testo non vengono toccate.' }], summary: () => 'Rendi ricercabile (OCR)', runBytes: (b, _p, ctx) => sv.ocr(b, { deskew: true, progress: prog(ctx) }) });
-  if (typeof sv.compress === 'function' && !ha('comprimi-sotto')) esterne.push({ id: 'comprimi-sotto', label: 'Riduci dimensioni (sotto N MB)', description: 'Comprime le immagini fino a stare sotto la dimensione scelta', fields: [{ name: 'mb', label: 'Dimensione massima (MB)', type: 'number', value: 10, min: 0.2, max: 500, step: 0.1 }], summary: (p) => `Riduci sotto ${p.mb} MB`, validate: (p) => (!(+p.mb > 0) ? 'Scrivi una dimensione in MB.' : null), runBytes: async (b, p, ctx) => { const r = await sv.compress(b, { maxBytes: Math.round(+p.mb * 1048576), signal: ctx.signal }); if (r && r.reached === false) ctx.note = [ctx.note, `sopra ${p.mb} MB anche dopo la riduzione`].filter(Boolean).join(' — '); return r?.bytes || b; } });
+  if (typeof sv.protect === 'function' && !ha('proteggi')) esterne.push({ ...operazioneProteggi(sv.protect), esterna: true });
+  if (typeof sv.compress === 'function' && !ha('comprimi-sotto') && !ha('riduci')) esterne.push({ id: 'comprimi-sotto', label: 'Riduci dimensioni (sotto N MB)', description: 'Comprime le immagini fino a stare sotto la dimensione scelta', fields: [{ name: 'mb', label: 'Dimensione massima (MB)', type: 'number', value: 10, min: 0.2, max: 500, step: 0.1 }], summary: (p) => `Riduci sotto ${p.mb} MB`, validate: (p) => (!(+p.mb > 0) ? 'Scrivi una dimensione in MB.' : null), runBytes: async (b, p, ctx) => { const r = await sv.compress(b, { maxBytes: Math.round(+p.mb * 1048576), signal: ctx.signal }); if (r && r.reached === false) ctx.note = [ctx.note, `sopra ${p.mb} MB anche dopo la riduzione`].filter(Boolean).join(' — '); return r?.bytes || b; } });
   if (typeof sv.pdfa === 'function' && !ha('pdfa')) esterne.push({ id: 'pdfa', label: 'Converti in PDF/A', description: 'Formato per la conservazione, con verifica', fields: [{ name: 'part', label: 'Variante', type: 'select', value: '2', options: [{ value: '2', label: 'PDF/A-2 (consigliata)' }, { value: '3', label: 'PDF/A-3' }] }, { name: 'ocr', label: 'Riconosci il testo delle scansioni', type: 'checkbox', value: true }], summary: (p) => `PDF/A-${p.part}`, runBytes: async (b, p, ctx) => { const r = await sv.pdfa(b, { part: +p.part || 2, ocr: !!p.ocr, lang: 'it-IT', progress: prog(ctx) }); const ko = (r.verifica || []).filter((x) => !x.ok).length; ctx.note = [ctx.note, ko ? `PDF/A: ${ko} controlli non superati` : 'PDF/A verificato'].filter(Boolean).join(' — '); return r.bytes; } });
-  if (typeof sv.sanitize === 'function' && !ha('sanifica')) esterne.push({ id: 'sanifica', label: 'Togli contenuti nascosti', description: 'Metadati, commenti, allegati, JavaScript, livelli nascosti, versioni precedenti', fields: [{ name: 'commenti', label: 'Togli anche i commenti', type: 'checkbox', value: true }, { name: 'allegati', label: 'Togli anche gli allegati', type: 'checkbox', value: true }], summary: () => 'Togli contenuti nascosti', runBytes: async (b, p) => (await sv.sanitize(b, { metadati: true, javascript: true, allegati: !!p.allegati, commenti: !!p.commenti, campiNascosti: true, livelliNascosti: true, datiPrivati: true, xfa: true, versioni: true })).bytes });
+  if (typeof sv.sanitize === 'function' && !ha('sanifica') && !ha('sanitize')) esterne.push({ id: 'sanifica', label: 'Togli contenuti nascosti', description: 'Metadati, commenti, allegati, JavaScript, livelli nascosti, versioni precedenti', fields: [{ name: 'commenti', label: 'Togli anche i commenti', type: 'checkbox', value: true }, { name: 'allegati', label: 'Togli anche gli allegati', type: 'checkbox', value: true }], summary: () => 'Togli contenuti nascosti', runBytes: async (b, p) => (await sv.sanitize(b, { metadati: true, javascript: true, allegati: !!p.allegati, commenti: !!p.commenti, campiNascosti: true, livelliNascosti: true, datiPrivati: true, xfa: true, versioni: true })).bytes });
   if (typeof sv.oscuraDatiPersonali === 'function' && !ha('oscura-modelli')) esterne.push({ id: 'oscura-modelli', label: 'Oscura dati personali (modelli)', description: 'Codici fiscali, IBAN e altri dati trovati con i modelli', fields: [{ name: 'info', type: 'info', text: 'Oscuramento definitivo: il testo sotto viene eliminato.' }], summary: () => 'Oscura dati personali', runBytes: async (b, _p, ctx) => { const r = await sv.oscuraDatiPersonali(b, { progress: prog(ctx) }); ctx.note = [ctx.note, `${r.trovati ?? 0} dati oscurati`].filter(Boolean).join(' — '); return r.bytes; } });
   return tutteLeOperazioni(esterne);
 }
@@ -184,6 +185,10 @@ export function openBatch(app, deps, preset = null) {
       if (isDesktop() && folder) { try { return await call(app, 'write', { folder, sub: opz.dest === 'other' ? '' : 'Elaborati', name: `registro_azioni_guidate_${lavoro.id}.csv`, bytes: csv, overwrite: true }); } catch {} }
       return null;
     };
+    const scrivi = async (d, name, bytes) => {
+      if (d.folder && isDesktop()) return call(app, 'write', { folder: d.folder, sub: d.sub, name, bytes, overwrite: d.overwrite });
+      return writeOut(app, null, { name, bytes });
+    };
     await salva(true);
     const todo = daFare(lavoro);
     const done = await app.ui.withProgress('Azioni guidate', async (p) => {
@@ -194,7 +199,9 @@ export function openBatch(app, deps, preset = null) {
         const k = c0.fatti + i;
         const el = (Date.now() - t0) / 1000; const rate = i ? el / i : 0;
         p.set(k / lavoro.items.length, `File ${k + 1} di ${lavoro.items.length}: ${it.name}${i > 5 ? ` — circa ${Math.ceil((todo.length - i) * rate / 60)} min alla fine` : ''}`);
-        const ctx = { index: lavoro.items.indexOf(rec), name: it.name, signal: p.signal };
+        const dest = destinazione(it, opz);
+        // ctx.scriviFile: le operazioni che producono altri file (.docx, .txt…) li scrivono accanto al risultato
+        const ctx = { index: lavoro.items.indexOf(rec), name: it.name, signal: p.signal, scriviFile: (nome, b) => scrivi({ ...dest, overwrite: true }, nome, b) };
         const s0 = performance.now();
         try {
           if (it.size > MAX_FILE) throw new SkipError('Il file è troppo grande (oltre 500 MB).');
@@ -202,16 +209,7 @@ export function openBatch(app, deps, preset = null) {
           const out = await eseguiSequenza(bytes, passi, { PDFLib: app.lib.PDFLib, openPdfLib: (b) => app.lib.openPdfLib(b), savePdfLib: (d) => app.lib.savePdfLib(d), ops, ctx, signal: p.signal });
           const name = opz.nome === 'contenuto' ? await nomeDalContenuto(out, it.name, app.settings.get('avanzati.rinomina.regola')) : nomeUscita(it.name, { modo: opz.nome });
           if (opz.nome === 'contenuto') ctx.note = [ctx.note, `nuovo nome: ${name}`].filter(Boolean).join(' — ');
-          let dove;
-          if (opz.dest === 'overwrite' && it.path) dove = await call(app, 'write', { folder: dirname(it.path), name: basename(it.path), bytes: out, overwrite: true });
-          else if (opz.dest === 'other' && opz.destFolder) dove = await writeOut(app, opz.destFolder, { name, bytes: out });
-          else if (it.path) {
-            // sottocartella «Elaborati» accanto all'originale, mantenendo la struttura delle sottocartelle
-            const inFolder = opz.folder && it.path.startsWith(opz.folder);
-            const base = inFolder ? opz.folder : dirname(it.path);
-            const relDir = inFolder ? dirname(String(it.rel).replace(/\\/g, '/')) : '';
-            dove = await call(app, 'write', { folder: base, sub: ['Elaborati', relDir && relDir !== it.rel ? relDir : ''].filter(Boolean).join('/'), name, bytes: out, overwrite: true });
-          } else dove = await writeOut(app, null, { name, bytes: out });
+          const dove = await scrivi(dest, opz.dest === 'overwrite' && it.path ? basename(it.path) : name, out);
           registra(lavoro, rec, { s: 'ok', dove, nota: ctx.note || '', ms: performance.now() - s0 });
         } catch (e) {
           if (e?.name === 'AbortError') break;

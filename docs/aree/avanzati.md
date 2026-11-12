@@ -24,8 +24,45 @@ Tutto funziona senza rete (tranne «Crea PDF da pagina web», che scarica la pag
 
 Pannelli: `p7m` (Firme .p7m), `fattura` (Fattura elettronica), `layers` (Livelli). I pannelli `p7m` e `fattura` appartengono al loro documento: passando a un altro documento si torna alle miniature. Impostazione: «riapri i documenti dell'ultima volta» (`avanzati.restoreSession`, attiva).
 
+## Flussi dell'ufficio amministrativo (terzo ciclo)
+
+| id | Nome | Criterio di accettazione (verificato) |
+|---|---|---|
+| `mission-file` | Pratica di missione | Modulo PDF + foto (JPG/PNG, HEIC su macOS) in qualunque ordine → riordino con frecce, ↻ per foto storte; foto girate secondo l'EXIF e ritagliate ai margini bianchi; OCR se c'è `app.services.ocr`; riduzione sotto la soglia con `app.services.compress`; se non basta, proposta «parte k di N» con ogni parte sotto soglia; pagina di riepilogo con numero di pagina di ogni giustificativo; nome `Missione_COGNOME_aaaa-mm-gg.pdf`. Dopo aver scelto i file: 2 clic (Crea la pratica, Salva). |
+| `dossier-index` | Fascicolo con indice | N documenti (anche .p7m e foto) → PDF con pagina/e indice (voce, numero di documento, pagina iniziale), voci cliccabili, un segnalibro per documento, «Allegato n. k» sulla prima pagina, numerazione facoltativa; i file illeggibili non fermano il fascicolo e vengono elencati. |
+| `reporting-package` | Pacchetto per la rendicontazione | Cartella con una sottocartella per voce → `Rendicontazione/Voce_<voce>.pdf` (fascicolo con indice e allegati numerati) e `Riepilogo_rendicontazione.csv` (voce, n. allegato, file, pagine, pagina nel PDF, data, importo, CIG, CUP; «;» e virgola decimale, apribile in Excel; totali per voce). |
+| `publish-ready` | Pronto per la pubblicazione | Pannello a destra, passi in ordine sul documento attivo: oscura dati personali (servizio `oscuraDatiPersonali` se esiste, altrimenti «Cerca e oscura»), `sanitize`, prepara accessibilità, `pdfa`, `controllaAccessibilita`; salva `<nome>_pubblicabile.pdf` e `<nome>_pubblicabile_rapporto.pdf` con esiti, controlli e SHA-256. Ogni passo è annullabile. |
+| `entity-profile`, `insert-entity`, `fill-entity` | Profilo dell'ente | Denominazione, sigla, ufficio, sede, CF, P.IVA (verificata), codice IPA, codice univoco ufficio, PEC, direttore, firmatari. Estende il profilo personale dell'area moduli (completa ente/P.IVA/ufficio se vuoti, non sovrascrive). Un clic: inserimento sulla pagina, compilazione dei campi dei moduli (solo campi dell'ente; il codice fiscale personale resta all'area moduli), proposto nel timbro di protocollo e nella dichiarazione di conformità. Servizi: `app.services.profiloEnte()`, `app.services.profiloCompleto()`. |
+| pannello `dati-chiave` | Dati chiave | CIG, CUP, P.IVA e CF (con carattere di controllo), IBAN (mod 97), totale e importi, scadenze, ognuno con «Copia»; «Copia tutti i dati». DURC: scadenza letta o calcolata (data richiesta + giorni da impostazione, 120 predefiniti, da verificare): rosso se scaduto. |
+
+## Azioni guidate: formato delle operazioni delle altre aree
+```js
+app.bus.on('batch:operations', (list) => list.push({
+  id, label, description, fields /* come app.ui.dialog */, summary(params) /* testo breve */, validate?(params) /* → errore|null */,
+  last?: true /* deve essere l'ultima (es. proteggi) */,
+  runBytes: async (bytes, params, ctx) => nuoviBytes,
+}));
+// ctx: { index, name, signal /* AbortSignal: interrompersi anche a metà file */, scriviFile(nome, bytes) /* altri file accanto al risultato */, note /* testo per il registro */ }
+```
+- Le operazioni NON devono conservare stato tra un file e l'altro: dopo un'interruzione il lavoro riparte dal primo file non fatto con gli stessi `params` (le password dell'operazione `proteggi` non vengono salvate e si richiedono alla ripresa).
+- Un'operazione registrata con lo stesso `id` sostituisce la nostra. Se un'area espone il servizio ma non registra l'operazione, Leggio la offre sopra il servizio: `ocr`, `comprimi-sotto` (salvo `riduci`), `pdfa`, `sanifica`, `oscura-modelli`, `proteggi` (`app.services.protect`; Leggio non ha più una cifratura propria).
+- Errori: `SkipError` (o qualunque errore) → il file viene segnato «saltato»/«non riuscito» con il messaggio, gli altri proseguono.
+
+## Azioni guidate su migliaia di file
+- Nessun limite basso: fino a 200.000 file per cartella; l'interfaccia mostra al massimo 400 righe dell'elenco e, nel rapporto, tutti i problemi (fino a 500) più un campione dei riusciti.
+- Stato del lavoro salvato nel profilo dell'app (`avanzati-azioni-guidate.json`, canali `job-save|load|clear`) al più ogni 3 s: dopo una chiusura o un annullamento, riaprendo «Azioni guidate» compare «Riprendi (N file)».
+- Registro completo `Elaborati/registro_azioni_guidate_<id>.csv` (esito, file, dettagli, destinazione, durata).
+- Le uscite in «Elaborati» sovrascrivono quelle con lo stesso nome (così la ripresa non crea doppioni); gli originali non si toccano mai senza conferma.
+- Misura (MacBook, app Electron, 1.000 PDF di 3 pagine in 60 sottocartelle, numeri di pagina + rimozione metadati): vedi rapporto del ciclo.
+
+## Moduli puri in `lib/` (usati in sola lettura anche dall'area «archivio»)
+`cades.js` (openP7m, overallStatus, innerName, sniff, looksLikeP7m), `fattura.js` (parseFattura, fatturaHtml, nomeProposto, isFattura), `xml.js`, `der.js`,
+`datichiave.js` (estraiDati(testo,{oggi,durataDurc}), partitaIvaValida, codiceFiscaleValido, ibanValido, importo, riepilogoTesto, DURATA_DURC_GIORNI),
+`rinomina.js` (analizza, proponiNome, trovaDate), `mime.js` (parseMime, parseDaticert, attachments, bodyText, summary), `ente.js`, `fascicolo.js` (creaFascicolo),
+`missione.js`, `rendiconto.js`, `registro.js`, `batch-ops.js`, `protocollo.js`, `conformita.js`, `tagger.js`, `textsearch.js`, `report.js`.
+Le firme non cambiano senza avviso nel rapporto del ciclo.
+
 ## Per le altre aree
-- **Operazioni nelle azioni guidate**: `app.bus.on('batch:operations', (list) => list.push({ id, label, description, fields, summary(params), runBytes: async (bytes, params, ctx) => nuoviBytes }))`. Così OCR, compressione vera e PDF/A compaiono nell'elenco.
 - `app.avanzati.openSignedFile(app, { bytes, name })` e `app.avanzati.openFattura(app, bytes, name)` aprono .p7m e fatture da qualunque punto.
 
 ## Limiti noti (onesti)

@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import * as PDFLib from '@cantoo/pdf-lib';
 import fs from 'node:fs';
-import { OPERAZIONI, tutteLeOperazioni, validaSequenza, eseguiSequenza, nomeUscita, SkipError } from '../src/renderer/features/avanzati/lib/batch-ops.js';
+import { OPERAZIONI, tutteLeOperazioni, validaSequenza, eseguiSequenza, nomeUscita, SkipError, operazioneProteggi, destinazione } from '../src/renderer/features/avanzati/lib/batch-ops.js';
 import { applicaProtocollo, righeTimbro, normalizzaData, contatoreCorrente, avanzaContatore, visivoAPagina, formattaNumero } from '../src/renderer/features/avanzati/lib/protocollo.js';
 
 const fixture = new Uint8Array(fs.readFileSync(new URL('./fixtures/prova.pdf', import.meta.url)));
+const protectFinto = async (b, o) => { const d = await PDFLib.PDFDocument.load(b); d.encrypt({ userPassword: o.userPassword, ownerPassword: 'x' }); return d.save(); };
 const env = (extra = {}) => ({
-  PDFLib, ops: tutteLeOperazioni(extra.esterne || []), ctx: extra.ctx || {},
+  PDFLib, ops: tutteLeOperazioni([{ ...operazioneProteggi(protectFinto), esterna: true }, ...(extra.esterne || [])]), ctx: extra.ctx || {},
   openPdfLib: (b) => PDFLib.PDFDocument.load(b, { ignoreEncryption: true, updateMetadata: false }),
   savePdfLib: (d) => d.save({ useObjectStreams: true }),
 });
@@ -50,7 +51,7 @@ describe('timbro di protocollo', () => {
 
 describe('azioni guidate', () => {
   it('valida la sequenza (Proteggi per ultima, password lunga)', () => {
-    const ops = tutteLeOperazioni();
+    const ops = tutteLeOperazioni([{ ...operazioneProteggi(protectFinto), esterna: true }]);
     expect(validaSequenza([], ops)).toMatch(/almeno/);
     expect(validaSequenza([{ op: 'proteggi', params: { password: 'abcd' } }, { op: 'ruota', params: {} }], ops)).toMatch(/ultima/);
     expect(validaSequenza([{ op: 'proteggi', params: { password: 'ab' } }], ops)).toMatch(/4 caratteri/);
@@ -88,6 +89,30 @@ describe('azioni guidate', () => {
     await expect(eseguiSequenza(new Uint8Array([1, 2, 3]), [{ op: 'ruota', params: {} }], env())).rejects.toBeInstanceOf(SkipError);
     const prot = await eseguiSequenza(fixture, [{ op: 'proteggi', params: { password: 'abcd1234' } }], env());
     await expect(eseguiSequenza(prot, [{ op: 'ruota', params: {} }], env())).rejects.toThrow(/protetto/);
+  });
+
+  it('passa ctx.signal e ctx.scriviFile alle operazioni, e l\'annullamento le ferma a metà', async () => {
+    const scritti = [];
+    const ctrl = new AbortController();
+    const esterne = [
+      { id: 'esporta-txt', label: 'Esporta testo', runBytes: async (b, _p, ctx) => { await ctx.scriviFile('documento.txt', new TextEncoder().encode('ciao')); expect(ctx.signal).toBe(ctrl.signal); return b; } },
+      { id: 'lungo', label: 'OCR lungo', runBytes: (b, _p, ctx) => new Promise((res, rej) => { const t = setTimeout(() => res(b), 5000); ctx.signal.addEventListener('abort', () => { clearTimeout(t); rej(new DOMException('Annullato', 'AbortError')); }); }) },
+    ];
+    const ctx = { scriviFile: async (n, b) => { scritti.push([n, b.length]); } };
+    const e = { ...env({ esterne, ctx }), signal: ctrl.signal };
+    const t0 = Date.now();
+    setTimeout(() => ctrl.abort(), 50);
+    await expect(eseguiSequenza(fixture, [{ op: 'esporta-txt' }, { op: 'lungo' }, { op: 'ruota', params: {} }], e)).rejects.toThrow(/Annullato/);
+    expect(Date.now() - t0).toBeLessThan(2000);
+    expect(scritti).toEqual([['documento.txt', 4]]);
+  });
+
+  it('destinazione: «Elaborati» con le sottocartelle, altra cartella, sostituzione', () => {
+    expect(destinazione({ path: '/c/a/b/x.pdf', rel: 'a/b/x.pdf' }, { dest: 'sub', folder: '/c' })).toEqual({ folder: '/c', sub: 'Elaborati/a/b', overwrite: true });
+    expect(destinazione({ path: '/d/x.pdf', rel: 'x.pdf' }, { dest: 'sub', folder: null })).toEqual({ folder: '/d', sub: 'Elaborati', overwrite: true });
+    expect(destinazione({ path: '/c/x.pdf' }, { dest: 'other', destFolder: '/out' })).toEqual({ folder: '/out', sub: '', overwrite: false });
+    expect(destinazione({ path: 'C:\\c\\x.pdf' }, { dest: 'overwrite' })).toEqual({ folder: 'C:\\c', sub: '', overwrite: true });
+    expect(destinazione({ name: 'x.pdf' }, { dest: 'sub' })).toEqual({ folder: null, sub: '', overwrite: false });
   });
 
   it('nomi dei file di uscita', () => {
