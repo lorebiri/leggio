@@ -100,3 +100,9 @@ Id riservati usati dalla schermata iniziale (se l'area li implementa, usare **es
 8. Collaudo: `npx vite build && mkdir -p dist/fixtures && cp test/fixtures/*.pdf dist/fixtures/` poi anteprima
    su http://localhost:5199 (`npx vite preview --port 5199`); in console `window.__leggio` è l'app.
    Esempio: `await __leggio.openBytes(new Uint8Array(await (await fetch('/fixtures/prova.pdf')).arrayBuffer()), {name:'prova.pdf'})`.
+
+## Test che girano anche su Windows (la CI li esegue su Windows, macOS e Linux)
+- A pdf.js in Node si passano **URL `file://`** per il worker (`pathToFileURL(...).href`) e percorsi con la **barra finale `/`**
+  per `standardFontDataUrl` (`fileURLToPath(...).replace(/\\/g, '/')`): con i percorsi «D:\…» di Windows pdf.js fallisce.
+- Niente script `.sh` eseguiti direttamente: su Windows usare `it.skipIf(process.platform === 'win32')`.
+- Niente soglie di tempo strette nei test unitari: le macchine della CI sono lente; le misure vanno negli script di benchmark.

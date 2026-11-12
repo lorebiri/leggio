@@ -31,7 +31,7 @@ describe('cifratura in blocco con chiave riusata', () => {
     const { fileURLToPath } = await import('node:url');
     const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
     const { encryptBytes, forgetReusedKeys, openDecrypted } = await import('../src/renderer/features/sicurezza/logica/cifratura.js');
-    const FONTS = fileURLToPath(new URL('../node_modules/pdfjs-dist/standard_fonts/', import.meta.url));
+    const FONTS = fileURLToPath(new URL('../node_modules/pdfjs-dist/standard_fonts/', import.meta.url)).replace(/\\/g, '/');
     const prova = new Uint8Array(readFileSync(new URL('./fixtures/prova.pdf', import.meta.url)));
     const opts = { reuseKey: true, userPassword: 'lotto2026', permissions: { copia: false } };
     const t0 = Date.now(); const a = await encryptBytes(prova, opts); const t1 = Date.now();
