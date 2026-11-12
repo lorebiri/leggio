@@ -42,7 +42,7 @@ function colorFrom(vals) {
 export function interpret(parsed, res, opts = {}) {
   const maxOps = opts.maxOps ?? 2_000_000;
   const maxDepth = opts.maxDepth ?? 8;
-  const out = { shows: [], images: [], forms: [], opCount: 0, truncated: false, unbalanced: false, finalDepth: 0, endCtmIdentity: true, unsupportedFonts: new Set() };
+  const out = { shows: [], images: [], forms: [], opCount: 0, truncated: false, unbalanced: false, excessQ: 0, finalDepth: 0, endCtmIdentity: true, unsupportedFonts: new Set() };
   run(parsed, res, IDENT, out, 0, null, maxOps, maxDepth);
   return out;
 }
@@ -57,7 +57,7 @@ function run(parsed, res, baseCtm, out, depth, formPath, maxOps, maxDepth) {
     const { op, operands: a } = ops[i];
     switch (op) {
       case 'q': stack.push(gs); gs = { ...gs }; if (stack.length > 4096) stack.shift(); break;
-      case 'Q': if (stack.length) gs = stack.pop(); else if (!formPath) out.unbalanced = true; break;
+      case 'Q': if (stack.length) gs = stack.pop(); else if (!formPath) { out.unbalanced = true; out.excessQ++; } break;
       case 'cm': if (a.length >= 6) gs.ctm = mul(nums(a, 6), gs.ctm); break;
       case 'BT': tm = IDENT; tlm = IDENT; break;
       case 'ET': break;
