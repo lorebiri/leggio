@@ -72,7 +72,7 @@ export function riepilogoOggi({ records, stati, impostazioni = {}, ultimaApertur
     }
     // fatture elettroniche: 15 giorni dalla ricezione per accettare o rifiutare (poi decorrenza termini)
     if (!s && !r.segnatura?.numero) {
-      const g = giorniSdi(r, oggi);
+      const g = giorniSdi(r, oggi, imp.giorniSdi || 15);
       if (g && g.giorni >= 0 && g.giorni <= imp.avvisoSdi) sdi.push({ id: r.id, nome: r.nome, fornitore: r.fornitore, fine: g.fine, giorni: g.giorni, stimata: g.stimata });
     }
     // arrivati e non protocollati: entrati DOPO la prima indicizzazione, da più di N giorni, senza segnatura né stato

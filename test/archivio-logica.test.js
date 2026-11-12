@@ -264,6 +264,10 @@ describe('pronta per il pagamento', () => {
     expect(p.motivi.some((m) => /stimata/.test(m.testo))).toBe(true);
     expect(prontaPerPagamento(r, { pagamento: 'fatto' }, indiciFornitori([]))).toMatchObject({ esito: 'pagata' });
     expect(prontaPerPagamento({ tipo: 'durc' }, null, indiciFornitori([]))).toBe(null);
+    // fattura vecchia senza stato: nessun semaforo (non confondere); se è «da pagare» sì
+    const vecchia = fatt({ scadenza: '2025-03-01' });
+    expect(prontaPerPagamento(vecchia, null, indiciFornitori([]), { oggi: '2026-11-12' })).toBe(null);
+    expect(prontaPerPagamento(vecchia, { pagamento: 'da' }, indiciFornitori([]), { oggi: '2026-11-12' }).esito).toBe('giallo');
     expect(giorniSdi({ tipo: 'fattura', contenuto: 'fattura', mtime: Date.parse('2026-11-01T10:00:00') }, '2026-11-12')).toMatchObject({ fine: '2026-11-16', giorni: 4, stimata: true });
     expect(giorniSdi({ tipo: 'fattura', contenuto: 'pdf', mtime: 1 })).toBe(null);
     expect(aggiungiMesi('2026-11-30', 3)).toBe('2027-02-28');

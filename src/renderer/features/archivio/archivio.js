@@ -7,6 +7,7 @@ import { isDesktop, storeDesktop, storeWeb, idDa, sepPercorso, percorsiSenzaMaiu
 import { datiDaTesto, VERSIONE_ESTRAZIONE, CODICI_ENTE_PREDEFINITI } from './lib/estrai.js';
 import { IMPOSTAZIONI_PREDEFINITE } from './lib/scadenze.js';
 import { oggiIso } from './lib/testo.js';
+import { regole as regoleDa } from '../avanzati/lib/controlli.js';
 import { segnaturaGenerica, normalizzaSegnatura } from './lib/segnatura.js';
 import { modificaDaEvento } from './lib/stati.js';
 import { LettoreSegnature } from './segnatura-ocr.js';
@@ -103,6 +104,7 @@ export class Archivio {
   }
 
   pratica(id) { return this.motore.call('pratica', { id }); }
+  testi(ids) { return this.motore.call('testi', { ids }); }
   fornitore(piva) { return this.motore.call('fornitore', { piva }); }
   /** Le impostazioni sono cambiate: il motore ricalcola DURC e semafori. */
   async impostazioniCambiate() { await this.motore.call('impostazioni', { imp: this.impostazioni() }); this.versione++; this.emit('cambiato'); }
@@ -124,10 +126,18 @@ export class Archivio {
   }
 
   get attivo() { return this.cartelle.length > 0; }
+  /**
+   * Regole che cambiano nel tempo (durata del DURC, giorni SdI…): una sola fonte, il file di regole dell'area
+   * avanzati (dati/regole-ufficio.json, con fonte e data; l'ufficio lo aggiorna dalle Impostazioni).
+   */
+  regole() { try { return regoleDa(this.app.settings.get('avanzati.regole', null)); } catch { return null; } }
   impostazioni() {
     const s = this.app.settings;
+    const R = this.regole();
     return {
-      durataDurc: +s.get('archivio.durataDurc', IMPOSTAZIONI_PREDEFINITE.durataDurc) || IMPOSTAZIONI_PREDEFINITE.durataDurc,
+      durataDurc: +R?.durc?.giorniValidita || IMPOSTAZIONI_PREDEFINITE.durataDurc,
+      fonteDurc: R?.durc ? `${R.durc.fonte} (aggiornato il ${R.durc.aggiornato})` : '',
+      giorniSdi: +R?.sdi?.giorniEsito || 15,
       preavvisoDurc: +s.get('archivio.preavvisoDurc', IMPOSTAZIONI_PREDEFINITE.preavvisoDurc) || 0,
       preavvisoFatture: +s.get('archivio.preavvisoFatture', IMPOSTAZIONI_PREDEFINITE.preavvisoFatture) || 0,
       scaduteDaProporre: IMPOSTAZIONI_PREDEFINITE.scaduteDaProporre,

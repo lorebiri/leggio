@@ -15,7 +15,11 @@ const isoDaMs = (ms) => { if (!Number.isFinite(ms) || ms <= 0) return ''; const 
 /** Data di ricezione: quella registrata, altrimenti la data del file (stima: va detto). → { data, stimata } */
 export function dataRicezione(r) {
   if (r.ricezione) return { data: r.ricezione, stimata: false };
-  return { data: isoDaMs(r.mtime), stimata: true };
+  const file = isoDaMs(r.mtime);
+  // un file copiato molto dopo la data della fattura (archivio riordinato, copia da backup) non dice quando è
+  // arrivata: allora si usa la data della fattura (stima prudente: il termine risulta prima, non dopo)
+  if (r.data && (!file || file > aggiungiGiorni(r.data, 30) || file < r.data)) return { data: r.data, stimata: true };
+  return { data: file, stimata: true };
 }
 
 /** Pagamento previsto: la scadenza scritta in fattura, altrimenti ricezione + 30 giorni (PCC). */
@@ -54,8 +58,12 @@ const coda = (iban) => (iban ? '…' + String(iban).slice(-4) : '');
 export function prontaPerPagamento(r, stato, indici, { oggi = oggiIso() } = {}) {
   if (r.tipo !== 'fattura') return null;
   if (stato?.pagamento === 'fatto') return { esito: 'pagata', motivi: [], previsto: null, giorniPcc: null };
+  if (stato?.archiviato) return null;
   const motivi = [];
   const prev = pagamentoPrevisto(r);
+  // fatture vecchie senza stato (probabilmente già pagate fuori da Leggio): nessun semaforo, per non confondere.
+  // Il semaforo vale per quelle «da pagare» e per quelle con il pagamento previsto da poco o in arrivo.
+  if (stato?.pagamento !== 'da' && prev.data && giorniTra(oggi, prev.data) < -30) return null;
   const giorniPcc = prev.scadenzaPcc ? giorniTra(oggi, prev.scadenzaPcc) : null;
   // DURC alla data del pagamento previsto (se il pagamento previsto è già passato, a oggi)
   const alla = prev.data && prev.data > oggi ? prev.data : oggi;
@@ -88,11 +96,11 @@ export function prontaPerPagamento(r, stato, indici, { oggi = oggiIso() } = {}) 
 function it(iso) { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : iso; }
 
 /** Giorni rimasti per l'esito SdI (15 giorni dalla ricezione; poi decorrenza termini). Solo fatture XML. */
-export function giorniSdi(r, oggi = oggiIso()) {
+export function giorniSdi(r, oggi = oggiIso(), giorni = GIORNI_SDI) {
   if (r.tipo !== 'fattura' && r.tipo !== 'nota-credito') return null;
   if (r.contenuto !== 'fattura') return null; // solo fatture elettroniche (XML, anche .p7m)
   const ric = dataRicezione(r);
   if (!ric.data) return null;
-  const fine = aggiungiGiorni(ric.data, GIORNI_SDI);
+  const fine = aggiungiGiorni(ric.data, giorni);
   return { fine, giorni: giorniTra(oggi, fine), stimata: ric.stimata };
 }

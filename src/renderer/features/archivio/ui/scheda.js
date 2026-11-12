@@ -5,7 +5,8 @@ import { creaFascicolo } from '../../avanzati/lib/fascicolo.js';
 import { TIPO_LABEL } from '../lib/estrai.js';
 import { testoProtocollo } from '../lib/stati.js';
 import { euro, dataIt } from '../lib/testo.js';
-import { apriDocumento, fatturaInPdf } from './azioni.js';
+import { apriDocumento, fatturaInPdf, leggiFattura } from './azioni.js';
+import { controlliFattura } from '../../avanzati/lib/controlli.js';
 import { openP7m } from '../../avanzati/lib/cades.js';
 import { isDesktop } from '../store.js';
 
@@ -37,6 +38,15 @@ export async function apriScheda(app, A, riga, { q } = {}) {
   const s = r.stato || {};
   c.append(sez('Protocollo (Titulus)', h('p', {}, s.protocollo === 'fatto' ? testoProtocollo(s) : s.protocollo === 'da' ? 'Da protocollare in Titulus.' : s.protocollo === 'no' ? 'Non da protocollare.' : r.segnaturaDaLeggere ? 'Segnatura da leggere (in corso, in sottofondo).' : 'Nessuna segnatura trovata nel documento.')));
 
+  // controlli della fattura elettronica: logica dell'area avanzati (SdI, CIG/CUP, split, bollo, note di credito)
+  if (r.contenuto === 'fattura') {
+    try {
+      const { f } = await leggiFattura(A, r);
+      const avvisi = controlliFattura(f, { dataRicezione: r.ricezione || null, regole: A.regole() || undefined }).filter((x) => x.livello === 'avviso');
+      if (avvisi.length) c.append(sez('Controlli della fattura', h('ul', { class: 'ar-sch-motivi' }, avvisi.map((x) => h('li', { class: 'm-giallo', title: x.aiuto || '' }, x.testo)))));
+    } catch { /* fattura illeggibile: nulla da aggiungere */ }
+  }
+
   if (r.pagamento) {
     const p = r.pagamento;
     c.append(sez('Pagamento', h('p', { class: 'ar-semaforo s-' + p.esito }, testoSemaforo(p)),
@@ -65,13 +75,22 @@ export async function apriScheda(app, A, riga, { q } = {}) {
         h('span', {}, h('strong', {}, d.nome), h('small', {}, [dataIt(d.data), d.stato?.protocollo === 'fatto' && d.stato.numeroProtocollo ? `prot. ${d.stato.numeroProtocollo}` : '', d.questo ? 'questo documento' : `stesso ${d.perche.join(', ')}`].filter(Boolean).join(' · ')))),
     ))));
     praticaSez.append(h('div', { class: 'av-row' }, h('button', { class: 'btn', onclick: () => fascicolo(app, A, pratica, r) }, `Crea il fascicolo con indice (${pratica.documenti.length} documenti)…`)));
-    // liste di controllo dell'area avanzati, solo se l'ufficio le ha attivate
-    if (typeof app.services?.listaControlloPratica === 'function') {
-      try {
-        const lista = await app.services.listaControlloPratica(pratica.documenti);
-        if (lista?.voci?.length) praticaSez.append(h('h4', {}, lista.titolo || 'Lista di controllo'), h('ul', { class: 'ar-sch-motivi' }, lista.voci.map((v) => h('li', { class: v.presente ? 'm-ok' : 'm-giallo' }, `${v.presente ? 'Presente' : 'Manca'}: ${v.testo}`))));
-      } catch (e) { app.log?.('warn', 'archivio: lista di controllo non disponibile', { e: e.message }); }
-    }
+  }
+  // liste di controllo dell'area avanzati: solo se l'ufficio le ha attivate (spente = non si vede nulla)
+  const lc = app.services?.listeControllo;
+  if (pratica?.documenti.length && typeof lc?.attive === 'function' && lc.attive()) {
+    try {
+      const testi = await A.testi(pratica.documenti.map((d) => d.id));
+      for (const m of lc.modelli() || []) {
+        const esito = lc.valuta(m.id, testi) || [];
+        if (!esito.length) continue;
+        const manca = esito.filter((e) => e.stato !== 'presente').length;
+        praticaSez.append(h('details', { class: 'ar-lista', open: manca > 0 },
+          h('summary', {}, `${m.nome || 'Lista di controllo'}: ${esito.length - manca} su ${esito.length} trovati`),
+          h('ul', { class: 'ar-sch-motivi' }, esito.map((e) => h('li', { class: e.stato === 'presente' ? 'm-ok' : 'm-giallo', title: e.voce?.fonte || '' },
+            `${e.stato === 'presente' ? 'Trovato' : 'Non trovato'}: ${e.voce?.testo || ''}`, e.mancanti?.length ? ` (manca in: ${e.mancanti.slice(0, 3).join(', ')})` : '')))));
+      }
+    } catch (err) { app.log?.('warn', 'archivio: liste di controllo non disponibili', { e: err.message }); }
   }
   c.append(praticaSez);
 }

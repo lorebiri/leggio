@@ -276,7 +276,7 @@ export async function copieConNomeProposto(app, A, righe) {
 // ---------------- fatture elettroniche, stampa, firma ----------------
 
 /** Byte della fattura XML (anche dentro una busta .p7m) → { f (fattura letta), xml } */
-async function leggiFattura(A, r) {
+export async function leggiFattura(A, r) {
   let b = await A.leggiBytes(r.path);
   if (looksLikeP7m(b) || /\.p7m$/i.test(r.nome)) { const x = await openP7m(b, { verify: false }); if (!x.content) throw new Error('La busta firmata non contiene la fattura.'); b = x.content; }
   if (!isFattura(b)) throw new Error('Non è una fattura elettronica.');

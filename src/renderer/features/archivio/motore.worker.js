@@ -192,6 +192,8 @@ const H = {
   noti() { return { ids: [...M.rec.keys()], impronte: [...perImpronta.keys()] }; },
   impostazioni({ imp }) { M.impostazioni(imp || {}); return true; },
   pratica({ id }) { return M.pratica(id); },
+  /** Testo (limitato) dei documenti, per le liste di controllo della pratica. */
+  testi({ ids, max = 30000 }) { return ids.map((id) => { const r = M.get(id); return r ? { id, nome: r.nome, testo: String(r.testo || '').slice(0, max) } : null; }).filter(Boolean); },
   fornitore({ piva }) { return M.fornitore(piva); },
   info() { return { documenti: M.size, stati: M.stati.size, impronte: perImpronta.size }; },
 };
