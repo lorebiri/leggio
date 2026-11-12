@@ -7,9 +7,11 @@ import { compressTool, compressBytes, compressUnder } from './ui-comprimi.js';
 import { sanitizeTool, metadataTool, attachmentsPanel, watchAttachments, repairTool } from './ui-varie.js';
 import { sanitize, analyze } from './logica/sanifica.js';
 import { LIVELLI } from './logica/comprimi.js';
+import { payloadLimit } from './logica/pec.js';
 import { openDecrypted } from './logica/cifratura.js';
 import { operazioniSicurezza } from './azioni.js';
-import { pecTool, pecSettings, preparaPec } from './ui-pec.js';
+import { pecTool, pecSettings, preparaPec, sogliaPec } from './ui-pec.js';
+import { oscuraDatiPersonali } from './ui-conferma.js';
 
 export default function register(app) {
   injectStyles();
@@ -104,6 +106,12 @@ export default function register(app) {
       return { bytes: await doc.save({ useObjectStreams: true }), report };
     },
     preparaPec: (files, opts) => preparaPec(files, opts),
+    /** Oscuramento con i modelli: mostra SEMPRE l'elenco dei risultati da confermare. → { bytes, trovati, verifica } */
+    oscuraDatiPersonali: (bytes, opts) => oscuraDatiPersonali(app, bytes, opts),
+    /** Soglia PEC unica dell'app: limite del messaggio in MB (Impostazioni). */
+    sogliaPec: () => sogliaPec(app),
+    /** Byte di allegati che stanno in un messaggio PEC (tolta la codifica base64 e un margine). */
+    sogliaPecAllegati: () => payloadLimit(sogliaPec(app)),
     analyzeHidden: async (bytes, { password } = {}) => analyze((await openDecrypted(bytes, password ?? '')).doc, bytes),
   });
 }

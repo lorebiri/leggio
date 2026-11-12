@@ -9,6 +9,9 @@ const MIN_LEGIBLE = 110;
 const fmt = (n) => (n < 1e6 ? Math.max(1, Math.round(n / 1000)) + ' KB' : (n / 1e6).toFixed(1).replace('.', ',') + ' MB');
 const isPdf = (f) => /\.pdf$/i.test(f.name) || (f.bytes[0] === 0x25 && f.bytes[1] === 0x50 && f.bytes[2] === 0x44 && f.bytes[3] === 0x46);
 
+/** Soglia PEC unica dell'app (MB del messaggio), dalle Impostazioni. */
+export function sogliaPec(app) { const v = Number(app.settings.get('sic.pec.limitMB', 30)); return v > 0 ? v : 30; }
+
 export function pecSettings(app) {
   app.bus.on('settings:fields', (arr) => arr.push({ key: 'sic.pec.limitMB', field: {
     label: 'Limite di un messaggio PEC (MB)', type: 'number', value: 30, min: 1, step: 'any',
@@ -65,7 +68,8 @@ export async function preparaPec(files, { limitMB = 30, legible = true, signal, 
 
 export async function pecTool(app) {
   const { h } = app.ui;
-  const files = app.docs.map((d) => ({ name: d.name, bytes: d.bytes, on: true }));
+  // si parte dal documento attivo; gli altri documenti aperti si aggiungono solo se scelti
+  const files = app.activeDoc ? [{ name: app.activeDoc.name, bytes: await app.currentBytes(app.activeDoc), on: true, doc: app.activeDoc }] : [];
   const list = h('ul', { class: 'lg-att' });
   const render = () => {
     list.innerHTML = '';
@@ -76,19 +80,26 @@ export async function pecTool(app) {
     }
   };
   render();
-  const limitMB = Number(app.settings.get('sic.pec.limitMB', 30)) || 30;
+  const limitMB = sogliaPec(app);
   const v = await app.ui.dialog({
     title: 'Prepara per PEC', okLabel: 'Prepara', width: 560,
     body: h('div', {},
       h('p', {}, 'Scegli i file da allegare. Leggio li riduce quanto basta per stare in un messaggio e, se non basta, ti dice come dividerli in più invii. Gli originali non vengono toccati.'),
       list,
-      h('div', { class: 'lg-row' }, h('button', { type: 'button', class: 'btn small', onclick: async () => {
+      h('div', { class: 'lg-row' }, app.docs.length > 1 ? h('button', { type: 'button', class: 'btn small', onclick: async () => {
+        const others = app.docs.filter((d) => !files.some((f) => f.doc === d));
+        if (!others.length) return app.ui.toast('Tutti i documenti aperti sono già nell\'elenco.');
+        const sel = await app.ui.dialog({ title: 'Aggiungi documenti aperti', okLabel: 'Aggiungi', fields: others.map((d, k) => ({ type: 'checkbox', name: 'd' + k, label: d.name, value: false })) });
+        if (!sel) return;
+        for (const [k, d] of others.entries()) if (sel['d' + k]) files.push({ name: d.name, bytes: await app.currentBytes(d), on: true, doc: d });
+        render();
+      } }, 'Aggiungi documenti aperti…') : null, h('button', { type: 'button', class: 'btn small', onclick: async () => {
         const add = await app.platform.openFiles({ multiple: true, filters: [{ name: 'Tutti i file', extensions: ['*'] }], title: 'Scegli i file da allegare' });
         for (const f of add || []) files.push({ name: f.name, bytes: f.bytes, on: true });
         render();
       } }, 'Aggiungi file…'))),
     fields: [
-      { type: 'number', name: 'limit', label: 'Limite di un messaggio (MB)', value: limitMB, min: 1, step: 'any', help: `Dipende dal gestore PEC: verificalo. In posta gli allegati pesano circa un terzo in più: con ${String(limitMB).replace('.', ',')} MB di limite si possono allegare circa ${fmt(payloadLimit(limitMB))} di file.` },
+      { type: 'number', name: 'limit', label: 'Limite di un messaggio (MB)', value: limitMB, min: 1, step: 'any', help: `È la soglia unica di Leggio (si cambia anche nelle Impostazioni). Dipende dal gestore PEC: verificalo. In posta gli allegati pesano circa un terzo in più: con ${String(limitMB).replace('.', ',')} MB di limite si possono allegare circa ${fmt(payloadLimit(limitMB))} di file.` },
       { type: 'checkbox', name: 'legible', label: 'Non scendere sotto una qualità leggibile (consigliato)', value: true },
     ],
     validate: (x) => (!files.some((f) => f.on) ? 'Scegli almeno un file.' : !(x.limit > 0) ? 'Indica il limite in MB.' : null),

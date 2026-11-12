@@ -2,6 +2,8 @@
 import { LIVELLI, SCALA, compressImages, cleanupStructure, searchUnderLimit } from './logica/comprimi.js';
 import { browserCodec } from './codec.js';
 import { openDecrypted } from './logica/cifratura.js';
+import { payloadLimit } from './logica/pec.js';
+import { sogliaPec } from './ui-pec.js';
 import { st, salvaCopia, copyName, signatureCount, avvisoFirma, boxAvviso } from './comune.js';
 
 const MB = 1024 * 1024;
@@ -36,6 +38,7 @@ export async function compressTool(app) {
   const { h } = app.ui;
   const bytes = await app.currentBytes(doc);
   const nSig = signatureCount(bytes);
+  const pecMB = Math.floor(payloadLimit(sogliaPec(app)) / 1e5) / 10; // stesso limite di «Prepara per PEC»
   const last = app.settings.get('sic.compress', { mode: 'limit', limit: 10, level: 'media', dpi: 150, quality: 72, gray: false, meta: false });
   const preset = (mb) => (e) => { const el = e.target.closest('.lg-limit')?.querySelector('input'); if (el) el.value = mb; };
   const v = await app.ui.dialog({
@@ -52,7 +55,7 @@ export async function compressTool(app) {
         const i = h('input', { type: 'number', class: 'input', min: 0.1, step: 'any', value: last.limit, style: { width: '110px' }, 'aria-label': 'Dimensione massima in MB' });
         c.classList.add('lg-limit');
         c.append(h('div', { class: 'lg-row' }, i, h('span', {}, 'MB'),
-          h('button', { type: 'button', class: 'btn small', onclick: preset(20), title: 'Molti gestori PEC accettano messaggi fino a 30 MB in totale: verifica il limite del tuo ufficio' }, 'Per PEC (20 MB)'),
+          h('button', { type: 'button', class: 'btn small', onclick: preset(pecMB), title: `Limite PEC delle Impostazioni (${String(sogliaPec(app)).replace('.', ',')} MB a messaggio), tolto il «circa un terzo in più» degli allegati in posta` }, `Per PEC (${String(pecMB).replace('.', ',')} MB)`),
           h('button', { type: 'button', class: 'btn small', onclick: preset(10) }, 'Per portale (10 MB)'),
           h('button', { type: 'button', class: 'btn small', onclick: preset(5) }, '5 MB')));
         return { get: () => Number(i.value) };
