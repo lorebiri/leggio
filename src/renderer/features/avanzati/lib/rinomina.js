@@ -58,7 +58,7 @@ export function analizza(testo, nomeOriginale = '') {
   for (let nm; (nm = reN.exec(t));) { if (/\d/.test(nm[1])) { numero = nm[1].replace(/[.\-/]+$/, ''); break; } }
   let soggetto = '';
   const soc = t.match(/([A-Z][A-Za-zÀ-ÿ0-9&'.\- ]{2,60}?)\s*(S\.?\s?r\.?\s?l\.?s?|S\.?\s?p\.?\s?A\.?|S\.?\s?n\.?\s?c\.?|S\.?\s?a\.?\s?s\.?|Soc\.? coop\.?|società cooperativa)(?![A-Za-z])/i);
-  if (soc) soggetto = soc[1].trim().split(/\s+/).filter((w) => /[A-Za-z0-9]/.test(w)).slice(-3).join(' ');
+  if (soc) soggetto = soc[1].trim().split(/\s+/).filter((w) => /[A-Za-z0-9]/.test(w) && !/^(durc|fattura|spett\.?le|ditta|fornitore|sociale|denominazione|contributiva|regolarit[aà])$/i.test(w)).slice(-3).join(' ');
   if (!soggetto) { const r = t.match(/(?:ragione sociale|denominazione|spett\.?le|fornitore|ditta)\s*:?\s*([A-Z][A-Za-zÀ-ÿ&'.\- ]{2,40})/i); if (r) soggetto = r[1].trim().split(/\s+/).slice(0, 3).join(' '); }
   return { tipo, soggetto, numero, data, scadenza, originale: String(nomeOriginale).replace(/\.pdf$/i, '') };
 }

@@ -42,13 +42,20 @@ Pannelli: `p7m` (Firme .p7m), `fattura` (Fattura elettronica), `layers` (Livelli
   (`app.services.pdfa`) e riduce (`app.services.compress`) solo i file NON firmati; copie in «Per Titulus» più rapporto PDF e CSV. Nessun
   collegamento di rete a Titulus.
 - Le Azioni guidate non hanno più l'operazione «protocollo» (numerazione progressiva).
+- **Stato d'archivio**: applicando la segnatura su una copia (casella «Segna il documento in archivio…»), o accettando la proposta che compare
+  aprendo un documento che porta già la segnatura, si emette
+  `app.bus.emit('archivio:stato', { path, nome, modifica: { imposta: 'protocollato', numeroProtocollo, dataProtocollo /* ISO */ }, origine: 'segnatura'|'lettura' })`.
+  `path` è il file ORIGINALE (anche per una fattura impaginata da XML o un PDF estratto da .p7m). L'area archivio ascolta l'evento e applica
+  la modifica al documento con quel percorso. La segnatura predefinita è la striscia verticale a sinistra (non copre numero e data della fattura).
+- **Dati per Titulus** (pannello `dati-titulus`): oggetto proposto, mittente, P.IVA, numero e data del documento, CIG/CUP, importo, firmatari; «Copia»
+  per ciascuno e «Copia tutto». Da FatturaPA (dati esatti) o dal testo (da controllare). `lib/titulus.js › datiPerTitulus`, `testoDatiTitulus`.
 
 ## Flussi dell'ufficio amministrativo (terzo ciclo)
 
 | id | Nome | Criterio di accettazione (verificato) |
 |---|---|---|
-| `mission-file` | Pratica di missione | Modulo PDF + foto (JPG/PNG, HEIC su macOS) in qualunque ordine → riordino con frecce, ↻ per foto storte; foto girate secondo l'EXIF e ritagliate ai margini bianchi; OCR se c'è `app.services.ocr`; riduzione sotto la soglia con `app.services.compress`; se non basta, proposta «parte k di N» con ogni parte sotto soglia; pagina di riepilogo con numero di pagina di ogni giustificativo; nome `Missione_COGNOME_aaaa-mm-gg.pdf`. Dopo aver scelto i file: 2 clic (Crea la pratica, Salva). |
-| `dossier-index` | Fascicolo con indice | N documenti (anche .p7m e foto) → PDF con pagina/e indice (voce, numero di documento, pagina iniziale), voci cliccabili, un segnalibro per documento, «Allegato n. k» sulla prima pagina, numerazione facoltativa; i file illeggibili non fermano il fascicolo e vengono elencati. |
+| `mission-file` | Pratica di missione (soglia PEC: `app.services.sogliaPec()` o l'impostazione `sic.pec.limitMB`) | Modulo PDF + foto (JPG/PNG, HEIC su macOS) in qualunque ordine → riordino con frecce, ↻ per foto storte; foto girate secondo l'EXIF e ritagliate ai margini bianchi; OCR se c'è `app.services.ocr`; riduzione sotto la soglia con `app.services.compress`; se non basta, proposta «parte k di N» con ogni parte sotto soglia; pagina di riepilogo con numero di pagina di ogni giustificativo; nome `Missione_COGNOME_aaaa-mm-gg.pdf`. Dopo aver scelto i file: 2 clic (Crea la pratica, Salva). |
+| `dossier-index` | Fascicolo con indice (avvisa dei DURC scaduti prima di unire; nell'indice i .p7m riportano i firmatari e l'esito) | N documenti (anche .p7m e foto) → PDF con pagina/e indice (voce, numero di documento, pagina iniziale), voci cliccabili, un segnalibro per documento, «Allegato n. k» sulla prima pagina, numerazione facoltativa; i file illeggibili non fermano il fascicolo e vengono elencati. |
 | `reporting-package` | Pacchetto per la rendicontazione | Cartella con una sottocartella per voce → `Rendicontazione/Voce_<voce>.pdf` (fascicolo con indice e allegati numerati) e `Riepilogo_rendicontazione.csv` (voce, n. allegato, file, pagine, pagina nel PDF, data, importo, CIG, CUP; «;» e virgola decimale, apribile in Excel; totali per voce). |
 | `publish-ready` | Pronto per la pubblicazione | Pannello a destra, passi in ordine sul documento attivo: oscura dati personali (servizio `oscuraDatiPersonali` se esiste, altrimenti «Cerca e oscura»), `sanitize`, prepara accessibilità, `pdfa`, `controllaAccessibilita`; salva `<nome>_pubblicabile.pdf` e `<nome>_pubblicabile_rapporto.pdf` con esiti, controlli e SHA-256. Ogni passo è annullabile. |
 | `entity-profile`, `insert-entity`, `fill-entity` | Profilo dell'ente | Denominazione, sigla, ufficio, sede, CF, P.IVA (verificata), codice IPA, codice univoco ufficio, PEC, direttore, firmatari. Estende il profilo personale dell'area moduli (completa ente/P.IVA/ufficio se vuoti, non sovrascrive). Un clic: inserimento sulla pagina, compilazione dei campi dei moduli (solo campi dell'ente; il codice fiscale personale resta all'area moduli), proposto nella segnatura su copia di lavoro e nella dichiarazione di conformità. Servizi: `app.services.profiloEnte()`, `app.services.profiloCompleto()`. |
@@ -66,6 +73,15 @@ app.bus.on('batch:operations', (list) => list.push({
 - Le operazioni NON devono conservare stato tra un file e l'altro: dopo un'interruzione il lavoro riparte dal primo file non fatto con gli stessi `params` (le password dell'operazione `proteggi` non vengono salvate e si richiedono alla ripresa).
 - Un'operazione registrata con lo stesso `id` sostituisce la nostra. Se un'area espone il servizio ma non registra l'operazione, Leggio la offre sopra il servizio: `ocr`, `comprimi-sotto` (salvo `riduci`), `pdfa`, `sanifica`, `oscura-modelli`, `proteggi` (`app.services.protect`; Leggio non ha più una cifratura propria).
 - Errori: `SkipError` (o qualunque errore) → il file viene segnato «saltato»/«non riuscito» con il messaggio, gli altri proseguono.
+
+## Azioni guidate: fatture elettroniche
+- Accettano `.xml` FatturaPA e `.p7m` (con XML o PDF dentro): le operazioni ricevono il PDF impaginato (o il PDF contenuto nel .p7m); gli
+  originali firmati non si toccano. XML che non sono fatture: saltati con il motivo.
+- Operazioni: «Salva come PDF (fatture elettroniche)», «Rinomina dal contenuto» (per le fatture `Fattura_FORNITORE_n…_data.pdf` dai dati
+  dell'XML), «Estrai dati in Excel» (`dati_estratti_<id>.csv` accanto al registro: una riga per documento, importi come numeri; dalle fatture
+  dati esatti, dai PDF letti dal testo). I dati restano nel lavoro: la ripresa li conserva.
+- Nomi senza doppioni nello stesso lavoro (` (2)`), stabili anche alla ripresa (`registro.js › nomeUnico`).
+- Servizio `app.services.fatturaPdf(bytes) → bytes` (XML o .p7m; solo app desktop).
 
 ## Azioni guidate su migliaia di file
 - Nessun limite basso: fino a 200.000 file per cartella; l'interfaccia mostra al massimo 400 righe dell'elenco e, nel rapporto, tutti i problemi (fino a 500) più un campione dei riusciti.

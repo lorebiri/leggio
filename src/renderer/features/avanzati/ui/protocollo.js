@@ -2,6 +2,7 @@
 // (il protocollo informatico del CNR). Leggio non genera mai numeri di protocollo: niente contatori.
 import { applicaProtocollo, applicaStriscia, POSIZIONI, DIREZIONI, normalizzaData } from '../lib/protocollo.js';
 import { leggiSegnaturaTitulus } from './segnatura-immagine.js';
+import { segnalaProtocollato, percorsoOriginale } from './datititulus.js';
 import { segnaturaTitulus, MODELLI_PREDEFINITI } from '../lib/titulus.js';
 import { pageText } from '../lib/textsearch.js';
 
@@ -56,6 +57,7 @@ export async function timbroProtocollo(app) {
       { name: 'posizione', label: 'Posizione', type: 'select', value: pref.posizione, options: POSIZIONI },
       { name: 'pagine', label: 'Su quali pagine', type: 'radio', value: pref.pagine, options: [{ value: 'prima', label: 'Solo la prima' }, { value: 'tutte', label: 'Tutte le pagine' }] },
       { name: 'copia', label: 'Indica che è una copia di lavoro («COPIA DI LAVORO»)', type: 'checkbox', value: pref.copia !== false },
+      app.archivio && percorsoOriginale(doc) ? { name: 'archivio', label: 'Segna il documento in archivio come «Protocollato (Titulus)» con questo numero', type: 'checkbox', value: true } : null,
       { name: 'colore', label: 'Colore', type: 'color', value: pref.colore },
     ].filter(Boolean),
     okLabel: 'Riporta la segnatura',
@@ -74,5 +76,9 @@ export async function timbroProtocollo(app) {
     if (v.stile === 'striscia') await applicaStriscia(pdfDoc, PDFLib, { aoo: v.aoo, numero, data, uor: v.uor, copia: v.copia, pagine: v.pagine });
     else await applicaProtocollo(pdfDoc, PDFLib, { ...v, numero, data });
   });
-  app.ui.toast('Segnatura riportata. Salva questa copia con «Salva con nome»: il documento ufficiale resta quello in Titulus.', { kind: 'info', timeout: 9000 });
+  if (v.archivio && app.archivio && percorsoOriginale(doc)) {
+    const ok = segnalaProtocollato(app, doc, { numero, data: data.split('/').reverse().join('-') }, 'segnatura');
+    app.ui.toast(ok ? `Segnatura riportata e stato d'archivio aggiornato: «Protocollato (Titulus) n. ${numero}». Salva questa copia con «Salva con nome».`
+      : 'Segnatura riportata. L\'archivio non ha ricevuto lo stato: impostalo dall\'archivio («Cambia stato»). Salva questa copia con «Salva con nome».', { kind: ok ? 'success' : 'warning', timeout: 9000 });
+  } else app.ui.toast('Segnatura riportata. Salva questa copia con «Salva con nome»: il documento ufficiale resta quello in Titulus.', { kind: 'info', timeout: 9000 });
 }

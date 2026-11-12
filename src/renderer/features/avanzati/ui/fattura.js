@@ -3,13 +3,27 @@
 // pannello «Fattura elettronica» (CIG/CUP, avvisi, allegati, firma). Nell'anteprima web, senza printToPDF,
 // si mostra impaginata in uno spazio di lavoro con «Stampa».
 import { parseFattura, fatturaDocument, nomeProposto, allegatoBytes, allegatoNome, euro, dataIt } from '../lib/fattura.js';
-import { looksLikeP7m } from '../lib/cades.js';
+import { looksLikeP7m, openP7m } from '../lib/cades.js';
 import { ESITI } from '../lib/report.js';
 import { isDesktop, call } from '../native.js';
 
 const firmaTesto = (firma) => (firma ? `Firmato digitalmente: ${firma.result.levels.flatMap((l) => l.signers.map((s) => s.name)).join(', ')} — esito verifica: ${ESITI[firma.stato].titolo}` : '');
 
-export async function openFattura(app, bytes, name, { firma = null } = {}, deps) {
+/**
+ * Fattura (XML o .p7m con XML) → PDF impaginato (solo app desktop). → { bytes, fattura, nome } | lancia un errore leggibile.
+ * Esposto come app.services.fatturaPdf(bytes) per l'area archivio e usato dalle Azioni guidate.
+ */
+export async function fatturaPdfDaBytes(app, bytes, { nomeFile = 'fattura.xml', compatta = false } = {}) {
+  if (!isDesktop()) throw new Error('L\'impaginazione in PDF della fattura è disponibile nell\'app desktop.');
+  let xml = bytes;
+  if (looksLikeP7m(bytes)) { const r = await openP7m(bytes, { verify: false }); if (!r.content) throw new Error('Il file firmato non contiene il documento.'); xml = r.content; }
+  const f = parseFattura(xml);
+  const pdf = await creaPdf(app, f, { compatta, nomeFile, silenzioso: true });
+  if (!pdf) throw new Error('Impaginazione non riuscita.');
+  return { bytes: pdf, fattura: f, nome: nomeProposto(f) };
+}
+
+export async function openFattura(app, bytes, name, { firma = null, path = null } = {}, deps) {
   let f;
   try { f = parseFattura(bytes); }
   catch (err) {
@@ -22,7 +36,7 @@ export async function openFattura(app, bytes, name, { firma = null } = {}, deps)
       if (pdf) {
         const doc = await app.openBytes(pdf, { name: nomeProposto(f) });
         if (doc) {
-          doc.data.fattura = { f, xmlName: name, xmlBytes: bytes, firma, compatta };
+          doc.data.fattura = { f, xmlName: name, xmlBytes: bytes, xmlPath: path || firma?.sourcePath || null, firma, compatta };
           if (firma) doc.data.p7m = firma;
           app.sidebar.show('fattura');
           const avvisi = f.corpi.flatMap((c) => c.avvisi.filter((a) => a.livello !== 'info'));
@@ -36,9 +50,10 @@ export async function openFattura(app, bytes, name, { firma = null } = {}, deps)
 }
 
 /** PDF impaginato della fattura (solo app desktop). */
-async function creaPdf(app, f, { compatta, firma, nomeFile }) {
+async function creaPdf(app, f, { compatta, firma, nomeFile, silenzioso = false }) {
   const html = fatturaDocument(f, { compatta, firma: firmaTesto(firma), nomeFile });
-  const bytes = await app.ui.withProgress('Impaginazione della fattura', async (p) => { p.set(null, 'Creazione del PDF della fattura…'); return call(app, 'html-to-pdf', { html, pageSize: 'A4', margins: 0 }); }, { cancellable: false });
+  const bytes = silenzioso ? await call(app, 'html-to-pdf', { html, pageSize: 'A4', margins: 0 })
+    : await app.ui.withProgress('Impaginazione della fattura', async (p) => { p.set(null, 'Creazione del PDF della fattura…'); return call(app, 'html-to-pdf', { html, pageSize: 'A4', margins: 0 }); }, { cancellable: false });
   if (!bytes) return null;
   try { const d = await app.lib.openPdfLib(bytes); d.setTitle(nomeProposto(f).replace(/\.pdf$/, '')); d.setLanguage('it-IT'); d.setCreator('Leggio'); return await app.lib.savePdfLib(d); } catch { return bytes; }
 }

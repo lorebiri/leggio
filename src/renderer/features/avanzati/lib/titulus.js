@@ -178,3 +178,44 @@ export function valutaPerTitulus(info) {
   if (!nome.ok) { avvisi.push('nome: ' + nome.motivi.join(', ')); azioni.rinomina = true; }
   return { problemi, avvisi, azioni };
 }
+
+// ---------------- «Dati per Titulus» ----------------
+const dataIt = (iso) => (/^\d{4}-\d{2}-\d{2}$/.test(iso || '') ? iso.split('-').reverse().join('/') : iso || '');
+const euroIt = (v) => (v == null || v === '' ? '' : Number(v).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' }) + ' €');
+
+/**
+ * Campi da incollare in Titulus. Da una FatturaPA (dati esatti) o dal testo (dati: estraiDati, analisi: rinomina.analizza).
+ * → [{ chiave, etichetta, valore }] solo con i campi trovati. L'oggetto è una proposta da rivedere.
+ */
+export function datiPerTitulus({ fattura, dati, analisi, firma, nomeFile } = {}) {
+  const out = [];
+  const add = (chiave, etichetta, valore) => { if (valore != null && String(valore).trim()) out.push({ chiave, etichetta, valore: String(valore).trim() }); };
+  if (fattura) {
+    const c = fattura.corpi[0]; const tipo = { TD04: 'Nota di credito', TD05: 'Nota di debito', TD06: 'Parcella' }[c.tipo] || 'Fattura';
+    const forn = fattura.cedente?.nome || '';
+    add('oggetto', 'Oggetto (proposta)', [`${tipo} n. ${c.numero} del ${dataIt(c.data)}`, forn, c.cig.length ? `CIG ${c.cig.join(', ')}` : '', c.cup.length ? `CUP ${c.cup.join(', ')}` : ''].filter(Boolean).join(' – '));
+    add('mittente', 'Mittente / fornitore', forn);
+    add('piva', 'P.IVA o codice fiscale del mittente', fattura.cedente?.partitaIva || fattura.cedente?.codiceFiscale);
+    add('numero', 'Numero del documento', c.numero);
+    add('data', 'Data del documento', dataIt(c.data));
+    add('cig', 'CIG', c.cig.join(', ')); add('cup', 'CUP', c.cup.join(', '));
+    add('importo', 'Importo totale', euroIt(c.calcoli.totale));
+    if (fattura.corpi.length > 1) add('nota', 'Nota', `Il file contiene ${fattura.corpi.length} documenti`);
+  } else if (dati || analisi) {
+    const a = analisi || {}; const d = dati || { cig: [], cup: [], piva: [] };
+    const tipo = a.tipo && a.tipo !== 'Documento' ? a.tipo.replace('NotaCredito', 'Nota di credito') : 'Documento';
+    const cig = d.cig?.map((x) => x.valore).join(', '); const cup = d.cup?.map((x) => x.valore).join(', ');
+    add('oggetto', 'Oggetto (proposta)', [`${tipo}${a.numero ? ` n. ${a.numero}` : ''}${a.data ? ` del ${dataIt(a.data)}` : ''}`, a.soggetto, cig ? `CIG ${cig}` : '', cup ? `CUP ${cup}` : '', d.durc?.scadenza ? `scadenza ${dataIt(d.durc.scadenza)}` : ''].filter(Boolean).join(' – '));
+    add('mittente', 'Mittente / fornitore', a.soggetto);
+    add('piva', 'P.IVA del mittente', d.piva?.[0]?.valore);
+    add('numero', 'Numero del documento', a.numero);
+    add('data', 'Data del documento', dataIt(a.data));
+    add('cig', 'CIG', cig); add('cup', 'CUP', cup);
+    add('importo', 'Importo totale', d.totale != null ? euroIt(d.totale) : '');
+  }
+  const firmatari = firma?.result?.levels?.flatMap((l) => l.signers.map((s) => s.name)) || [];
+  if (firmatari.length) add('firma', 'Firmato digitalmente da', firmatari.join(', '));
+  if (!out.length && nomeFile) add('oggetto', 'Oggetto (proposta)', String(nomeFile).replace(/(\.pdf)?(\.p7m)*$/i, '').replace(/[_]+/g, ' '));
+  return out;
+}
+export function testoDatiTitulus(campi) { return campi.map((c) => `${c.etichetta}: ${c.valore}`).join('\n'); }

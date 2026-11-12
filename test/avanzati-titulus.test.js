@@ -109,3 +109,40 @@ describe('segnatura su copia di lavoro «come Titulus»', async () => {
     await pdf.loadingTask.destroy();
   });
 });
+
+describe('dati per Titulus ed estrazione per Excel', async () => {
+  const { parseFattura, righeExcelFattura } = await import('../src/renderer/features/avanzati/lib/fattura.js');
+  const { FATTURA_FPA12 } = await import('./avanzati-fattura.test.js');
+  const { estraiDati, rigaExcelDaTesto } = await import('../src/renderer/features/avanzati/lib/datichiave.js');
+  const { analizza } = await import('../src/renderer/features/avanzati/lib/rinomina.js');
+  const { datiPerTitulus, testoDatiTitulus } = await import('../src/renderer/features/avanzati/lib/titulus.js');
+  const { nuovoLavoro, registra, datiCsv } = await import('../src/renderer/features/avanzati/lib/registro.js');
+  const f = parseFattura(FATTURA_FPA12);
+  it('dalla FatturaPA: oggetto proposto, mittente, P.IVA, numero, data, CIG/CUP, importo', () => {
+    const c = datiPerTitulus({ fattura: f });
+    const m = Object.fromEntries(c.map((x) => [x.chiave, x.valore]));
+    expect(m.oggetto).toBe('Fattura n. 123/A del 31/10/2026 – Forniture Scientifiche & Laboratorio S.r.l. – CIG Z1A2B3C4D5 – CUP B12C34000560001');
+    expect(m).toMatchObject({ mittente: 'Forniture Scientifiche & Laboratorio S.r.l.', piva: 'IT01234567890', numero: '123/A', data: '31/10/2026', cig: 'Z1A2B3C4D5' });
+    expect(m.importo).toMatch(/^1\.220,00/);
+    expect(testoDatiTitulus(c)).toContain('Numero del documento: 123/A');
+  });
+  it('dal testo di un PDF', () => {
+    const t = 'FORNITURE SCIENTIFICHE S.r.l. P.IVA 02118311006 FATTURA n. 77 del 05/11/2026 CIG Z1A2B3C4D5 Totale documento € 1.220,00';
+    const m = Object.fromEntries(datiPerTitulus({ dati: estraiDati(t), analisi: analizza(t) }).map((x) => [x.chiave, x.valore]));
+    expect(m.oggetto).toBe('Fattura n. 77 del 05/11/2026 – FORNITURE SCIENTIFICHE – CIG Z1A2B3C4D5');
+    expect(m).toMatchObject({ piva: '02118311006', numero: '77', data: '05/11/2026' });
+  });
+  it('righe per Excel e CSV del lavoro (anche dopo una ripresa)', () => {
+    const r = righeExcelFattura(f);
+    expect(r).toHaveLength(2);
+    expect(r[0]).toMatchObject({ Fornitore: 'Forniture Scientifiche & Laboratorio S.r.l.', Numero: '123/A', Totale: 1220, 'Scissione dei pagamenti': 'sì', 'Da pagare al fornitore': 1000, CIG: 'Z1A2B3C4D5' });
+    const l = nuovoLavoro({ items: [{ path: '/a.xml', name: 'a.xml', rel: 'a.xml' }, { path: '/b.pdf', name: 'b.pdf', rel: 'b.pdf' }], passi: [] });
+    registra(l, l.items[0], { s: 'ok', dati: r });
+    registra(l, l.items[1], { s: 'ok', dati: [rigaExcelDaTesto(estraiDati('CIG Z1A2B3C4D5 Totale € 10,00'), { tipo: 'Fattura' })] });
+    const csv = JSON.parse(JSON.stringify(l)); // come dal file di ripresa
+    const out = datiCsv(csv);
+    expect(out.split('\r\n')[0]).toMatch(/^﻿File;Tipo documento;Fornitore/);
+    expect(out).toContain('a.xml;Fattura;Forniture Scientifiche & Laboratorio S.r.l.;IT01234567890;123/A;31/10/2026;1000,00;220,00;1220,00;sì;1000,00');
+    expect(out.split('\r\n').filter(Boolean)).toHaveLength(4);
+  });
+});

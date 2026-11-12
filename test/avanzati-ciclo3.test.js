@@ -136,3 +136,15 @@ describe('rendicontazione e registro', () => {
     expect(registroCsv(l).split('\r\n')[3]).toMatch(/^DA FARE;2\.pdf/);
   });
 });
+
+describe('azioni guidate: nomi senza doppioni', async () => {
+  const { nuovoLavoro, nomeUnico } = await import('../src/renderer/features/avanzati/lib/registro.js');
+  it('due fatture con lo stesso numero non si sovrascrivono, e alla ripresa il nome resta lo stesso', () => {
+    const l = nuovoLavoro({ items: [{ path: '/a.xml', name: 'a.xml' }, { path: '/b.xml.p7m', name: 'b.xml.p7m' }], passi: [] });
+    expect(nomeUnico(l, l.items[0], '/c/Elaborati', 'Fattura_X_n1.pdf')).toBe('Fattura_X_n1.pdf');
+    expect(nomeUnico(l, l.items[1], '/c/Elaborati', 'Fattura_X_n1.pdf')).toBe('Fattura_X_n1 (2).pdf');
+    const ripreso = JSON.parse(JSON.stringify(l));
+    expect(nomeUnico(ripreso, ripreso.items[1], '/c/Elaborati', 'Fattura_X_n1.pdf')).toBe('Fattura_X_n1 (2).pdf');
+    expect(nomeUnico(l, { path: '/z.pdf', name: 'z.pdf' }, '/altra', 'Fattura_X_n1.pdf')).toBe('Fattura_X_n1.pdf');
+  });
+});

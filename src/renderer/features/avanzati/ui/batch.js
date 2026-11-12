@@ -2,7 +2,33 @@
 import { tutteLeOperazioni, validaSequenza, eseguiSequenza, nomeUscita, SkipError, operazioneProteggi, destinazione } from '../lib/batch-ops.js';
 import { chooseFolder, chooseFiles, writeOut, isDesktop, call, fileItem, dirname, basename } from '../native.js';
 import { nomeDalContenuto } from './coda.js';
-import { nuovoLavoro, registra, daFare, conteggi, lavoroValido, registroCsv, chiaveDi } from '../lib/registro.js';
+import { nuovoLavoro, registra, daFare, conteggi, lavoroValido, registroCsv, chiaveDi, datiCsv, nomeUnico } from '../lib/registro.js';
+import { fatturaPdfDaBytes } from './fattura.js';
+import { isFattura, righeExcelFattura } from '../lib/fattura.js';
+import { looksLikeP7m, openP7m } from '../lib/cades.js';
+import { estraiDati, rigaExcelDaTesto } from '../lib/datichiave.js';
+import { analizza } from '../lib/rinomina.js';
+import { testoPrimePagine } from './coda.js';
+import { openPdfJs } from '../../../core/pdf.js';
+import { destroyPdf } from '../native.js';
+
+/** Converte l'ingresso in PDF: FatturaPA (anche in .p7m) → PDF impaginato; .p7m con PDF → PDF contenuto. */
+export async function preparaIngresso(app, bytes, nome) {
+  const ctx = {};
+  let b = bytes; let nota = '';
+  if (looksLikeP7m(b) || /\.p7m$/i.test(nome)) {
+    const r = await openP7m(b, { verify: false }).catch(() => null);
+    if (!r?.content) throw new SkipError('File firmato non leggibile o senza documento.');
+    b = r.content; nota = 'documento estratto dal file firmato (l\'originale firmato resta com\'è)';
+  }
+  if (isFattura(b)) {
+    const r = await fatturaPdfDaBytes(app, b, { nomeFile: nome });
+    ctx.fattura = r.fattura; ctx.nomeFattura = r.nome;
+    return { bytes: r.bytes, ctx, nota: [nota, 'fattura elettronica impaginata in PDF'].filter(Boolean).join('; ') };
+  }
+  if (!new TextDecoder('latin1').decode(b.subarray(0, 1024)).includes('%PDF-')) throw new SkipError(/\.xml$/i.test(nome) ? 'XML che non è una fattura elettronica.' : 'Non è un PDF né una fattura elettronica.');
+  return { bytes: b, ctx, nota };
+}
 
 const KEY_SEQ = 'avanzati.sequenze';
 const MAX_FILE = 500 * 1024 * 1024;
@@ -28,6 +54,19 @@ export function operazioni(app) {
   if (typeof sv.pdfa === 'function' && !ha('pdfa', 'conv-pdfa')) esterne.push({ id: 'pdfa', label: 'Converti in PDF/A', description: 'Formato per la conservazione, con verifica', fields: [{ name: 'part', label: 'Variante', type: 'select', value: '2', options: [{ value: '2', label: 'PDF/A-2 (consigliata)' }, { value: '3', label: 'PDF/A-3' }] }, { name: 'ocr', label: 'Riconosci il testo delle scansioni', type: 'checkbox', value: true }], summary: (p) => `PDF/A-${p.part}`, runBytes: async (b, p, ctx) => { const r = await sv.pdfa(b, { part: +p.part || 2, ocr: !!p.ocr, lang: 'it-IT', progress: prog(ctx) }); const ko = (r.verifica || []).filter((x) => !x.ok).length; ctx.note = [ctx.note, ko ? `PDF/A: ${ko} controlli non superati` : 'PDF/A verificato'].filter(Boolean).join(' — '); return r.bytes; } });
   if (typeof sv.sanitize === 'function' && !ha('sanifica') && !ha('sanitize')) esterne.push({ id: 'sanifica', label: 'Togli contenuti nascosti', description: 'Metadati, commenti, allegati, JavaScript, livelli nascosti, versioni precedenti', fields: [{ name: 'commenti', label: 'Togli anche i commenti', type: 'checkbox', value: true }, { name: 'allegati', label: 'Togli anche gli allegati', type: 'checkbox', value: true }], summary: () => 'Togli contenuti nascosti', runBytes: async (b, p) => (await sv.sanitize(b, { metadati: true, javascript: true, allegati: !!p.allegati, commenti: !!p.commenti, campiNascosti: true, livelliNascosti: true, datiPrivati: true, xfa: true, versioni: true })).bytes });
   if (typeof sv.oscuraDatiPersonali === 'function' && !ha('oscura-modelli')) esterne.push({ id: 'oscura-modelli', label: 'Oscura dati personali (modelli)', description: 'Codici fiscali, IBAN e altri dati trovati con i modelli', fields: [{ name: 'info', type: 'info', text: 'Oscuramento definitivo: il testo sotto viene eliminato.' }], summary: () => 'Oscura dati personali', runBytes: async (b, _p, ctx) => { const r = await sv.oscuraDatiPersonali(b, { progress: prog(ctx) }); ctx.note = [ctx.note, `${r.trovati ?? 0} dati oscurati`].filter(Boolean).join(' — '); return r.bytes; } });
+  esterne.push(
+    { id: 'fattura-pdf', label: 'Salva come PDF (fatture elettroniche)', description: 'Le fatture XML (anche firmate .p7m) diventano PDF impaginati; gli altri PDF restano come sono', fields: [{ name: 'info', type: 'info', text: 'Le fatture elettroniche vengono comunque impaginate in PDF prima delle altre operazioni: questa voce serve quando vuoi solo i PDF.' }], summary: () => 'Salva come PDF (fatture)', runBytes: (b) => b },
+    { id: 'rinomina-contenuto', label: 'Rinomina dal contenuto', description: 'Nome come Fattura_FORNITORE_n123_2026-10-31.pdf (per le fatture dai dati dell\'XML)', fields: [{ name: 'info', type: 'info', text: 'La regola del nome si cambia in «Rinomina dal contenuto».' }], summary: () => 'Rinomina dal contenuto', runBytes: (b, _p, ctx) => { ctx.rinomina = true; return b; } },
+    { id: 'estrai-excel', label: 'Estrai dati in Excel', description: 'Fornitore, P.IVA, numero, data, importi, scadenza, IBAN, CIG, CUP in un file per Excel', fields: [{ name: 'info', type: 'info', text: 'Alla fine trovi «dati_estratti_….csv» accanto al registro (si apre con Excel). Per le fatture XML i dati sono esatti; per i PDF sono letti dal testo e vanno controllati.' }], summary: () => 'Estrai dati in Excel',
+      runBytes: async (b, _p, ctx) => {
+        if (ctx.fattura) ctx.dati = righeExcelFattura(ctx.fattura);
+        else {
+          let pdf; let testo = '';
+          try { ({ pdf } = await openPdfJs(b)); testo = await testoPrimePagine(pdf, 3); } catch { testo = ''; } finally { destroyPdf(pdf); }
+          ctx.dati = [rigaExcelDaTesto(estraiDati(testo), analizza(testo, ctx.name))];
+        }
+        return b;
+      } });
   return tutteLeOperazioni(esterne);
 }
 
@@ -59,12 +98,12 @@ export function openBatch(app, deps, preset = null) {
   drop.addEventListener('dragleave', () => drop.classList.remove('over'));
   drop.addEventListener('drop', (e) => {
     e.preventDefault(); e.stopPropagation(); drop.classList.remove('over');
-    addItems([...e.dataTransfer.files].filter((f) => /\.pdf$/i.test(f.name)).map(fileItem));
+    addItems([...e.dataTransfer.files].filter((f) => /\.(pdf|xml|p7m)$/i.test(f.name)).map(fileItem));
   });
   const col1 = h('section', { class: 'av-box' }, h('h3', {}, h('span', { class: 'av-step-n' }, '1'), 'File da elaborare'),
     h('div', { class: 'av-row' },
-      h('button', { class: 'btn primary', onclick: async () => { try { const r = await chooseFolder(app, { recursive: state.recursive, skipDirs: ['Elaborati'], title: 'Scegli la cartella con i PDF' }); if (r) { addItems(r.items, r.folder, r.label); if (r.truncated) app.ui.toast('La cartella contiene moltissimi file: ne sono stati presi i primi 200.000.', { kind: 'warning' }); } } catch (e) { app.reportError(e, 'Cartella non leggibile'); } } }, 'Scegli cartella…'),
-      h('button', { class: 'btn', onclick: async () => { try { addItems(await chooseFiles(app, { title: 'Aggiungi PDF' })); } catch (e) { app.reportError(e, 'File non aggiunti'); } } }, 'Aggiungi file…'),
+      h('button', { class: 'btn primary', onclick: async () => { try { const r = await chooseFolder(app, { recursive: state.recursive, skipDirs: ['Elaborati'], title: 'Scegli la cartella con i PDF e le fatture', exts: ['pdf', 'xml', 'p7m'] }); if (r) { addItems(r.items, r.folder, r.label); if (r.truncated) app.ui.toast('La cartella contiene moltissimi file: ne sono stati presi i primi 200.000.', { kind: 'warning' }); } } catch (e) { app.reportError(e, 'Cartella non leggibile'); } } }, 'Scegli cartella…'),
+      h('button', { class: 'btn', onclick: async () => { try { addItems(await chooseFiles(app, { title: 'Aggiungi PDF e fatture', exts: ['pdf', 'xml', 'p7m'], filterName: 'PDF, fatture XML e file firmati' })); } catch (e) { app.reportError(e, 'File non aggiunti'); } } }, 'Aggiungi file…'),
       state.items ? h('button', { class: 'btn', onclick: () => { state.items = []; state.folder = null; state.label = ''; renderFiles(); } }, 'Svuota') : null),
     h('label', { class: 'chk', for: 'av-b-rec' }, recursive, 'Comprendi le sottocartelle'),
     fileCount, fileList, drop);
@@ -180,7 +219,13 @@ export function openBatch(app, deps, preset = null) {
     const registroDove = async () => {
       const csv = new TextEncoder().encode(registroCsv(lavoro));
       const folder = opz.dest === 'other' ? opz.destFolder : opz.folder;
-      if (isDesktop() && folder) { try { return await call(app, 'write', { folder, sub: opz.dest === 'other' ? '' : 'Elaborati', name: `registro_azioni_guidate_${lavoro.id}.csv`, bytes: csv, overwrite: true }); } catch {} }
+      const dati = datiCsv(lavoro);
+      if (isDesktop() && folder) {
+        try {
+          if (dati) await call(app, 'write', { folder, sub: opz.dest === 'other' ? '' : 'Elaborati', name: `dati_estratti_${lavoro.id}.csv`, bytes: new TextEncoder().encode(dati), overwrite: true });
+          return await call(app, 'write', { folder, sub: opz.dest === 'other' ? '' : 'Elaborati', name: `registro_azioni_guidate_${lavoro.id}.csv`, bytes: csv, overwrite: true });
+        } catch {}
+      } else if (dati) app.platform.download(new TextEncoder().encode(dati), 'dati_estratti.csv');
       return null;
     };
     const scrivi = async (d, name, bytes) => {
@@ -203,12 +248,20 @@ export function openBatch(app, deps, preset = null) {
         const s0 = performance.now();
         try {
           if (it.size > MAX_FILE) throw new SkipError('Il file è troppo grande (oltre 500 MB).');
-          const bytes = await it.read();
+          let bytes = await it.read();
+          // fatture elettroniche (anche dentro i .p7m): le operazioni ricevono il PDF impaginato; .p7m con PDF: il PDF contenuto
+          const prep = await preparaIngresso(app, bytes, it.name);
+          bytes = prep.bytes; Object.assign(ctx, prep.ctx);
+          if (prep.nota) ctx.note = prep.nota;
           const out = await eseguiSequenza(bytes, passi, { PDFLib: app.lib.PDFLib, openPdfLib: (b) => app.lib.openPdfLib(b), savePdfLib: (d) => app.lib.savePdfLib(d), ops, ctx, signal: p.signal });
-          const name = opz.nome === 'contenuto' ? await nomeDalContenuto(out, it.name, app.settings.get('avanzati.rinomina.regola')) : nomeUscita(it.name, { modo: opz.nome });
-          if (opz.nome === 'contenuto') ctx.note = [ctx.note, `nuovo nome: ${name}`].filter(Boolean).join(' — ');
+          const pdfName = it.name.replace(/(\.xml)?(\.p7m)*$/i, (m) => (m ? '.pdf' : '')).replace(/\.pdf\.pdf$/i, '.pdf');
+          const rinomina = opz.nome === 'contenuto' || ctx.rinomina;
+          let name = rinomina ? (ctx.nomeFattura || await nomeDalContenuto(out, pdfName, app.settings.get('avanzati.rinomina.regola'))) : nomeUscita(pdfName, { modo: opz.nome });
+          if (rinomina && /^Documento(_n\d*)?\.pdf$/i.test(name)) { name = nomeUscita(pdfName, { modo: 'stesso' }); ctx.note = [ctx.note, 'nome non ricavabile dal contenuto: tenuto quello originale'].filter(Boolean).join(' — '); }
+          name = nomeUnico(lavoro, rec, `${dest.folder || ''}/${dest.sub || ''}`, name);
+          if (rinomina) ctx.note = [ctx.note, `nuovo nome: ${name}`].filter(Boolean).join(' — ');
           const dove = await scrivi(dest, opz.dest === 'overwrite' && it.path ? basename(it.path) : name, out);
-          registra(lavoro, rec, { s: 'ok', dove, nota: ctx.note || '', ms: performance.now() - s0 });
+          registra(lavoro, rec, { s: 'ok', dove, nota: ctx.note || '', ms: performance.now() - s0, dati: ctx.dati || null });
         } catch (e) {
           if (e?.name === 'AbortError') break;
           registra(lavoro, rec, { s: e instanceof SkipError ? 'saltato' : 'errore', motivo: motivoLeggibile(e), ms: performance.now() - s0 });

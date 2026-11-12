@@ -8,6 +8,8 @@ import { openFattura, registerFatturaPanel } from './ui/fattura.js';
 import { timbroProtocollo, KEY_MODELLI, cercaSegnatura } from './ui/protocollo.js';
 import { preparaPerTitulus, KEY_SOGLIA_TITULUS } from './ui/titulus.js';
 import { leggiSegnaturaTitulus, KEY_MASCHERA_UOR } from './ui/segnatura-immagine.js';
+import { registerDatiTitulus } from './ui/datititulus.js';
+import { fatturaPdfDaBytes } from './ui/fattura.js';
 import { compilaModelli, MODELLI_PREDEFINITI, SOGLIA_MB_PREDEFINITA, segnatureTitulus } from './lib/titulus.js';
 import { openBatch } from './ui/batch.js';
 import { openSearchFolder } from './ui/search-folder.js';
@@ -56,6 +58,9 @@ export default function register(app) {
   app.services.segnaturaTitulus = (testo) => cercaSegnatura(app, testo);
   /** Dai byte di un PDF o .p7m: prima il testo della pagina 1, poi la striscia-immagine sul margine (OCR). Non modifica nulla. */
   app.services.leggiSegnaturaTitulus = (bytes, opts) => leggiSegnaturaTitulus(app, bytes, opts);
+  /** FatturaPA (XML o .p7m) → PDF impaginato (solo app desktop). */
+  app.services.fatturaPdf = async (bytes, opts) => (await fatturaPdfDaBytes(app, bytes, opts)).bytes;
+  registerDatiTitulus(app);
   app.services.segnatureTitulus = (testo) => { try { return segnatureTitulus(testo, { modelli: String(app.settings.get(KEY_MODELLI, '') || '').trim() ? String(app.settings.get(KEY_MODELLI)).split(/\r?\n/).filter(Boolean) : undefined }); } catch { return segnatureTitulus(testo); } };
   app.bus.on('settings:fields', (arr) => {
     arr.push({ key: KEY_MODELLI, field: { label: 'Segnatura di Titulus: modelli di riconoscimento (uno per riga; vuoto = generici). Da verificare sul formato dell\'AOO.', type: 'textarea', rows: 3, value: '', placeholder: MODELLI_PREDEFINITI[0].slice(0, 80) + '…' } });
@@ -176,7 +181,7 @@ export default function register(app) {
     });
     app.registerOpener({
       id: 'avanzati-xml', name: 'Fattura elettronica (.xml)', extensions: ['xml'],
-      open: (f) => (isFattura(f.bytes) ? deps.openFattura(app, f.bytes, f.name)
+      open: (f) => (isFattura(f.bytes) ? deps.openFattura(app, f.bytes, f.name, { path: f.path })
         : looksLikeP7m(f.bytes) ? deps.openSignedFile(app, { bytes: f.bytes, name: f.name, path: f.path })
         : app.ui.toast(`«${f.name}» non è una fattura elettronica.`, { kind: 'warning' })),
     });
@@ -208,7 +213,7 @@ export default function register(app) {
 async function chooseSigned(app, deps) {
   const files = await app.platform.openFiles({ multiple: true, raw: true, title: 'Apri file firmato', filters: [{ name: 'File firmati e fatture elettroniche', extensions: ['p7m', 'p7s', 'tsd', 'm7m', 'xml'] }, { name: 'Tutti i file', extensions: ['*'] }] });
   for (const f of files || []) {
-    if (/\.xml$/i.test(f.name) && isFattura(f.bytes)) await deps.openFattura(app, f.bytes, f.name);
+    if (/\.xml$/i.test(f.name) && isFattura(f.bytes)) await deps.openFattura(app, f.bytes, f.name, { path: f.path });
     else await deps.openSignedFile(app, { bytes: f.bytes, name: f.name, path: f.path });
   }
 }
@@ -218,5 +223,5 @@ async function chooseFattura(app, deps) {
   const f = files?.[0];
   if (!f) return;
   if (looksLikeP7m(f.bytes)) return deps.openSignedFile(app, { bytes: f.bytes, name: f.name, path: f.path });
-  return deps.openFattura(app, f.bytes, f.name);
+  return deps.openFattura(app, f.bytes, f.name, { path: f.path });
 }

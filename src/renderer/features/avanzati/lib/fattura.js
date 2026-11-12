@@ -348,3 +348,14 @@ export function isFattura(bytes) {
 }
 
 export { findAll };
+
+/** Righe per Excel (una per documento nel file). Importi come numeri. */
+export function righeExcelFattura(f) {
+  return f.corpi.map((c) => ({
+    'Tipo documento': TIPI_DOCUMENTO[c.tipo] || c.tipo, Fornitore: f.cedente?.nome || '', 'P.IVA fornitore': f.cedente?.partitaIva || f.cedente?.codiceFiscale || '',
+    Numero: c.numero, Data: c.data, Imponibile: c.calcoli.imponibile, IVA: c.calcoli.imposta, Totale: c.calcoli.totale,
+    'Scissione dei pagamenti': c.calcoli.split ? 'sì' : 'no', 'Da pagare al fornitore': c.calcoli.nettoAPagare,
+    Scadenza: c.pagamenti[0]?.dettagli[0]?.scadenza || '', IBAN: c.pagamenti[0]?.dettagli[0]?.iban || '',
+    CIG: c.cig.join(' '), CUP: c.cup.join(' '), Avvisi: c.avvisi.filter((a) => a.livello !== 'info').map((a) => a.testo).join(' | '),
+  }));
+}
