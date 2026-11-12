@@ -77,7 +77,7 @@ export class FormEditor {
     this.offDoc = this.app.bus.on('document:activated', () => this.app.tools.deactivate());
     this.board.redrawAll();
     const pv = this.app.viewer.pdfViewer;
-    for (let i = 0; i < (pv.pagesCount || 0); i++) { const v = pv.getPageView(i); if (v?.div?.querySelector('canvas')) this.#ensurePage(i); }
+    for (let i = 0; i < (pv.pagesCount || 0); i++) { const v = pv.getPageView(i); if ((v?.renderingState === 3 || v?.div?.querySelector('canvas'))) this.#ensurePage(i); }
     this.#buildBar();
   }
 
@@ -248,17 +248,20 @@ export class FormEditor {
     const deleted = this.deleted.slice();
     if (!items.length && !deleted.length) { this.app.ui.toast('Nessuna modifica ai campi da salvare.'); return; }
     let report = null;
-    const ok = await this.app.editWithPdfLib('Campi del modulo aggiornati', async (pdfDoc, PDFLib) => {
-      report = await applyFormChanges(PDFLib, pdfDoc, items, deleted);
+    const run = (prog) => this.app.editWithPdfLib('Campi del modulo aggiornati', async (pdfDoc, PDFLib) => {
+      report = await applyFormChanges(PDFLib, pdfDoc, items, deleted, (f) => prog?.set(f * 0.9, 'Scrittura dei campi…'));
+      prog?.set(0.95, 'Salvataggio…');
       if (!report.changed) return false;
     }, this.doc);
+    // con molti campi si mostra l'avanzamento (l'interfaccia resta reattiva)
+    const ok = items.length + deleted.length > 60 ? await this.app.ui.withProgress('Salvataggio dei campi', run, { cancellable: false }) : await run(null);
     if (ok) {
       this.changed = false; this.deleted = [];
       // il documento è stato ricaricato: si rilegge il modello
       this.loaded.clear(); this.board.clear(); this.doc = this.app.activeDoc;
       this.board.redrawAll();
       const pv = this.app.viewer.pdfViewer;
-      for (let i = 0; i < (pv.pagesCount || 0); i++) { const v = pv.getPageView(i); if (v?.div?.querySelector('canvas')) this.#ensurePage(i); }
+      for (let i = 0; i < (pv.pagesCount || 0); i++) { const v = pv.getPageView(i); if ((v?.renderingState === 3 || v?.div?.querySelector('canvas'))) this.#ensurePage(i); }
       if (report?.problems.length) this.app.ui.toast(report.problems.slice(0, 3).join(' · '), { kind: 'warning', timeout: 8000 });
     }
   }
@@ -324,7 +327,7 @@ function setJsActions(PDFLib, ctx, dict, format) {
 }
 
 /** Applica il modello del redattore al documento. → { changed, problems[] } */
-export async function applyFormChanges(PDFLib, pdfDoc, items, deleted) {
+export async function applyFormChanges(PDFLib, pdfDoc, items, deleted, onProgress) {
   const { PDFName, PDFNumber, PDFString, PDFHexString, PDFDict, PDFArray, TextAlignment } = PDFLib;
   const ctx = pdfDoc.context; const problems = []; let changed = false;
   const form = pdfDoc.getForm();
@@ -382,8 +385,9 @@ export async function applyFormChanges(PDFLib, pdfDoc, items, deleted) {
 
   // 3) campi nuovi
   const groups = new Map();
-  const nameTaken = (n) => { try { return !!form.getFieldMaybe(n); } catch { return false; } };
-  const freeName = (n) => { let k = 2; let x = n; while (nameTaken(x)) x = `${n}_${k++}`; return x; };
+  const taken = new Set(); try { for (const f of form.getFields()) taken.add(f.getName()); } catch {}
+  const freeName = (n) => { let k = 2; let x = n; while (taken.has(x)) x = `${n}_${k++}`; taken.add(x); return x; };
+  let done = 0;
   for (const it of items.filter((i) => !i.existing)) {
     try {
       const page = pages[it.pageIndex]; if (!page) continue;
@@ -411,7 +415,7 @@ export async function applyFormChanges(PDFLib, pdfDoc, items, deleted) {
           break;
         case 'radio': {
           let g = groups.get(it.name);
-          if (!g) { g = form.getFieldMaybe(it.name) instanceof PDFLib.PDFRadioGroup ? form.getRadioGroup(it.name) : form.createRadioGroup(freeName(it.name)); groups.set(it.name, g); }
+          if (!g) { let ex = null; if (taken.has(it.name)) { try { ex = form.getRadioGroup(it.name); } catch {} } g = ex || form.createRadioGroup(freeName(it.name)); groups.set(it.name, g); }
           g.addOptionToPage(p.exportValue || 'Opzione', page, opts);
           field = g;
           break;
@@ -448,6 +452,7 @@ export async function applyFormChanges(PDFLib, pdfDoc, items, deleted) {
       }
       changed = true;
     } catch (e) { problems.push(`Campo «${it.name}» non creato: ${e.message || e}`); }
+    if (++done % 50 === 0) { onProgress?.(done / items.length); await new Promise((r) => setTimeout(r, 0)); }
   }
   await safeAppearances(PDFLib, pdfDoc, form);
   return { changed, problems };

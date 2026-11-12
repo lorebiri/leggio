@@ -834,7 +834,8 @@ async function signFiles(paths, p12Bytes, password, opts = {}, onProgress = () =
       fs.renameSync(tmp, outPath);
       results.push({ name: path.basename(p), ok: true, output: outPath });
     } catch (e) {
-      results.push({ name: path.basename(p), ok: false, error: e instanceof UserError ? e.message : 'Errore imprevisto: ' + (e.message || e) });
+      const msg = e instanceof UserError ? e.message : e && e.code === 'ENOENT' ? 'Il file non esiste più (spostato o eliminato?).' : e && (e.code === 'EACCES' || e.code === 'EPERM') ? 'Permessi insufficienti per leggere il file o scrivere nella sua cartella.' : 'Errore imprevisto: ' + (e.message || e);
+      results.push({ name: path.basename(p), ok: false, error: msg });
     }
   }
   return results;

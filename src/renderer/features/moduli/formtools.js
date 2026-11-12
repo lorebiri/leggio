@@ -371,7 +371,7 @@ export function installInfoBar(app, { onVerify }) {
         btn.classList.toggle('on', on); btn.setAttribute('aria-pressed', String(on)); app.settings.set('moduli.highlight', on);
       } }, 'Evidenzia campi');
       parts.push(h('span', { class: 'mod-ib-item' }, isXfa ? 'Questo è un modulo XFA: si può compilare, ma alcune funzioni (Prepara modulo, appiattisci) non sono disponibili.' : fillable.partial ? 'Questo documento contiene campi compilabili.' : `Questo documento contiene campi compilabili (${fillable.length}).`), btn,
-        h('button', { class: 'btn small', onclick: () => app.tools.run('autofill-profile') }, 'Compila con i miei dati'));
+        sigs.length ? null : h('button', { class: 'btn small', onclick: () => app.tools.run('autofill-profile') }, 'Compila con i miei dati'));
     } else if (isXfa) parts.push(h('span', { class: 'mod-ib-item' }, 'Modulo XFA (formato Adobe dinamico): la visualizzazione può essere incompleta.'));
     if (!parts.length) return;
     bar.append(h('span', { class: 'mod-ib-icon', 'aria-hidden': 'true' }, sigs.length ? '✔' : '✎'), ...parts,

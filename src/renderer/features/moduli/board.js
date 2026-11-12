@@ -74,7 +74,7 @@ export class Board {
   redrawAll() {
     const pv = this.app.viewer.pdfViewer;
     const n = pv.pagesCount || 0;
-    for (let i = 0; i < n; i++) { const v = pv.getPageView(i); if (v && v.div && v.div.querySelector('canvas')) this.drawPage(i); }
+    for (let i = 0; i < n; i++) { const v = pv.getPageView(i); if (v && v.div && (v.renderingState === 3 || v.div.querySelector('canvas'))) this.drawPage(i); }
   }
 
   /** Elemento DOM di un elemento (se la sua pagina è visualizzata). */
