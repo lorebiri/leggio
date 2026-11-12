@@ -95,7 +95,7 @@ function riepilogo(app, f, firma, deps) {
 /** Pannello laterale «Fattura elettronica» per i documenti nati da un XML. */
 export function registerFatturaPanel(app, deps) {
   app.registerPanel({
-    id: 'fattura', title: 'Fattura elettronica', icon: 'file', order: 61,
+    id: 'fattura', title: 'Fattura elettronica', icon: 'invoice', order: 61,
     render(c) {
       const { h } = app.ui;
       const doc = app.activeDoc;

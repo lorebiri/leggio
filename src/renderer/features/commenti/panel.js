@@ -88,7 +88,7 @@ export function commentsPanel(app) {
         const ta = H('textarea', { rows: 2, placeholder: 'Scrivi una risposta…', 'aria-label': 'Risposta' });
         ta.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send(); });
         const send = () => { if (ta.value.trim()) actions.reply(app, t, ta.value); };
-        replyBox.append(ta, H('div', { class: 'lg-row' }, H('button', { class: 'btn small', onclick: () => { replyBox.hidden = true; } }, 'Annulla'), H('button', { class: 'btn small primary', onclick: send }, 'Rispondi')));
+        replyBox.append(ta, H('div', { class: 'lg-row' }, H('button', { class: 'btn small', onclick: () => { replyBox.hidden = true; } }, 'Lascia perdere'), H('button', { class: 'btn small primary', onclick: send }, 'Rispondi')));
         el.append(H('div', { class: 'lg-item-actions' },
           H('button', { class: 'lg-tbtn', onclick: (e) => { e.stopPropagation(); replyBox.hidden = false; ta.focus(); } }, 'Rispondi'),
           H('button', { class: 'lg-tbtn', onclick: (e) => { e.stopPropagation(); const b = e.currentTarget.getBoundingClientRect(); app.ui.contextMenu(b.left, b.bottom + 4, statusMenuItems(app, t)); } }, 'Stato ▾'),

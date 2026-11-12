@@ -23,6 +23,8 @@ export class Viewer {
       annotationMode: pdfjs.AnnotationMode.ENABLE_FORMS,
       textLayerMode: 1, removePageBorders: false,
       maxCanvasPixels: 2 ** 25, enableAutoLinking: true,
+      // icone delle note e degli allegati disegnate da pdf.js (copiate da vite.config.js in dist/pdfjs/images)
+      imageResourcesPath: new URL('./pdfjs/images/', document.baseURI).href,
     });
     this.linkService.setViewer(this.pdfViewer);
     this.doc = null;

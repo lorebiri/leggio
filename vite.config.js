@@ -9,6 +9,7 @@ function copyAssets() {
     writeBundle(opts) {
       const out = opts.dir || resolve('dist');
       const pdfjs = resolve('node_modules/pdfjs-dist');
+      if (existsSync(resolve(pdfjs, 'web/images'))) cpSync(resolve(pdfjs, 'web/images'), resolve(out, 'pdfjs', 'images'), { recursive: true });
       for (const d of ['cmaps', 'standard_fonts', 'wasm', 'iccs']) {
         if (existsSync(resolve(pdfjs, d))) cpSync(resolve(pdfjs, d), resolve(out, 'pdfjs', d), { recursive: true });
       }

@@ -64,7 +64,7 @@ async function cerca(app, q) {
 
 export function registerControlli(app) {
   app.registerPanel({
-    id: 'controlli', title: 'Controlli', icon: 'check', order: 61,
+    id: 'controlli', title: 'Controlli', icon: 'checklist', order: 61,
     render(c) {
       const { h } = app.ui;
       const doc = app.activeDoc;

@@ -45,7 +45,7 @@ writeFileSync(`${out}/2-protetto.pdf`, await encryptBytes(base, { userPassword: 
   writeFileSync(`${out}/4-id-prova.p12`, Buffer.from(p12.bytes || p12));
   const r = await M.signPdf(base, Buffer.from(p12.bytes || p12), 'firma123', { visible: true, pageIndex: 0, rect: [350, 60, 560, 130], subFilter: 'cades', reason: 'Prova di compatibilità', location: 'Sesto Fiorentino' });
   writeFileSync(`${out}/4-firmato.pdf`, Buffer.from(r.bytes));
-  const p7 = M.signP7m(base, Buffer.from(p12.bytes || p12), 'firma123');
+  const p7 = await M.signP7m(base, Buffer.from(p12.bytes || p12), 'firma123');
   writeFileSync(`${out}/5-busta.pdf.p7m`, Buffer.from(p7.bytes || p7));
 }
 console.log('file di prova in', out);

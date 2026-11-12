@@ -754,7 +754,7 @@ export class App {
     const st = this.el.status; st.textContent = '';
     if (d) {
       if (d.dirty || d.formsDirty) st.append(h('span', { class: 'status-dirty' }, 'Modifiche non salvate ·'));
-      st.append(`${d.busy ? `In corso: ${d.queue.current}… · ` : ''}${d.pageCount} pagine · ${formatBytes(d.bytes.length)}${(d.bytes.length < 64 * MB ? this.isSigned(d) : d.data.__signed) ? ' · firmato digitalmente' : ''}${d.password ? ' · protetto da password' : ''}${d.readOnly ? ' · sola lettura' : ''}${d.path ? ' · ' + d.path : ''}`);
+      st.append(`${d.busy ? `In corso: ${d.queue.current}… · ` : ''}${d.pageCount} ${d.pageCount === 1 ? 'pagina' : 'pagine'} · ${formatBytes(d.bytes.length)}${(d.bytes.length < 64 * MB ? this.isSigned(d) : d.data.__signed) ? ' · firmato digitalmente' : ''}${d.password ? ' · protetto da password' : ''}${d.readOnly ? ' · sola lettura' : ''}${d.path ? ' · ' + d.path : ''}`);
     }
   }
 
