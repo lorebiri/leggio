@@ -213,7 +213,7 @@ export function openBatch(app, deps, preset = null) {
           registra(lavoro, rec, { s: 'ok', dove, nota: ctx.note || '', ms: performance.now() - s0 });
         } catch (e) {
           if (e?.name === 'AbortError') break;
-          registra(lavoro, rec, { s: e instanceof SkipError ? 'saltato' : 'errore', motivo: e?.message || String(e), ms: performance.now() - s0 });
+          registra(lavoro, rec, { s: e instanceof SkipError ? 'saltato' : 'errore', motivo: motivoLeggibile(e), ms: performance.now() - s0 });
         }
         await salva(false);
         if (i % 4 === 3) await new Promise((r) => setTimeout(r, 0)); // lascia respirare l'interfaccia
@@ -290,4 +290,17 @@ async function askParams(app, o, params = {}) {
   if (!fields.some((f) => f.type !== 'info')) return {};
   const v = await app.ui.dialog({ title: o.label, message: o.description, fields, okLabel: 'Conferma', validate: (x) => o.validate?.(x) || null });
   return v;
+}
+
+
+/** Messaggio per il registro: gli errori tecnici delle librerie (in inglese) diventano frasi chiare. */
+export function motivoLeggibile(e) {
+  const msg = String(e?.message || e || '');
+  if (e instanceof SkipError) return msg;
+  if (/password|encrypt/i.test(msg) && !/[àèéìòù]|\b(il|la|non|del)\b/i.test(msg)) return 'Il file è protetto da password.';
+  if (/Failed to parse|Invalid PDF|xref|trailer|startxref|Expected|Unexpected|parse|corrupt|No PDF header/i.test(msg) && !/\b(il|la|non|del|file)\b/.test(msg)) {
+    console.warn('[azioni guidate] errore tecnico:', msg);
+    return 'Il file non è un PDF leggibile o è danneggiato.';
+  }
+  return msg || 'Errore sconosciuto.';
 }

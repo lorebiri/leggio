@@ -23,15 +23,15 @@ function campoCartella(app) {
     name: 'cartella', label: 'Dove salvare i file convertiti', type: 'custom',
     render(c) {
       let valore = this.value || '';
-      const lab = app.ui.h('span', { class: 'conv-hint' }, valore || (window.leggio ? 'Nessuna cartella scelta' : 'Nell’anteprima web i file vengono scaricati'));
+      const lab = app.ui.h('span', { class: 'conv-hint' }, valore || 'Accanto agli altri risultati, nella cartella «Elaborati»');
       const btn = app.ui.h('button', { type: 'button', class: 'btn small', onclick: async () => {
         const f = await app.platform.chooseFolder('Cartella per i file convertiti');
         if (f && f !== '__download__') { valore = f; lab.textContent = f; }
-      } }, 'Scegli la cartella…');
+      } }, 'Scegli un\'altra cartella…');
       c.append(btn, ' ', lab);
       return { get: () => valore };
     },
-    help: 'Il PDF passa invariato ai passi successivi della sequenza.',
+    help: 'Facoltativo. Il PDF passa invariato ai passi successivi della sequenza.',
   };
 }
 
@@ -42,14 +42,14 @@ function opEsporta(app, formato) {
   return {
     id: 'conv-esporta-' + formato, label: `Esporta in ${nome} (.${ext})`, description: `Salva una copia in formato ${nome} di ogni file in una cartella`,
     fields: [campoCartella(app)],
-    validate: (p) => (window.leggio && !p.cartella ? 'Scegli la cartella in cui salvare i file convertiti.' : null),
     summary: (p) => `Esporta in ${nome}${p.cartella ? ` in ${p.cartella}` : ''}`,
     async runBytes(bytes, p, ctx = {}) {
       const out = await convertiBytes(app, bytes, formato, { title: nomeBase(ctx.name), immaginiPagina: formato === 'docx' || formato === 'odt' ? 'senza-testo' : 'mai' });
       const file = `${nomeBase(ctx.name || 'documento')}.${ext}`;
-      // API futura delle azioni guidate: scrittura accanto agli altri risultati
-      if (typeof ctx.scriviFile === 'function') await ctx.scriviFile(file, out);
-      else await app.platform.writeInFolder(p.cartella || '__download__', file, out);
+      // cartella scelta dall'utente, altrimenti accanto agli altri risultati («Elaborati»)
+      if (p.cartella) await app.platform.writeInFolder(p.cartella, file, out);
+      else if (typeof ctx.scriviFile === 'function') await ctx.scriviFile(file, out);
+      else await app.platform.writeInFolder('__download__', file, out);
       ctx.note = [ctx.note, `${nome}: ${file}`].filter(Boolean).join(' — ');
       return bytes;
     },
