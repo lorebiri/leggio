@@ -4,21 +4,19 @@
 // non possono stare negli object stream (devono essere diretti per calcolare il ByteRange).
 // Un campo firma vuoto (da firmare) non ha /ByteRange e non conta come firmato.
 
-const NEEDLE = [0x2f, 0x42, 0x79, 0x74, 0x65, 0x52, 0x61, 0x6e, 0x67, 0x65]; // "/ByteRange"
+const CHUNK = 8 * 1024 * 1024;
+const dec = typeof TextDecoder !== 'undefined' ? new TextDecoder('latin1') : null;
 
 /** @param {Uint8Array} bytes */
 export function isSignedPdf(bytes) {
-  if (!bytes?.length) return false;
-  const n = NEEDLE.length;
-  const first = NEEDLE[0];
-  for (let i = bytes.indexOf(first); i !== -1 && i <= bytes.length - n; i = bytes.indexOf(first, i + 1)) {
-    let k = 1;
-    while (k < n && bytes[i + k] === NEEDLE[k]) k++;
-    if (k === n) {
-      // dopo /ByteRange deve venire un array di numeri: [0 123 456 789]
-      let j = i + n;
-      while (j < bytes.length && (bytes[j] === 0x20 || bytes[j] === 0x0a || bytes[j] === 0x0d || bytes[j] === 0x09)) j++;
-      if (bytes[j] === 0x5b) return true;
+  if (!bytes?.length || !dec) return false;
+  // a blocchi da 8 MB con 64 byte di sovrapposizione; la ricerca nativa nelle stringhe è molto veloce
+  for (let off = 0; off < bytes.length; off += CHUNK) {
+    const str = dec.decode(bytes.subarray(off, Math.min(bytes.length, off + CHUNK + 64)));
+    let i = str.indexOf('/ByteRange');
+    while (i !== -1) {
+      if (/^\/ByteRange\s*\[/.test(str.slice(i, i + 40))) return true;
+      i = str.indexOf('/ByteRange', i + 10);
     }
   }
   return false;

@@ -26,9 +26,20 @@ export const PDFJS_SAFE = { isEvalSupported: false, enableXfa: true, stopAtError
  * pdf.js trasferisce il buffer al worker (lo "stacca"): gli si passa sempre una copia, così
  * i byte del documento restano utilizzabili.
  */
-export async function openPdfJs(bytes, { password, onPassword, onProgress, signal } = {}) {
+/**
+ * Worker di pdf.js condiviso dai documenti aperti: senza, ogni scheda avvia un proprio thread
+ * (200 file aperti = 200 worker, ciascuno con la sua memoria). Se il worker muore se ne crea un altro.
+ * Le operazioni usa e getta (verifica al salvataggio, stampa) usano un worker proprio (ownWorker).
+ */
+let sharedWorker = null;
+export function getSharedWorker() {
+  if (!sharedWorker || sharedWorker.destroyed) sharedWorker = new pdfjs.PDFWorker({ name: 'leggio-documenti' });
+  return sharedWorker;
+}
+
+export async function openPdfJs(bytes, { password, onPassword, onProgress, signal, ownWorker = false } = {}) {
   if (signal?.aborted) throw abortError();
-  const task = pdfjs.getDocument({ data: bytes.slice(), password, ...PDFJS_ASSETS, ...PDFJS_SAFE });
+  const task = pdfjs.getDocument({ data: bytes.slice(), password, ...PDFJS_ASSETS, ...PDFJS_SAFE, ...(ownWorker ? {} : { worker: getSharedWorker() }) });
   let usedPassword = password;
   let cancelled = false;
   let rejectCancel;
@@ -81,7 +92,7 @@ function abortError() { const e = new Error('Apertura annullata'); e.name = 'Abo
 
 /** Verifica che i byte siano un PDF leggibile (apertura + prima pagina). Lancia un errore se no. */
 export async function verifyPdfBytes(bytes, password) {
-  const { pdf } = await openPdfJs(bytes, { password });
+  const { pdf } = await openPdfJs(bytes, { password, ownWorker: true });
   try {
     if (!pdf.numPages) throw new Error('Il file non contiene pagine');
     const page = await pdf.getPage(1);
