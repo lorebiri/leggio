@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs>
+  <linearGradient id="fondo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fdfcf8"/><stop offset="1" stop-color="#e6e2d6"/></linearGradient>
+  <linearGradient id="foglio" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#14958a"/><stop offset="1" stop-color="#0f766e"/></linearGradient>
+  <filter id="ombra" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur in="SourceAlpha" stdDeviation="14"/><feOffset dy="10"/><feComponentTransfer><feFuncA type="linear" slope=".28"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+<filter id="bordo" x="-10%" y="-10%" width="120%" height="120%"><feMorphology in="SourceAlpha" operator="dilate" radius="30"/><feGaussianBlur stdDeviation="10"/><feComponentTransfer result="d"><feFuncA type="linear" slope="4" intercept="-1.4"/></feComponentTransfer><feFlood flood-color="#f4f3ef"/><feComposite in2="d" operator="in"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+<g filter="url(#bordo)"><g transform="rotate(-7 512.0 423.6)"><rect x="220.8" y="210.4" width="582.4" height="426.4" rx="49.9" fill="url(#foglio)"/><path d="M324.8 335.2H699.2M324.8 423.6H699.2M324.8 512.0H584.8" stroke="#fff" stroke-width="41.6" stroke-linecap="round" opacity=".95"/><rect x="191.7" y="618.1" width="640.6" height="56.2" rx="28.1" fill="#1f2b2e"/></g><path d="M512.0 668.0V811.5M387.2 811.5H636.8" stroke="#1f2b2e" stroke-width="62.4" stroke-linecap="round" fill="none"/></g>
+</svg>

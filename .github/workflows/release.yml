@@ -1,0 +1,93 @@
+# Pacchetti di installazione: parte quando si spinge un tag vX.Y.Z.
+# Costruisce su macOS e Windows e carica tutto in una BOZZA di release GitHub,
+# che va controllata e pubblicata a mano (vedi docs/RILASCIO.md).
+# Avviato a mano (workflow_dispatch) costruisce i pacchetti senza pubblicarli: si scaricano dagli artefatti.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bozza:
+    name: Prepara la bozza di release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Controlla che il tag corrisponda alla versione di package.json
+        run: |
+          v="$(node -p "require('./package.json').version")"
+          if [ "v$v" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::Il tag ${GITHUB_REF_NAME} non corrisponde alla versione $v di package.json"
+            exit 1
+          fi
+      - name: Crea la bozza con note automatiche (se non esiste già)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "La release ${GITHUB_REF_NAME} esiste già: aggiungo solo i file."
+          else
+            gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" \
+              --draft --generate-notes --title "Leggio ${GITHUB_REF_NAME#v}" --verify-tag
+          fi
+
+  pacchetti:
+    name: Pacchetti ${{ matrix.nome }}
+    needs: bozza
+    # gira anche quando «bozza» è saltato (avvio manuale), ma non se è fallito
+    if: ${{ !failure() && !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            nome: macOS
+            args: --mac
+          - os: windows-latest
+            nome: Windows
+            args: --win
+    runs-on: ${{ matrix.os }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Nessun certificato per ora: niente firma. Quando ci saranno, aggiungere qui i segreti
+      # (CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID): vedi docs/RILASCIO.md.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Prepara i dati OCR
+        if: hashFiles('scripts/prepara-ocr.mjs') != ''
+        run: node scripts/prepara-ocr.mjs
+      - run: npm test
+      - run: npx vite build
+      - name: Costruisci i pacchetti
+        run: npx electron-builder ${{ matrix.args }} --publish never
+      - name: Verifica che il pacchetto contenga i moduli del processo main
+        run: node scripts/verifica-pacchetto.mjs
+      - name: Carica nella bozza di release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(release/Leggio-*.dmg release/Leggio-*.zip release/Leggio-*.exe)
+          gh release upload "${GITHUB_REF_NAME}" "${files[@]}" --repo "${GITHUB_REPOSITORY}" --clobber
+      - name: Conserva i pacchetti come artefatti del workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: leggio-${{ matrix.nome }}
+          path: |
+            release/Leggio-*.dmg
+            release/Leggio-*.zip
+            release/Leggio-*.exe
+          if-no-files-found: error
+          retention-days: 14

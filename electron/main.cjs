@@ -312,6 +312,7 @@ function buildMenu() {
       { label: 'Segnala un problema', click: () => shell.openExternal('https://github.com/lorebiri/leggio/issues') },
       { label: 'Scorciatoie da tastiera', click: cmd('shortcuts') },
       { type: 'separator' },
+      { label: 'Controlla aggiornamenti…', click: () => require('./updater.cjs').checkInteractive(mainWindow) },
       { label: 'Recupera documenti non salvati…', click: () => send('app:open-recovery') },
       { label: 'Apri cartella dei log', click: () => openLogs() },
     ] },
@@ -514,6 +515,7 @@ else {
     registerFeatureModules();
     buildMenu();
     createWindow();
+    require('./updater.cjs').setup({ getWindow: () => mainWindow });
     sendOpen(process.argv.slice(app.isPackaged ? 1 : 2));
     app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) createWindow(); });
   });

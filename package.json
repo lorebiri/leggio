@@ -12,10 +12,13 @@
     "build:web": "vite build",
     "start": "electron .",
     "test": "vitest run",
-    "test:stress": "node test/stress/genera.mjs && node test/stress/misura.mjs",
-    "dist:mac": "vite build && electron-builder --mac",
-    "dist:win": "vite build && electron-builder --win",
-    "preview": "bash scripts-preview.sh"
+    "dist:mac": "vite build && electron-builder --mac --publish never",
+    "dist:win": "vite build && electron-builder --win --publish never",
+    "preview": "bash scripts-preview.sh",
+    "icone": "node scripts/genera-icone.mjs",
+    "dist:prova": "vite build && electron-builder --mac dmg --arm64 --publish never",
+    "verifica:pacchetto": "node scripts/verifica-pacchetto.mjs",
+    "test:stress": "node test/stress/genera.mjs && node test/stress/misura.mjs"
   },
   "dependencies": {
     "@cantoo/pdf-lib": "^2.11.1",
@@ -33,5 +36,137 @@
     "electron-builder": "^26.18.0",
     "vite": "^8.3.8",
     "vitest": "^5.1.0"
+  },
+  "build": {
+    "appId": "it.lorenzobirindelli.leggio",
+    "productName": "Leggio",
+    "copyright": "Copyright © 2026 Lorenzo Birindelli — GPL-3.0-or-later",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json",
+      "!dist/fixtures/**",
+      "!node_modules/{pdfjs-dist,@napi-rs,docx}/**",
+      "!node_modules/{@types,undici-types}/**",
+      "!node_modules/{tesseract.js,tesseract.js-core,zlibjs,bmp-js,idb-keyval,wasm-feature-detect,is-url,opencollective-postinstall,regenerator-runtime,node-fetch,tr46,whatwg-url,webidl-conversions}/**",
+      "!node_modules/**/*.{map,ts,md,markdown}",
+      "!node_modules/**/{docs,doc,test,tests,example,examples,__tests__}/**"
+    ],
+    "extraResources": [
+      {
+        "from": "LICENSE",
+        "to": "LICENSE.txt"
+      }
+    ],
+    "asar": true,
+    "npmRebuild": false,
+    "artifactName": "Leggio-${version}-${os}-${arch}.${ext}",
+    "fileAssociations": [
+      {
+        "ext": "pdf",
+        "name": "Documento PDF",
+        "description": "Documento PDF",
+        "mimeType": "application/pdf",
+        "role": "Editor",
+        "rank": "Alternate"
+      }
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "identity": "-",
+      "minimumSystemVersion": "12.0"
+    },
+    "dmg": {
+      "title": "Leggio ${version}",
+      "contents": [
+        {
+          "x": 150,
+          "y": 190,
+          "type": "file"
+        },
+        {
+          "x": 410,
+          "y": 190,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "window": {
+        "width": 560,
+        "height": 380
+      },
+      "format": "ULFO"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "legalTrademarks": "Leggio"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Leggio",
+      "installerLanguages": [
+        "it_IT"
+      ],
+      "language": "1040",
+      "multiLanguageInstaller": false,
+      "license": "LICENSE",
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "Leggio-${version}-win-${arch}-installer.${ext}"
+    },
+    "portable": {
+      "artifactName": "Leggio-${version}-win-${arch}-portatile.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "lorebiri",
+        "repo": "leggio",
+        "releaseType": "draft"
+      }
+    ]
   }
 }

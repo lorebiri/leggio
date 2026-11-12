@@ -1,0 +1,114 @@
+/* Area «moduli»: compila e firma, prepara modulo, firme digitali. Solo variabili del tema. */
+
+/* ---------- livelli sopra le pagine ---------- */
+.leggio-overlay > .mod-layer { position: absolute; inset: 0; pointer-events: none; }
+.mod-layer .mod-item { position: absolute; pointer-events: auto; box-sizing: border-box; touch-action: none; }
+.mod-item.selected { outline: 1.5px solid var(--accent); outline-offset: 1px; }
+.mod-handle { position: absolute; width: 11px; height: 11px; background: var(--surface); border: 1.5px solid var(--accent); border-radius: 3px; z-index: 2; }
+.mod-handle.nw { left: -7px; top: -7px; cursor: nwse-resize; } .mod-handle.se { right: -7px; bottom: -7px; cursor: nwse-resize; }
+.mod-handle.ne { right: -7px; top: -7px; cursor: nesw-resize; } .mod-handle.sw { left: -7px; bottom: -7px; cursor: nesw-resize; }
+.mod-del { position: absolute; top: -12px; right: -30px; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface); color: var(--danger); font: 600 15px/1 var(--font); cursor: pointer; display: grid; place-items: center; padding: 0; z-index: 3; box-shadow: var(--shadow-pop); }
+.mod-del:hover { background: var(--danger-soft); }
+
+/* compila e firma */
+.mod-fill .mod-item { cursor: move; }
+.mod-fill .mod-item:hover:not(.selected) { outline: 1px dashed color-mix(in srgb, var(--accent) 60%, transparent); }
+.mod-text-edit { font-family: Helvetica, Arial, sans-serif; white-space: pre; outline: none; min-width: 1ch; min-height: 1em; cursor: text; padding: 0; margin: 0; }
+.mod-text.selected { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.mod-image img { width: 100%; height: 100%; display: block; pointer-events: none; user-select: none; }
+.mod-mark svg { width: 100%; height: 100%; display: block; pointer-events: none; }
+.mod-tbtn.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.mod-size { min-width: 42px; text-align: center; font-variant-numeric: tabular-nums; }
+.mod-colors { display: inline-flex; gap: 5px; }
+.mod-color { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--border-strong); cursor: pointer; padding: 0; }
+.mod-color.on { box-shadow: 0 0 0 2px var(--accent); }
+.mod-hint { color: var(--muted); font-size: 12.5px; flex: 1; min-width: 160px; }
+.mod-menu-sig { height: 26px; max-width: 110px; object-fit: contain; background: #fff; border-radius: 4px; margin-right: 6px; }
+.mod-saved { display: grid; gap: 8px; max-height: 50vh; overflow: auto; }
+.mod-saved-row { display: flex; align-items: center; gap: 10px; }
+.mod-saved-row img { height: 44px; max-width: 260px; object-fit: contain; background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; }
+
+/* dialogo della firma */
+.sig-dialog { display: grid; gap: 12px; }
+.sig-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
+.sig-tab { border: 0; background: none; padding: 8px 16px; font-size: 14px; color: var(--muted); border-bottom: 2.5px solid transparent; cursor: pointer; margin-bottom: -1px; }
+.sig-tab.on { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+.sig-panel { display: grid; gap: 10px; }
+.sig-pad-wrap { position: relative; width: 560px; max-width: 100%; height: 200px; background: #fff; border: 1px solid var(--border-strong); border-radius: var(--radius); overflow: hidden; }
+.sig-pad { display: block; touch-action: none; cursor: crosshair; max-width: 100%; }
+.sig-line { position: absolute; left: 24px; right: 24px; bottom: 50px; border-bottom: 1px solid #c8c6bf; pointer-events: none; }
+.sig-hint { position: absolute; left: 0; right: 0; bottom: 18px; text-align: center; color: #8a8c92; pointer-events: none; font-size: 14px; }
+.sig-row { display: flex; align-items: center; gap: 10px; }
+.sig-colors { display: inline-flex; gap: 6px; }
+.sig-color { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--border-strong); cursor: pointer; padding: 0; }
+.sig-color.on { box-shadow: 0 0 0 2.5px var(--accent); }
+.sig-text { height: 36px; font-size: 16px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); }
+.sig-fonts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; max-height: 240px; overflow: auto; }
+.sig-font { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); height: 64px; font-size: 30px; cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 0 10px; }
+.sig-font.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.sig-imgprev { min-height: 120px; background: repeating-conic-gradient(#eee 0 25%, #fff 0 50%) 0 0 / 16px 16px; border: 1px solid var(--border); border-radius: var(--radius); display: grid; place-items: center; padding: 8px; }
+.sig-imgprev p { background: var(--surface); padding: 6px 10px; border-radius: 6px; margin: 0; }
+.sig-imgcanvas { max-width: 100%; max-height: 180px; }
+.sig-save { color: var(--ink); }
+.sig-note { margin: 0; font-size: 12.5px; color: var(--muted); }
+
+/* ---------- prepara modulo ---------- */
+.viewer-container.mod-editing .annotationLayer { visibility: hidden; }
+.mod-form .mod-field { border: 1.5px solid color-mix(in srgb, var(--accent) 75%, transparent); background: color-mix(in srgb, var(--accent) 14%, transparent); cursor: move; border-radius: 2px; }
+.mod-form .mod-field.proposed { border-color: #d97706; background: rgba(245, 158, 11, .18); border-style: dashed; }
+.mod-form .mod-field.required { box-shadow: inset 0 0 0 1px var(--danger); }
+.mod-form .mod-field.k-checkbox, .mod-form .mod-field.k-radio { border-radius: 3px; }
+.mod-form .mod-field.k-radio { border-radius: 50%; }
+.mod-field-label { position: absolute; left: 0; bottom: 100%; margin-bottom: 1px; font: 600 10.5px/1.3 var(--font); color: var(--accent-ink); background: var(--accent); padding: 0 4px; border-radius: 3px 3px 3px 0; white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; pointer-events: none; opacity: .92; }
+.mod-field.proposed .mod-field-label { background: #b45309; color: #fff; }
+.mod-props .field { margin-bottom: 10px; display: grid; gap: 4px; }
+.mod-props .field.inline { display: flex; align-items: center; gap: 8px; }
+.mod-props input[type=text], .mod-props input[type=number], .mod-props select, .mod-props textarea { width: 100%; padding: 5px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); }
+.mod-prop-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.mod-pickrect { position: absolute; border: 2px dashed var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); pointer-events: none; }
+
+/* ---------- barra informativa ed evidenziazione ---------- */
+.mod-infobar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 7px 12px; background: color-mix(in srgb, #3b82f6 12%, var(--surface)); border-bottom: 1px solid var(--border); font-size: 13.5px; }
+.mod-infobar.signed { background: color-mix(in srgb, var(--success) 12%, var(--surface)); }
+.mod-ib-icon { font-size: 16px; }
+.mod-ib-item { flex: 0 1 auto; }
+.mod-ib-close { margin-left: auto; font-size: 18px; width: 28px; height: 28px; }
+.mod-infobar .btn.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.viewer-container.mod-highlight .annotationLayer .textWidgetAnnotation :is(input, textarea),
+.viewer-container.mod-highlight .annotationLayer .choiceWidgetAnnotation select,
+.viewer-container.mod-highlight .annotationLayer .buttonWidgetAnnotation:is(.checkBox, .radioButton) input {
+  background-color: rgba(96, 140, 255, .2) !important; outline: 1px solid rgba(60, 100, 230, .55);
+}
+.viewer-container.mod-highlight .annotationLayer :is(input, textarea, select)[required] { outline: 1.5px solid var(--danger); }
+
+/* ---------- firme digitali ---------- */
+.mod-idrow { display: flex; align-items: center; gap: 10px; }
+.mod-idname { flex: 1; padding: 6px 10px; border: 1px dashed var(--border-strong); border-radius: 6px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mod-verify { display: grid; gap: 12px; }
+.mod-summary { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: var(--radius); font-size: 14.5px; }
+.mod-sem { width: 14px; height: 14px; border-radius: 50%; flex: none; background: var(--faint); }
+.ok > .mod-sem, .ok > header > .mod-sem { background: var(--success); }
+.warn > .mod-sem, .warn > header > .mod-sem { background: var(--warning); }
+.bad > .mod-sem, .bad > header > .mod-sem { background: var(--danger); }
+.mod-summary.ok { background: color-mix(in srgb, var(--success) 13%, var(--surface)); }
+.mod-summary.warn { background: color-mix(in srgb, var(--warning) 13%, var(--surface)); }
+.mod-summary.bad { background: var(--danger-soft); }
+.mod-summary.none { background: var(--surface-2); }
+.mod-sigcard { border: 1px solid var(--border); border-left: 4px solid var(--faint); border-radius: var(--radius); padding: 10px 12px; display: grid; gap: 8px; background: var(--surface); }
+.mod-sigcard.ok { border-left-color: var(--success); } .mod-sigcard.warn { border-left-color: var(--warning); } .mod-sigcard.bad { border-left-color: var(--danger); }
+.mod-sigcard header { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; }
+.mod-sigcard header .mod-sem { margin-top: 3px; }
+.mod-sigcard .props th { text-align: left; font-weight: 500; color: var(--muted); padding-right: 10px; vertical-align: top; white-space: nowrap; }
+.mod-sigdetail { margin: 0; padding-left: 18px; color: var(--ink); font-size: 13px; }
+.mod-batch { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; max-height: 50vh; overflow: auto; }
+.mod-batch li.bad strong { color: var(--danger); } .mod-batch li.ok strong { color: var(--success); }
+.mod-batch small { color: var(--muted); word-break: break-all; }
+.mod-autofill { display: grid; gap: 6px; max-height: 50vh; overflow: auto; }
+.mod-autofill-row { display: grid; grid-template-columns: auto 1fr 1.4fr; gap: 10px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.mod-af-name { color: var(--muted); font-family: var(--mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+.small { font-size: 12.5px; }
+@media (prefers-reduced-motion: reduce) { .mod-item { transition: none; } }
+.mod-split { display: inline-flex; }
+.mod-split > .btn:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.mod-split > .mod-split-arrow { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left-width: 0; padding: 0 7px; }
+.mod-split.primary > .mod-split-arrow { border-left: 1px solid color-mix(in srgb, var(--accent-ink) 35%, transparent); }
