@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rankTools, scoreTool } from '../src/renderer/core/toolsearch.js';
+import { rankTools, scoreTool, foundByAcrobatName } from '../src/renderer/core/toolsearch.js';
 
 const T = [
   { id: 'stamp', name: 'Timbro', keywords: 'timbro approvato protocollo pagato', description: 'Timbri predefiniti' },
@@ -40,5 +40,20 @@ describe('classifica della ricerca strumenti', () => {
     expect(ids('segreto')).toEqual([]);
     expect(rankTools(T, '').length).toBe(6);
     expect(scoreTool(T[0], '')).toBe(1);
+  });
+});
+
+describe('«in Acrobat si chiama …» solo quando serve', () => {
+  const firma = { name: 'Firma', acrobatName: 'Usa un certificato' };
+  const unisci = { name: 'Unisci PDF', acrobatName: 'Combina file' };
+  it('mostrato se il risultato viene dal nome Acrobat', () => {
+    expect(foundByAcrobatName(unisci, 'combina')).toBe(true);
+    expect(foundByAcrobatName(firma, 'certificato')).toBe(true);
+  });
+  it('non mostrato se il nome di Leggio basta, se la ricerca è vuota o i nomi coincidono', () => {
+    expect(foundByAcrobatName(firma, 'firma')).toBe(false);
+    expect(foundByAcrobatName(unisci, 'unisci')).toBe(false);
+    expect(foundByAcrobatName(unisci, '')).toBe(false);
+    expect(foundByAcrobatName({ name: 'Organizza pagine', acrobatName: 'Organizza pagine' }, 'organizza')).toBe(false);
   });
 });

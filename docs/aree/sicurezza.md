@@ -10,7 +10,7 @@ Test: `test/sicurezza-*.test.js` (`npx vitest run test/sicurezza`).
 | `protect` | Proteggi con password | AES-256 predefinito (AES-128 tra le opzioni di compatibilità), password di apertura e/o limitazioni, indicatore di robustezza, conferma. Al documento aperto (diventa effettiva al salvataggio) o come copia. |
 | `unprotect` | Rimuovi protezione | Con limitazioni chiede la password del **proprietario** (verificata su /O e /U, `logica/proprietario.js`). |
 | `redact` | Oscura (Redazione) | Strumento interattivo: riquadri, testo selezionato, pagine intere, «Cerca e oscura». Applicazione vera + verifica. |
-| `redact-search` | Cerca e oscura | Apre il pannello di ricerca: parole, regex, modelli (CF con carattere di controllo, IBAN mod 97, P.IVA, email, telefono, targa, date, carte con Luhn). Risultati spuntabili uno per uno; P.IVA e date escluse in partenza. Pagine senza testo → proposta di OCR (`app.services.ocr` o strumento `ocr`). |
+| `redact-search` | Cerca e oscura | Apre il pannello di ricerca: parole, regex, modelli (CF con carattere di controllo, IBAN mod 97, P.IVA, email, telefono, targa, date, luogo e data di nascita, indirizzo con CAP e comune, carte con Luhn). I modelli non si sovrappongono: un telefono che coincide con una P.IVA valida, un IBAN, un CF, una data o una carta, o preceduto da «P.IVA», «C.F.», «Prot. n.», «Fattura n.», non è un telefono. Risultati spuntabili uno per uno; P.IVA e date escluse in partenza. Pagine senza testo → proposta di OCR (`app.services.ocr` o strumento `ocr`). |
 | `sanitize` | Sanifica documento | Analisi con conteggi + rimozione: metadati Info/XMP, JavaScript e azioni, allegati, commenti, campi nascosti, contenuto dei livelli spenti, PieceInfo/miniature, XFA, versioni precedenti e oggetti orfani. |
 | `metadata` | Proprietà e vista iniziale | Titolo, autore, oggetto, parole chiave, applicazione, produttore, date; pannelli, disposizione, zoom e pagina iniziali, titolo nella barra. XMP riscritto coerente. |
 | `compress` | Riduci dimensioni file | «Sotto N MB» (ricerca binaria su una scala dpi/qualità, MB decimali), livelli, personalizzato; scala di grigi; copia come scelta predefinita; avviso firme. |
@@ -72,3 +72,14 @@ Misura (browser, 1000 file da una pagina con CF, IBAN e 30 righe di testo; caten
 1000 file in 219 s (0,22 s a file), 0 errori, heap JS stabile a ~32 MB (campioni ogni 100 file: 31–33 MB,
 un picco a 86 MB dovuto alla raccolta della memoria). Le operazioni non tengono stato tra un file e l'altro (salvo la
 chiave del lotto): la ripresa dopo un'interruzione la gestisce il motore delle azioni guidate.
+
+## Terzo giro della segreteria
+- `app.services.oscuraDatiPersonali(bytes, { password, progress, models, preselected, label, doSanitize })`: cerca con
+  i modelli e mostra **sempre** l'elenco dei risultati da confermare (CF, IBAN, email, telefono spuntati; P.IVA,
+  indirizzi, luogo e data di nascita visibili ma non spuntati), poi applica e verifica. Rinuncia → `AbortError`;
+  verifica fallita → `Error` e documento non modificato. → `{ bytes, trovati, verifica: true }`. Usato da
+  «Pronto per la pubblicazione» (area avanzati), che lo preferisce all'operazione delle azioni guidate.
+- Soglia PEC unica: `sic.pec.limitMB` nelle Impostazioni; `app.services.sogliaPec()` (MB del messaggio) e
+  `app.services.sogliaPecAllegati()` (byte di allegati, tolto il base64 e un margine). «Riduci dimensioni» propone
+  «Per PEC (N MB)» con lo stesso valore. Le altre aree devono usare questi servizi.
+- «Prepara per PEC» parte dal solo documento attivo; «Aggiungi documenti aperti…» e «Aggiungi file…» per gli altri.

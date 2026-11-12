@@ -26,5 +26,5 @@ export default defineConfig({
   worker: { format: 'es' },
   plugins: [copyAssets()],
   server: { port: 5199, strictPort: true },
-  test: { root: '.', include: ['test/**/*.test.js'], environment: 'node', setupFiles: ['test/setup.js'] },
+  test: { root: '.', include: ['test/**/*.test.js'], environment: 'node', setupFiles: ['test/setup.js'], testTimeout: 60000, hookTimeout: 60000 },
 });

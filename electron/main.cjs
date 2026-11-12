@@ -28,15 +28,11 @@ process.on('unhandledRejection', (r) => { L('error', 'promessa rifiutata nel mai
 // ---------- permessi sui percorsi ----------
 // Il renderer può sovrascrivere solo file che l'utente ha aperto o scelto (dialoghi, recenti,
 // trascinamento, riga di comando) e scrivere solo nelle cartelle scelte con il dialogo.
-const grantedFiles = new Set();
-const grantedFolders = new Set();
-const norm = (p) => (process.platform === 'win32' || isMac ? path.normalize(p).toLowerCase() : path.normalize(p));
-const grantFile = (p) => { if (p) grantedFiles.add(norm(p)); };
-const grantFolder = (p) => { if (p) grantedFolders.add(norm(p)); };
-const canWrite = (p) => grantedFiles.has(norm(p));
+const grants = require('./core/grants.cjs').createGrants();
+const grantFile = (p) => grants.grantFile(p);
+const grantFolder = (p) => grants.grantFolder(p);
 // file non PDF (es. .p7m) che l'utente ha aperto dal sistema: il renderer può leggerli, non sovrascriverli
-const grantedReads = new Set();
-const grantRead = (p) => { if (p) grantedReads.add(norm(p)); };
+const grantRead = (p) => grants.grantRead(p);
 
 // ---------- file recenti ----------
 const recentFile = () => path.join(app.getPath('userData'), 'recenti.json');
@@ -344,6 +340,8 @@ function registerCoreIpc() {
       filters: V.filters(filters) || [{ name: 'Documenti PDF', extensions: ['pdf'] }],
     });
     if (res.canceled || !res.filePath) return null;
+    const why = grants.whyNotSaveAs(res.filePath);
+    if (why) throw Object.assign(new Error(why), { userMessage: why });
     grantFile(res.filePath);
     if (bytes) await safeWrite(res.filePath, bytes);
     if (/\.pdf$/i.test(res.filePath)) addRecent(res.filePath);
@@ -358,7 +356,8 @@ function registerCoreIpc() {
   handle('file:write', async (_e, { path: p, bytes } = {}) => {
     const target = V.absPath(p);
     V.bytes(bytes);
-    if (!canWrite(target)) throw Object.assign(new Error(`Leggio non ha il permesso di scrivere «${path.basename(target)}» (file non aperto né scelto dall'utente). Usa «Salva con nome».`), { userMessage: true });
+    const why = grants.whyNotWrite(target);
+    if (why) throw Object.assign(new Error(why), { userMessage: why });
     const t0 = Date.now();
     const r = await safeWrite(target, bytes);
     L('info', 'salvato', { name: path.basename(target), size: bytes.byteLength, ms: Date.now() - t0, strategy: r.strategy });
@@ -367,8 +366,9 @@ function registerCoreIpc() {
   });
   handle('file:write-in-folder', async (_e, { folder, name, bytes } = {}) => {
     const dir = V.absPath(folder, 'cartella');
-    if (!grantedFolders.has(norm(dir))) throw Object.assign(new Error('Cartella non scelta dall\'utente: scegline una con il dialogo.'), { userMessage: true });
     const p = path.join(dir, V.fileName(name));
+    const why = grants.whyNotWriteInFolder(dir, p);
+    if (why) throw Object.assign(new Error(why), { userMessage: why });
     V.bytes(bytes);
     await safeWrite(p, bytes);
     return p;
@@ -376,10 +376,12 @@ function registerCoreIpc() {
   handle('file:read', async (_e, p) => {
     const target = V.absPath(p);
     if (/\.pdf$/i.test(target)) return readPdf(target);
-    if (!grantedReads.has(norm(target))) throw new V.IpcValidationError('Si possono riaprire solo file PDF o file aperti dall\'utente.');
+    if (!grants.canRead(target)) throw new V.IpcValidationError('Si possono riaprire solo file PDF o file aperti dall\'utente.');
     return { path: target, name: path.basename(target), bytes: readFileChecked(target) };
   });
   handle('file:recent', () => readRecent());
+  // sola lettura: il main rifiuta ogni scrittura su quel percorso finché resta protetto
+  handle('file:set-readonly', (_e, { path: p, readOnly } = {}) => { grants.setReadOnly(V.absPath(p), !!readOnly); return true; });
   handle('file:show-in-folder', (_e, p) => shell.showItemInFolder(V.absPath(p)));
   handle('app:open-external', (_e, url) => confirmExternal(V.str(url, 'url', 8192)));
   handle('app:info', () => ({ version: app.getVersion(), platform: process.platform, userData: app.getPath('userData'), resources: process.resourcesPath, packaged: app.isPackaged }));
@@ -446,7 +448,7 @@ function registerCoreIpc() {
     V.bytes(bytes);
     const id = Number(meta?.id);
     if (!Number.isInteger(id) || id < 0) throw new V.IpcValidationError('id non valido');
-    const m = { id, name: V.str(meta.name, 'nome', 1024), path: meta.path ? V.absPath(meta.path) : null, size: bytes.byteLength, time: Date.now(), pages: Number(meta.pages) || 0 };
+    const m = { id, name: V.str(meta.name, 'nome', 1024), path: meta.path ? V.absPath(meta.path) : null, size: bytes.byteLength, time: Date.now(), pages: Number(meta.pages) || 0, readOnly: !!meta.readOnly };
     const dir = recoveryDir();
     await fsp.mkdir(dir, { recursive: true });
     await safeWrite(path.join(dir, `${id}.pdf`), bytes, { verify: false });

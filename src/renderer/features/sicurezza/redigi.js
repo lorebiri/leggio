@@ -36,7 +36,8 @@ export async function findInPdf(pdf, matchers, { signal, onProgress, OPS } = {})
       if (!rects.length) continue;
       if (!byPage.has(i)) byPage.set(i, []);
       byPage.get(i).push(...rects);
-      hits.push({ page: i, text: hit.text, matcher: hit.matcher });
+      const flat = (t) => t.replace(/\s+/g, ' ');
+      hits.push({ page: i, text: hit.text, matcher: hit.matcher, rects, before: flat(pt.text.slice(Math.max(0, hit.start - 35), hit.start)), after: flat(pt.text.slice(hit.end, hit.end + 35)) });
     }
   }
   return { byPage, hits, textless };
