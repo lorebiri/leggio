@@ -58,3 +58,16 @@ export function rankTools(tools, query) {
     .sort((a, b) => b.s - a.s || norm(a.t.name).length - norm(b.t.name).length || a.i - b.i)
     .map((x) => x.t);
 }
+
+/**
+ * Il risultato è stato trovato grazie al nome che usa Acrobat (e non al nome di Leggio)?
+ * Solo allora l'interfaccia mostra «(in Acrobat si chiama …)».
+ */
+export function foundByAcrobatName(t, query) {
+  const q = norm(query);
+  if (!q || !t.acrobatName || norm(t.acrobatName) === norm(t.name)) return false;
+  const acro = norm(t.acrobatName), name = norm(t.name);
+  const qw = words(q);
+  const hit = (field, fw) => field.includes(q) || (qw.length > 0 && qw.every((w) => fw.some((f) => sameStem(w, f))));
+  return hit(acro, words(acro)) && !hit(name, words(name));
+}

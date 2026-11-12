@@ -196,6 +196,7 @@ export function toast(message, { kind = 'info', timeout = 3800, action } = {}) {
   t.append(h('button', { class: 'toast-x', 'aria-label': 'Chiudi avviso', title: 'Chiudi', onclick: () => close(), html: icon('close', 14) }));
   t.dataset.msg = String(message);
   root.append(t);
+  placeToasts();
   let timer = null; let closed = false;
   const close = () => { if (closed) return; closed = true; clearTimeout(timer); t.classList.add('closing'); setTimeout(() => t.remove(), 200); };
   const arm = () => { clearTimeout(timer); timer = setTimeout(close, timeout); };
@@ -205,6 +206,38 @@ export function toast(message, { kind = 'info', timeout = 3800, action } = {}) {
   t.__rearm = arm;
   // compatibilità: chi chiamava t.remove() continua a funzionare
   return t;
+}
+
+/**
+ * Gli avvisi non devono mai coprire una finestra aperta (dialogo, avanzamento, «Tutti gli strumenti»):
+ * con una finestra modale vanno nello spazio libero più grande intorno a essa (sotto, sopra, a lato);
+ * se non c'è spazio restano nascosti finché la finestra non si chiude.
+ */
+export function placeToasts() {
+  const root = document.getElementById('toast-root');
+  const over = layer();
+  if (!root || !over) return;
+  const modal = [...over.children].reverse().find((el) => !el.classList.contains('ctx-menu') && !el.classList.contains('closing'));
+  root.classList.remove('beside', 'waiting');
+  root.style.cssText = '';
+  if (!modal || !root.children.length) return;
+  const box = (modal.querySelector('.dlg, .hub-inner') || modal).getBoundingClientRect();
+  const z = parseFloat(getComputedStyle(root).zoom) || 1;
+  const W = innerWidth, H = innerHeight, need = 64 * z;
+  const gaps = { bottom: H - box.bottom, top: box.top, left: box.left, right: W - box.right };
+  if (gaps.bottom >= need) { root.style.top = 'auto'; root.style.bottom = (Math.max(8, (gaps.bottom - need) / 2) / z) + 'px'; }
+  else if (gaps.top >= need) { root.style.bottom = 'auto'; root.style.top = (Math.max(8, (gaps.top - need) / 2) / z) + 'px'; }
+  else if (Math.max(gaps.left, gaps.right) >= 220 * z) {
+    const left = gaps.left >= gaps.right;
+    root.classList.add('beside');
+    root.style.transform = 'none';
+    root.style.left = left ? (12 / z) + 'px' : ((box.right + 12) / z) + 'px';
+    root.style.maxWidth = ((left ? gaps.left : gaps.right) - 24) / z + 'px';
+  } else root.classList.add('waiting'); // nessuno spazio: compariranno alla chiusura della finestra
+}
+if (typeof window !== 'undefined') {
+  const watch = () => { const over = layer(); if (!over) return setTimeout(watch, 200); new MutationObserver(() => setTimeout(placeToasts, 30)).observe(over, { childList: true }); addEventListener('resize', placeToasts); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watch); else setTimeout(watch, 0);
 }
 
 /**

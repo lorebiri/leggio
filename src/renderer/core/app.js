@@ -257,6 +257,8 @@ export class App {
     } finally { clearTimeout(timer); prog?.close(); }
     if (dirty) doc.dirty = true;
     if (readOnly) doc.readOnly = true;
+    // la protezione vale anche nel main: nessun canale può più scrivere quel file
+    if (path) await platform.setReadOnly(path, !!readOnly).catch((err) => log('error', 'sola lettura non impostata', { error: String(err?.message || err) }));
     this.#watchForms(doc);
     this.docs.push(doc);
     this.activate(doc);
@@ -371,7 +373,7 @@ export class App {
    */
   async save(doc = this.activeDoc, { as = false } = {}) {
     if (!doc || doc.closed) return false;
-    if (doc.readOnly && !as) as = true; // sola lettura: mai sovrascrivere l'originale
+    if ((doc.readOnly || platform.isReadOnlyPath(doc.path)) && !as) as = true; // sola lettura: mai sovrascrivere l'originale
     try {
       return await this.#exclusive(doc, 'Salvataggio', async () => {
         const version = doc.version;
@@ -777,6 +779,7 @@ export class App {
     root.classList.toggle('ui-large', large);
     root.style.setProperty('--ui-zoom', String(this.uiZoom));
     this.el.root.classList.toggle('tb-labels', this.settings.get('toolbarLabels', true) !== false);
+    this.el.root.classList.toggle('rail-labels', this.settings.get('railLabels', true) !== false);
   }
 
   #applyTheme() {
@@ -977,6 +980,7 @@ export class App {
       { name: 'uiLarge', label: 'Caratteri e pulsanti grandi', type: 'checkbox', value: s.get('uiLarge', false), help: 'Ingrandisce testi, pulsanti e finestre (non la pagina). Anche da Vista › Caratteri e pulsanti grandi.' },
       { name: 'uiZoom', label: 'Dimensione dell\'interfaccia', type: 'select', value: String(s.get('uiZoom', 1)), options: UI_ZOOMS.map((z) => ({ value: String(z), label: Math.round(z * 100) + '%' })) },
       { name: 'toolbarLabels', label: 'Mostra i nomi sotto le icone della barra', type: 'checkbox', value: s.get('toolbarLabels', true) },
+      { name: 'railLabels', label: 'Mostra i nomi sotto le icone della colonna a sinistra', type: 'checkbox', value: s.get('railLabels', true) },
       ...extra.map((x) => ({ ...x.field, name: x.key, value: s.get(x.key, x.field.value) })),
     ] });
     if (!v) return;
