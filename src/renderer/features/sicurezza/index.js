@@ -8,6 +8,8 @@ import { sanitizeTool, metadataTool, attachmentsPanel, watchAttachments, repairT
 import { sanitize, analyze } from './logica/sanifica.js';
 import { LIVELLI } from './logica/comprimi.js';
 import { openDecrypted } from './logica/cifratura.js';
+import { operazioniSicurezza } from './azioni.js';
+import { pecTool, pecSettings, preparaPec } from './ui-pec.js';
 
 export default function register(app) {
   injectStyles();
@@ -67,6 +69,15 @@ export default function register(app) {
     keywords: 'ripara recupera danneggiato corrotto rotto non si apre errore xref',
     run: run(repairTool, 'Ripara PDF'),
   });
+  app.registerTool({
+    id: 'pec', name: 'Prepara per PEC', category: 'proteggi', icon: 'export', needsDoc: false,
+    description: 'Riduce più allegati per stare nel limite della PEC; se non basta, propone come dividere gli invii',
+    keywords: 'pec posta certificata allegati invio limite mb dimensione riduci comprimi dividi spedire email',
+    run: run(pecTool, 'Prepara per PEC'),
+  });
+  pecSettings(app);
+  // operazioni nelle Azioni guidate (area avanzati)
+  app.bus.on('batch:operations', (list) => { for (const op of operazioniSicurezza(app)) list.push(op); });
   app.registerPanel(attachmentsPanel(app));
   installSaveHook(app);
   watchAttachments(app);
@@ -92,6 +103,7 @@ export default function register(app) {
       const report = sanitize(doc, opts);
       return { bytes: await doc.save({ useObjectStreams: true }), report };
     },
+    preparaPec: (files, opts) => preparaPec(files, opts),
     analyzeHidden: async (bytes, { password } = {}) => analyze((await openDecrypted(bytes, password ?? '')).doc, bytes),
   });
 }
