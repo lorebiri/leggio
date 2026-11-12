@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leggio — il lettore ed editor PDF libero e gratuito</title>
+<meta name="description" content="Leggi, commenta, modifica, firma e converti i PDF. Gratuito, senza abbonamento e senza account, per Windows e macOS.">
+<link rel="icon" href="icona.svg" type="image/svg+xml">
+<style>
+  :root {
+    --bg: #f1efe9; --surface: #fffefb; --ink: #1c1e22; --muted: #5f636b; --line: #ddd9ce;
+    --accent: #0f766e; --accent-ink: #fff; --accent-soft: #d8efe9;
+    --display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #17181b; --surface: #202226; --ink: #ecebe6; --muted: #a2a5ac; --line: #33353b; --accent: #3cc7b4; --accent-ink: #072320; --accent-soft: #163a36; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
+  a { color: var(--accent); }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 24px; }
+  header.hero { padding: 72px 0 56px; display: grid; grid-template-columns: 1fr auto; gap: 40px; align-items: center; }
+  .hero img { width: 200px; height: 200px; filter: drop-shadow(0 18px 30px rgba(15, 118, 110, .18)); animation: entra .8s cubic-bezier(.2,.7,.2,1) both; }
+  h1 { font: 600 clamp(48px, 8vw, 84px)/1 var(--display); letter-spacing: -.02em; margin: 0 0 18px; }
+  .lead { font-size: 21px; color: var(--muted); max-width: 34em; margin: 0 0 30px; }
+  .lead strong { color: var(--ink); font-weight: 600; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 22px; border-radius: 12px; font-weight: 600; text-decoration: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink); transition: transform .15s, box-shadow .15s; }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,.08); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .btn small { font-weight: 400; opacity: .8; }
+  .nota { color: var(--muted); font-size: 14px; margin-top: 14px; }
+  section { padding: 48px 0; border-top: 1px solid var(--line); }
+  h2 { font: 600 32px/1.2 var(--display); margin: 0 0 24px; }
+  .griglia { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+  .carta { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; }
+  .carta h3 { margin: 0 0 6px; font-size: 18px; }
+  .carta p { margin: 0; color: var(--muted); font-size: 16px; }
+  .scarica { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+  .scarica ol { margin: 10px 0 0; padding-left: 20px; color: var(--muted); font-size: 15px; }
+  .scarica .btn { margin: 4px 8px 4px 0; padding: 10px 16px; }
+  footer { padding: 36px 0 56px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); }
+  @keyframes entra { from { opacity: 0; transform: translateY(14px) rotate(-3deg); } }
+  @media (prefers-reduced-motion: reduce) { .hero img { animation: none; } .btn { transition: none; } }
+  @media (max-width: 720px) { header.hero { grid-template-columns: 1fr; padding-top: 40px; } .hero img { width: 120px; height: 120px; order: -1; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <div>
+      <h1>Leggio</h1>
+      <p class="lead">Il programma per i PDF <strong>libero e gratuito</strong>: leggi, commenta, modifica, firma, proteggi e converti i tuoi documenti. Senza abbonamento, senza account, senza pubblicità. <strong>I tuoi file restano sul tuo computer.</strong></p>
+      <div class="cta">
+        <a class="btn primary" id="scarica-principale" href="https://github.com/lorebiri/leggio/releases/latest">Scarica Leggio <small id="scarica-dettaglio">per Windows e macOS</small></a>
+        <a class="btn" href="#scarica">Tutte le versioni</a>
+      </div>
+      <p class="nota" id="versione">Versione più recente su GitHub.</p>
+    </div>
+    <img src="icona.svg" alt="" width="200" height="200">
+  </header>
+
+  <section>
+    <h2>Tutto quello che serve, senza pagare</h2>
+    <p class="nota" style="margin:-12px 0 22px">Leggio è giovane e cresce a ogni versione: alcune funzioni arrivano negli aggiornamenti, che l'app ti segnala da sola.</p>
+    <div class="griglia">
+      <div class="carta"><h3>Leggere e cercare</h3><p>Più documenti in schede, ricerca nel testo, segnalibri, miniature, modalità lettura.</p></div>
+      <div class="carta"><h3>Commentare</h3><p>Evidenzia, sottolinea, aggiungi note e disegni a mano libera.</p></div>
+      <div class="carta"><h3>Organizzare le pagine</h3><p>Unisci, dividi, ruota, riordina ed elimina pagine con un trascinamento.</p></div>
+      <div class="carta"><h3>Compilare e firmare</h3><p>Moduli compilabili, firma grafica e firma digitale con certificato.</p></div>
+      <div class="carta"><h3>Proteggere</h3><p>Password, permessi e oscuramento definitivo delle informazioni riservate.</p></div>
+      <div class="carta"><h3>Convertire</h3><p>Da immagini a PDF, da PDF a Word, e testo ricercabile nelle scansioni (OCR).</p></div>
+    </div>
+  </section>
+
+  <section id="scarica">
+    <h2>Scarica</h2>
+    <div class="scarica">
+      <div class="carta">
+        <h3>Windows 10 e 11</h3>
+        <a class="btn" data-asset="win-installer" href="https://github.com/lorebiri/leggio/releases/latest">Installer</a>
+        <a class="btn" data-asset="win-portatile" href="https://github.com/lorebiri/leggio/releases/latest">Versione portatile</a>
+        <ol>
+          <li>Apri il file scaricato.</li>
+          <li>Se compare «Windows ha protetto il PC», premi <em>Ulteriori informazioni</em> e poi <em>Esegui comunque</em>.</li>
+          <li>Non serve la password di amministratore.</li>
+        </ol>
+      </div>
+      <div class="carta">
+        <h3>macOS 12 o successivo</h3>
+        <a class="btn" data-asset="mac-arm64" href="https://github.com/lorebiri/leggio/releases/latest">Mac con chip Apple</a>
+        <a class="btn" data-asset="mac-x64" href="https://github.com/lorebiri/leggio/releases/latest">Mac Intel</a>
+        <ol>
+          <li>Apri il file .dmg e trascina Leggio in Applicazioni.</li>
+          <li>Al primo avvio, se il Mac non riesce a verificare lo sviluppatore: <em>Impostazioni di Sistema → Privacy e sicurezza → Apri comunque</em>.</li>
+          <li>Non sai che Mac hai? Menu Apple (la mela in alto a sinistra) → <em>Informazioni su questo Mac</em>: «Chip Apple M…» oppure «Processore Intel».</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Privacy</h2>
+    <p>Leggio funziona senza Internet e non invia mai i tuoi documenti da nessuna parte. L'unico collegamento è un controllo, una volta al giorno, per sapere se esiste una versione nuova: una richiesta anonima a GitHub, che puoi disattivare nelle impostazioni. Nessuna telemetria.</p>
+  </section>
+
+  <footer>
+    Leggio è software libero (GPL-3.0-or-later) © Lorenzo Birindelli ·
+    <a href="https://github.com/lorebiri/leggio">Codice sorgente</a> ·
+    <a href="https://github.com/lorebiri/leggio/issues/new/choose">Segnala un problema</a>
+  </footer>
+</div>
+<script>
+// Collega i pulsanti ai file dell'ultima versione pubblicata (se l'API non risponde restano sulla pagina delle release).
+(async () => {
+  const ua = navigator.userAgent;
+  const isMac = /Macintosh|Mac OS X/.test(ua), isWin = /Windows/.test(ua);
+  let release;
+  try {
+    const r = await fetch('https://api.github.com/repos/lorebiri/leggio/releases/latest', { headers: { Accept: 'application/vnd.github+json' } });
+    if (!r.ok) return;
+    release = await r.json();
+  } catch { return; }
+  const assets = release.assets || [];
+  const find = (re) => assets.find((a) => re.test(a.name));
+  const map = {
+    'win-installer': find(/win-x64-installer\.exe$/i), 'win-portatile': find(/portatile\.exe$/i),
+    'mac-arm64': find(/mac-arm64\.dmg$/i), 'mac-x64': find(/mac-x64\.dmg$/i),
+  };
+  for (const el of document.querySelectorAll('[data-asset]')) {
+    const a = map[el.dataset.asset];
+    if (a) { el.href = a.browser_download_url; el.title = `${a.name} — ${(a.size / 1048576).toFixed(0)} MB`; }
+  }
+  const v = String(release.tag_name || '').replace(/^v/, '');
+  document.getElementById('versione').textContent = `Versione ${v}` + (release.published_at ? `, pubblicata il ${new Date(release.published_at).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}.` : '.');
+  // pulsante principale: Windows → installer; Mac → la sezione con la scelta del chip (il browser non dice in modo affidabile quale sia)
+  const main = document.getElementById('scarica-principale'), det = document.getElementById('scarica-dettaglio');
+  if (isWin && map['win-installer']) { main.href = map['win-installer'].browser_download_url; det.textContent = `per Windows · ${v}`; }
+  else if (isMac) { main.href = '#scarica'; det.textContent = `per Mac · ${v}`; }
+})();
+</script>
+</body>
+</html>
