@@ -18,7 +18,7 @@ copie rinominate, registri) è sempre una copia nuova; nessun file esistente vie
 | **Collega una cartella all'archivio…** (`archivio-cartelle`) | finestra «Cartelle e privacy» |
 | Pannello laterale **Archivio** (`archive`, icona a scatola) | ricerca veloce, avanzamento dell'indicizzazione, riepilogo di Oggi |
 | Schermata iniziale | con l'archivio attivo compare la sezione **«Oggi in archivio»** sotto i pulsanti principali |
-| Impostazioni | validità del DURC in giorni, preavviso DURC, preavviso fatture, codici fiscali/P.IVA del proprio ente |
+| Impostazioni | preavviso DURC, preavviso fatture, giorni per i «non protocollati», codici fiscali/P.IVA del proprio ente (la durata del DURC viene dal file di regole dell'area avanzati) |
 
 Gli strumenti stanno nella categoria `archivio` («Archivio d'ufficio») del nucleo.
 
@@ -266,6 +266,60 @@ vere 1–2 MB). Documenti reali più pesanti e cartelle di rete aumenteranno i t
 - Non provato su Windows reale né su cartelle di rete o OneDrive vere (simulata la cartella scollegata).
 - Esportazione Excel/CSV e dialoghi di scelta cartella non cliccati nell'app (dialoghi nativi): il file .xlsx è
   verificato nei test (`unzip -t`, contenuto dei fogli), non aperto in Excel.
+
+
+## Quarto ciclo: pratica, pagamento, «Oggi» (regola del titolare: agevolare, non complicare)
+Niente schermate nuove: una **Scheda** per documento (pannello a destra, pulsante accanto ad «Apri»), una colonna/
+semaforo sulle fatture, voci in «Oggi». In «Oggi» compaiono **solo le sezioni con qualcosa da fare** (se non c'è
+nulla: «Niente da fare in archivio oggi»); ogni voce si apre con un clic.
+
+- **Scheda del documento**: dati (anche IBAN), protocollo (Titulus), **controlli della fattura elettronica** (logica
+  dell'area avanzati, `lib/controlli.js › controlliFattura`: SdI, CIG/CUP, split, bollo, note di credito; solo gli
+  avvisi), **Pagamento**, **Fornitore** e **Pratica collegata**.
+- **Pratica collegata**: tutti i documenti con lo stesso **numero di protocollo, CIG o CUP**, in ordine di data, ognuno
+  con il motivo («stesso CIG»…); «Crea il fascicolo con indice» (libreria `creaFascicolo` dell'area avanzati, voci con
+  «prot. n. … del …», fatture XML impaginate, PDF dentro i .p7m). Le **liste di controllo** dell'area avanzati
+  (`app.services.listeControllo`) compaiono qui solo se l'ufficio le ha attivate; spente non si vede nulla.
+  Le copie `_firmato` della firma in blocco hanno gli stessi CIG/CUP/segnatura: entrano nella stessa pratica.
+- **Pronta per il pagamento** (semaforo sulla riga, filtro in «Mostra», colonne nel registro Excel/CSV):
+  DURC valido **alla data di pagamento prevista** (non solo a oggi); IBAN della fattura uguale a quello della
+  **dichiarazione di tracciabilità** (nuovo tipo di documento, L. 136/2010) quando c'è; giorni ai **30 giorni**
+  dell'indicatore di tempestività (PCC): se in fattura non c'è la scadenza, dalla ricezione. La ricezione è quella del
+  file (o la data della fattura se il file è stato copiato molto dopo): stimata, e lo si dice. Il semaforo compare
+  solo sulle fatture «da pagare» o con il pagamento previsto da meno di 30 giorni o futuro: le fatture vecchie senza
+  stato (probabilmente pagate fuori da Leggio) non si colorano. Leggio segnala soltanto. `lib/pagamento.js`.
+- **Fornitore** (raggruppato per P.IVA): ultimo DURC e validità, conto dedicato dichiarato, fatture non pagate e quante
+  da controllare, «Vedi le fatture del fornitore».
+- **Oggi**, nuove voci: **Anomalie di protocollo** (stesso numero su documenti con contenuto diverso, escluse le copie
+  in «Elaborati»/«Rinominati»), **Fatture elettroniche: termine SdI** (gli ultimi 5 giorni dei 15 dalla ricezione, solo
+  fatture senza stato), **Pagamenti in scadenza** (scadenza in fattura o 30 giorni PCC), **Da protocollare in
+  Titulus** con i documenti **arrivati da più di N giorni senza segnatura né stato** (N = 3, impostazione; solo per i
+  documenti arrivati dopo la prima indicizzazione; pulsante «Non serve» = stato «Non da protocollare»),
+  **Da pubblicare (Trasparenza)**: documenti con stato «Da pubblicare», con «pubblicare entro» 3 mesi dal
+  conferimento (data del documento) e «tenere pubblicato fino a» 3 anni dalla cessazione (data di fine letta nel
+  contratto): art. 15 d.lgs. 33/2013, **da verificare**. L'oscuramento lo fa «Pronto per la pubblicazione».
+- **Regole che cambiano**: una sola fonte, il file di regole dell'area avanzati (`avanzati/dati/regole-ufficio.json`,
+  aggiornabile dall'ufficio): durata del DURC (`durc.giorniValidita`, con fonte e data) e giorni SdI
+  (`sdi.giorniEsito`). L'impostazione `archivio.durataDurc` non esiste più.
+- **Firma…**: `app.services.firmaFile(selezionati)` dell'area moduli (un certificato, un PIN, risultati solo se qualcosa
+  non va). Per ogni file firmato arriva `archivio:stato` (`imposta: 'firmato'`) e l'originale diventa «Firmato»; le copie
+  `_firmato` accanto agli originali vengono indicizzate all'aggiornamento successivo.
+- Servizi nuovi per le altre aree: `app.services.apriArchivio({ q, filtro, scheda })`,
+  `app.services.apriDocumentoArchivio(id | percorso, { pagina, q })` (sempre in sola lettura).
+- Nuovi tipi riconosciuti: **Tracciabilità (conto dedicato)**, **Incarico o assegno**; i documenti MePA (documento di
+  stipula, trattativa diretta, RdO) sono «Ordine o determina». Nuovi stati: «Non da protocollare», «Da pubblicare».
+
+| Misura (3.629 file generati, macchina carica) | Risultato |
+|---|---|
+| Prima indicizzazione | 19,4 s (carico medio > 20; senza carico 10,7 s) |
+| «Oggi» completo (anomalie, SdI, pagamenti, DURC, non protocollati) | 6 ms nel worker |
+| Filtro «Fatture da controllare prima di pagare» | 34 ms; 176 fatture da controllare, 4 pronte (DURC dei dati di prova spesso scaduti) |
+| Pratica collegata | 2 ms; 80 pratiche con 3 o più documenti nell'archivio di prova |
+| Caricamento dell'indice all'avvio | 93 ms |
+
+Generatore: `test/archivio-genera.mjs` crea ora pratiche d'acquisto con lo stesso CIG (determina, ordine o stipula
+MePA, fatture), dichiarazioni di tracciabilità con IBAN validi (alcune fatture con IBAN diverso), incarichi con data di
+fine, documenti MePA firmati e qualche **numero di protocollo ripetuto** (anomalia).
 
 ## Per le altre aree
 - **Evento `archivio:stato`** (lo emette l'area avanzati quando appone la segnatura di Titulus su una copia o la

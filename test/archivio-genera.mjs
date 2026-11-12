@@ -52,7 +52,8 @@ const PERSONE = ['Mario Rossi', 'Anna Bianchi', 'Luca Verdi', 'Giulia Neri', 'Pa
 const LUOGHI = ['Roma', 'Milano', 'Bologna', 'Napoli', 'Torino', 'Bruxelles', 'Parigi', 'Monaco di Baviera'];
 // acquisti: stesso CIG su determina, ordine e fattura (pratica collegata)
 const ACQUISTI = [];
-const acquisto = () => { if (ACQUISTI.length < 80 && rnd() < 0.5) { const a = { f: null, cig: null }; ACQUISTI.push(a); return a; } return ACQUISTI.length ? pick(ACQUISTI) : null; };
+// una pratica d'acquisto ha pochi documenti (determina, ordine o stipula MePA, una o due fatture)
+const acquisto = () => { const aperti = ACQUISTI.filter((a) => a.usi < 4); if (!aperti.length || rnd() < 0.4) { const a = { f: null, cig: null, usi: 1 }; ACQUISTI.push(a); return a; } const a = pick(aperti); a.usi++; return a; };
 const cig = () => pick(['Z', 'A', 'B', '9']) + Array.from({ length: 9 }, () => pick('0123456789ABCDEF'.split(''))).join('');
 const cup = () => `B${int(10, 99)}C${int(10, 99)}${String(int(0, 999999999)).padStart(9, '0')}`;
 const dataCasuale = () => giorni(OGGI, -int(0, 700));
