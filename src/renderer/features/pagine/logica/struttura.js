@@ -512,7 +512,11 @@ export async function caricaPdf(bytes, { password, nome = 'il file' } = {}) {
 
 /** Apre i byte del documento attivo (anche cifrato con password nota), in modo rapido. */
 export async function apriVeloce(bytes, password) {
-  return PDFDocument.load(bytes, { ...LETTURA, password: password || undefined, ignoreEncryption: !password });
+  if (!password) return PDFDocument.load(bytes, { ...LETTURA, ignoreEncryption: true });
+  // con la password: i byte risultanti NON sono più cifrati (pdf-lib lascerebbe un /Encrypt incoerente
+  // che impedisce la modifica successiva). La protezione va riapplicata al salvataggio (area sicurezza).
+  try { return togliCifratura(await PDFDocument.load(bytes, { ...LETTURA, password })); }
+  catch { return PDFDocument.load(bytes, { ...LETTURA, ignoreEncryption: true }); }
 }
 
 /**
