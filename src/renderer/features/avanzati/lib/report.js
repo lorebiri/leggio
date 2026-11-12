@@ -27,10 +27,10 @@ export function righeFirmatario(s) {
     ['Integrità della firma', `${integritaTesto(s)} — ${s.integrityDetail || ''}`],
     ['Data della firma (dichiarata)', fmtData(s.signingTime)],
     s.timestamp ? ['Marca temporale', `${fmtData(s.timestamp.time)}${s.timestamp.tsa ? ' — ' + s.timestamp.tsa : ''}`] : null,
-    ['Certificato rilasciato da', s.issuer || '—'],
+    ['Certificato rilasciato da', c?.selfSigned ? 'Nessun certificatore: certificato AUTOFIRMATO (creato da chi firma, senza valore di firma qualificata)' : (s.issuer || '—')],
     c ? ['Validità del certificato', `dal ${fmtData(c.notBefore)} al ${fmtData(c.notAfter)}`] : null,
     ['Certificato valido alla data della firma', s.certValidAtSigning == null ? 'Non determinabile (manca la data della firma)' : s.certValidAtSigning ? 'Sì' : 'NO'],
-    c ? ['Tipo di certificato', c.qualified ? 'Qualificato (eIDAS)' : 'Non dichiarato qualificato'] : null,
+    c ? ['Tipo di certificato', c.qualified ? 'Qualificato (eIDAS)' : c.selfSigned ? 'Autofirmato' : 'Non dichiarato qualificato'] : null,
     c ? ['Numero di serie del certificato', c.serial] : null,
     ['Algoritmo', s.digestAlgorithm],
   ].filter(Boolean);

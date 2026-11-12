@@ -72,6 +72,16 @@ describe('CAdES / .p7m', () => {
     } finally { cert = saved; }
   });
 
+  it('riconosce il certificato autofirmato', async () => {
+    const saved = cert; cert = makeCert('PINCO PALLINO', 'X', false);
+    cert.setIssuer(cert.subject.attributes); cert.sign(keys.privateKey, forge.md.sha256.create());
+    try {
+      const r = await openP7m(sign(PDF));
+      expect(r.levels[0].signers[0].certificate.selfSigned).toBe(true);
+      expect(r.levels[0].signers[0].integrity).toBe('valid');
+    } finally { cert = saved; }
+  });
+
   it('segnala come non valido un file alterato di un byte', async () => {
     const p7m = sign(PDF);
     const i = Buffer.from(p7m).indexOf('obj');

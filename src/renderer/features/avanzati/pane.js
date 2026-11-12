@@ -8,6 +8,9 @@ export function openPane(app, { title, subtitle = '', onClose, id = '' }) {
   current?.close(true);
   const stage = app.el.main.querySelector('.stage') || app.el.main;
   const actions = h('div', { class: 'av-pane-actions' });
+  // append che ignora i valori vuoti (null/false): niente scritte «null» accanto ai pulsanti
+  const rawAppend = actions.append.bind(actions);
+  actions.append = (...nodes) => rawAppend(...nodes.filter((n) => n != null && n !== false));
   const closeBtn = h('button', { class: 'btn', onclick: () => api.close() }, 'Chiudi');
   const head = h('header', { class: 'av-pane-head' },
     h('div', { class: 'av-pane-titles' }, h('h2', {}, title), subtitle ? h('div', { class: 'av-pane-sub' }, subtitle) : null),
