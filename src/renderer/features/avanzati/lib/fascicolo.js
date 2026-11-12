@@ -5,7 +5,7 @@ import { testoSicuro, visivoAPagina, dimensioniVisive } from './protocollo.js';
 import { aCapo } from './conformita.js';
 
 const A4 = [595.28, 841.89];
-const RIGHE_PER_PAGINA = 30;
+const RIGHE_PER_PAGINA = 24;
 
 /** Quante pagine servono per l'indice. */
 export function pagineIndice(n, conTitolo = true) { return Math.max(1, Math.ceil((n + (conTitolo ? 4 : 0)) / RIGHE_PER_PAGINA)); }
@@ -71,7 +71,7 @@ export async function creaFascicolo(PDFLib, docs, o = {}) {
     const ctx = out.context;
     for (const v of voci) {
       if (y < 70) newPage();
-      y -= 20;
+      y -= 26;
       const num = `${v.n}.`; const pag = `pag. ${v.pagina}`;
       const maxTitolo = W - 70 - reg.widthOfTextAtSize(pag, 10.5);
       let titolo = testoSicuro(reg, v.titolo);

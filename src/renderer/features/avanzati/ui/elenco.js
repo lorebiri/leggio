@@ -29,7 +29,7 @@ export function elencoFile(app, { accetta = () => true, rotazione = false, titol
     let scartati = 0;
     for (const it of nuovi) {
       if (!accetta(it.name)) { scartati++; continue; }
-      items.push({ ...it, titolo: it.titolo || it.name.replace(/\.[^.]+$/, ''), rot: 0 });
+      items.push({ ...it, titolo: it.titolo || it.name.replace(/(\.pdf)?(\.p7m)+$/i, '').replace(/\.[^.]+$/, ''), rot: 0 });
     }
     if (scartati) app.ui.toast(`${scartati} file non supportati non sono stati aggiunti.`, { kind: 'warning' });
     render(); onChange?.();

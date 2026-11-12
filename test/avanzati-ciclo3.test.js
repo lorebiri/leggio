@@ -62,7 +62,7 @@ describe('fascicolo con indice', () => {
     const t8 = (await (await pdf.getPage(8)).getTextContent()).items.map((i) => i.str).join(' ');
     expect(t8).toContain('Allegato n. 2'); expect(t8).toContain('Pagina 8 di 9');
     await pdf.loadingTask.destroy();
-    expect(pagineIndice(100)).toBe(4);
+    expect(pagineIndice(100)).toBe(5);
   });
 });
 

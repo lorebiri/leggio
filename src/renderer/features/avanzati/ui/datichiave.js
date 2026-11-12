@@ -66,14 +66,14 @@ export function registerDatiChiave(app) {
         };
         const euro = (n) => n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' }) + ' €';
         const nessuno = !d.cig.length && !d.cup.length && !d.piva.length && !d.iban.length && !d.importi.length && !d.scadenze.length;
-        wrap.append(
+        wrap.append(...[
           h('div', { class: 'av-btn-col' }, h('button', { class: 'btn', disabled: nessuno, onclick: () => copia(app, riepilogoTesto(d)) }, 'Copia tutti i dati')),
           nessuno ? h('p', {}, 'Nessun CIG, CUP, partita IVA, IBAN o importo trovato in questo documento.') : null,
           sezione('CIG', d.cig), sezione('CUP', d.cup), sezione('Partita IVA', d.piva), sezione('Codice fiscale', d.cf), sezione('IBAN', d.iban),
           d.totale != null ? sezione('Totale', [{ valore: d.totale }], (v) => euro(v.valore), (v) => v.valore.toFixed(2).replace('.', ',')) : null,
           sezione('Importi', d.importi.filter((x) => x.etichetta !== 'Totale').slice(0, 8), (v) => `${v.etichetta ? v.etichetta + ': ' : ''}${euro(v.valore)}`, (v) => v.valore.toFixed(2).replace('.', ',')),
           sezione('Scadenze', d.scadenze, (v) => `${v.etichetta}: ${dataIt(v.valore)}`, (v) => dataIt(v.valore)),
-          h('p', { class: 'av-note' }, `Dati riconosciuti automaticamente${doc.pageCount > MAX_PAGINE ? ` nelle prime ${MAX_PAGINE} pagine` : ''}: controllali sempre sul documento. Partite IVA, codici fiscali e IBAN sono verificati con il carattere di controllo.`));
+          h('p', { class: 'av-note' }, `Dati riconosciuti automaticamente${doc.pageCount > MAX_PAGINE ? ` nelle prime ${MAX_PAGINE} pagine` : ''}: controllali sempre sul documento. Partite IVA, codici fiscali e IBAN sono verificati con il carattere di controllo.`)].filter(Boolean));
       })();
       return () => ctrl.abort();
     },

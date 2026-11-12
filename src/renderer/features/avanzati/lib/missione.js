@@ -37,7 +37,7 @@ export function nomeMissione(cognome, dataIso) {
   return `Missione_${c}_${d}.pdf`;
 }
 
-/** Pagina di riepilogo all'inizio. voci: [{ titolo, pagina, pagine, nota }] (pagina nel PDF finale) */
+/** Pagina di riepilogo all'inizio. voci: [{ titolo, pagina, pagine, nota }] (pagina = indice 0-based della prima pagina, prima di inserire il riepilogo) */
 export async function aggiungiRiepilogo(pdfDoc, PDFLib, voci, { titolo = 'Riepilogo dei giustificativi', righe = [] } = {}) {
   const reg = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
   const bold = await pdfDoc.embedFont(PDFLib.StandardFonts.HelveticaBold);
@@ -54,7 +54,7 @@ export async function aggiungiRiepilogo(pdfDoc, PDFLib, voci, { titolo = 'Riepil
     while (reg.widthOfTextAtSize(t, 10) > 595 - 2 * M - 80 && t.length > 4) t = t.slice(0, -2);
     p.drawText(String(i + 1), { x: M, y, size: 10, font: reg, color: ink });
     p.drawText(t, { x: M + 30, y, size: 10, font: reg, color: ink });
-    p.drawText(String(v.pagina + 1), { x: 595 - M - 40, y, size: 10, font: reg, color: ink }); // +1: questa pagina viene prima
+    p.drawText(String(v.pagina + 2), { x: 595 - M - 40, y, size: 10, font: reg, color: ink }); // pagina 0-based prima del riepilogo: +1 per contare da 1, +1 per il riepilogo in testa
   }
   return p;
 }

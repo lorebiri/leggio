@@ -53,7 +53,9 @@ app.bus.on('batch:operations', (list) => list.push({
 - Stato del lavoro salvato nel profilo dell'app (`avanzati-azioni-guidate.json`, canali `job-save|load|clear`) al più ogni 3 s: dopo una chiusura o un annullamento, riaprendo «Azioni guidate» compare «Riprendi (N file)».
 - Registro completo `Elaborati/registro_azioni_guidate_<id>.csv` (esito, file, dettagli, destinazione, durata).
 - Le uscite in «Elaborati» sovrascrivono quelle con lo stesso nome (così la ripresa non crea doppioni); gli originali non si toccano mai senza conferma.
-- Misura (MacBook, app Electron, 1.000 PDF di 3 pagine in 60 sottocartelle, numeri di pagina + rimozione metadati): vedi rapporto del ciclo.
+- Misure (MacBook, app Electron, 12/11/2026):
+  - 1.000 PDF di 3 pagine in 60 sottocartelle (4 rotti, 4 protetti): elenco della cartella 0,3 s; numeri di pagina + filigrana + metadati in circa 1 s in tutto; 992 fatti, 8 saltati con il motivo.
+  - 1.000 PDF scansionati da 2 pagine con foto (230 MB, 3 rotti) con «Riduci dimensioni» (area sicurezza) + numeri di pagina: interrotto a 415 file, ripreso dalla proposta «Riprendi (585 file)»; in tutto 60 ms per file in media, 997 fatti e 3 non riusciti, uscita 125 MB, registro di 1.000 righe, nessun doppione.
 
 ## Moduli puri in `lib/` (usati in sola lettura anche dall'area «archivio»)
 `cades.js` (openP7m, overallStatus, innerName, sniff, looksLikeP7m), `fattura.js` (parseFattura, fatturaHtml, nomeProposto, isFattura), `xml.js`, `der.js`,

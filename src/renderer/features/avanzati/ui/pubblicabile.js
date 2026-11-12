@@ -2,6 +2,7 @@
 // documento attivo. Usa i servizi delle altre aree: oscuramento (sicurezza), sanificazione (sicurezza),
 // PDF/A e controllo di accessibilità (conversione). Alla fine salva «_pubblicabile.pdf» e un rapporto PDF da archiviare.
 import { prepareAccessibility } from './accessibility.js';
+import { operazioni } from './batch.js';
 import { testoSicuro } from '../lib/protocollo.js';
 import { aCapo } from '../lib/conformita.js';
 import { sha256Hex, fmtData } from '../lib/report.js';
@@ -47,14 +48,24 @@ export function prontoPubblicazione(app) {
     switch (id) {
       case 'oscura': {
         const auto = servizio('oscuraDatiPersonali');
+        const op = !auto && operazioni(app).find((o) => o.id === 'oscura-modelli' && typeof o.runBytes === 'function');
         return [
+          op ? btn('Oscura automaticamente…', async () => {
+            const v = await app.ui.dialog({ title: op.label, message: op.description, fields: (op.fields || []).map((f) => ({ ...f })), okLabel: 'Oscura definitivamente', danger: true, validate: (x) => op.validate?.(x) || null });
+            if (!v) return;
+            const ctx = {};
+            const out = await app.ui.withProgress('Oscuramento dei dati personali', async (p) => { ctx.signal = p.signal; p.set(null, 'Ricerca e oscuramento…'); return op.runBytes(await app.currentBytes(doc), v, ctx); });
+            if (!out) return;
+            await app.applyEdit('Dati personali oscurati', async () => out, doc);
+            segna(s, id, true, `Oscuramento con verifica superata${ctx.note ? ': ' + ctx.note : ''}.`);
+          }, true) : null,
           auto ? btn('Oscura automaticamente…', async () => {
             const r = await app.ui.withProgress('Oscuramento dei dati personali', async (p) => auto(await app.currentBytes(doc), { password: doc.password, progress: p }));
             if (!r) return;
             await app.applyEdit('Dati personali oscurati', async () => r.bytes, doc);
             segna(s, id, r.verifica !== false, `Oscurati ${r.trovati ?? '?'} dati personali${r.verifica === false ? ' — la verifica finale ha trovato testo residuo' : ''}.`, { trovati: r.trovati });
           }, true) : null,
-          app.tools.get('redact-search') ? btn('Apri «Cerca e oscura»', () => { app.tools.run('redact-search'); app.ui.toast('Quando hai finito di oscurare, torna qui e premi «Fatto». Scegli «Applica al documento aperto» per continuare su questo file.', { timeout: 10000 }); }, !auto) : null,
+          app.tools.get('redact-search') ? btn('Scegli a mano («Cerca e oscura»)', () => { app.tools.run('redact-search'); app.ui.toast('Quando hai finito di oscurare, torna qui e premi «Fatto». Scegli «Applica al documento aperto» per continuare su questo file.', { timeout: 10000 }); }, !auto && !op) : null,
           btn('Fatto', () => segna(s, id, true, 'Oscuramento eseguito (verifica dell\'operatore).')),
           btn('Non ci sono dati da oscurare', () => segna(s, id, true, 'Nessun dato personale da oscurare (dichiarato dall\'operatore).')),
         ].filter(Boolean);
