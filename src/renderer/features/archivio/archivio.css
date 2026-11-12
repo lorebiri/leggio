@@ -15,7 +15,7 @@
 .ar-scheda[hidden] { display: none; }
 .ar-scheda-oggi { overflow: auto; padding: 20px; }
 .ar-scheda-doc { overflow-y: auto; }
-.ar-scheda-doc .ar-vl { min-height: max(320px, 55vh); flex: 1 0 auto; height: 0; }
+.ar-scheda-doc .ar-vl { min-height: max(320px, calc(55 * var(--vh))); flex: 1 0 auto; height: 0; }
 .ar-filtri-altri { padding-top: 0; }
 .ar-filtri-altri[hidden] { display: none; }
 
