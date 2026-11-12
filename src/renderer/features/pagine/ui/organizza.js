@@ -7,6 +7,9 @@ import { applicaDisposizione, caricaPdf, inserisciDaPdf } from '../logica/strutt
 import { pdfDaImmagini } from '../logica/crea.js';
 import { indiciInTesto } from '../logica/util.js';
 import { caricaEsterno, preparaImmagine, eImmagine, ePdf, leggiFile, analizzaPagina, mostraErrore, apriRisultato, nomeRisultato, FILTRO_TUTTI } from './comune.js';
+import { apriVeloce } from '../logica/struttura.js';
+import { salva } from '../logica/util.js';
+import { modificaDoc } from './comune.js';
 
 const controllori = new Map(); // doc.id → Organizza
 let seq = 1;
@@ -185,7 +188,7 @@ class Organizza {
         if (eImmagine(f.name)) {
           const img = await preparaImmagine(this.app, f.bytes, f.name);
           const d = await pdfDaImmagini([{ ...img, nome: f.name }], { formato: 'A4', margine: 10 });
-          pos2 += await this.#aggiungiEsterno({ nome: f.name, bytes: await d.save() }, pos2, null, max);
+          pos2 += await this.#aggiungiEsterno({ nome: f.name, bytes: await salva(d) }, pos2, null, max);
         } else if (ePdf(f.name) || f.bytes?.[0] === 0x25) {
           pos2 += await this.#aggiungiEsterno({ nome: f.name, bytes: f.bytes }, pos2, null, max);
         } else this.app.ui.toast(`«${f.name}» non è un PDF né un'immagine: ignorato`, { kind: 'warning' });
@@ -200,7 +203,7 @@ class Organizza {
     const file = 'f' + seq++;
     // se protetto, salviamo una versione senza cifratura per anteprima e unione
     let b = bytes;
-    if (libDoc.isEncrypted || password) b = await libDoc.save();
+    if (libDoc.isEncrypted || password) b = await salva(libDoc);
     const { pdf } = await openPdfJs(b, { password });
     this.esterni.set(file, { nome, bytes: b, pdf });
     let idx = indici || [...Array(pdf.numPages).keys()];
@@ -256,9 +259,9 @@ class Organizza {
   async #componi(items, titolo) {
     return this.app.ui.withProgress(titolo, async (p) => {
       p.set(null, 'Preparazione…');
-      const pdfDoc = await this.app.lib.openPdfLib(await this.app.currentBytes(this.doc), this.doc.password);
+      const pdfDoc = await apriVeloce(await this.app.currentBytes(this.doc), this.doc.password);
       await applicaDisposizione(pdfDoc, this.#perLogica(items), await this.#esterniLib(items), { signal: p.signal });
-      return this.app.lib.savePdfLib(pdfDoc);
+      return salva(pdfDoc);
     }).catch((err) => { mostraErrore(this.app, err, titolo); return null; });
   }
   #perLogica(items) { return items.map((x) => ({ tipo: x.tipo, indice: x.indice, file: x.file, size: x.size, rot: x.rot })); }
@@ -278,7 +281,7 @@ class Organizza {
         const ok = await this.app.ui.withProgress('Applicazione delle modifiche', async (p) => {
           p.set(null, `Riorganizzo ${this.items.length} pagine…`);
           const items = this.#perLogica(this.items); const est = await this.#esterniLib(this.items);
-          return this.app.editWithPdfLib('Pagine organizzate', async (pdfDoc) => { await applicaDisposizione(pdfDoc, items, est, { signal: p.signal }); }, this.doc);
+          return modificaDoc(this.app, 'Pagine organizzate', async (pdfDoc) => { await applicaDisposizione(pdfDoc, items, est, { signal: p.signal }); }, this.doc);
         }, { cancellable: false });
         if (!ok) return false;
         // le miniature già pronte restano valide: la rotazione ora è nel file
@@ -724,7 +727,7 @@ class Organizza {
     const bytes = await this.#componi(items, 'Copia delle pagine');
     if (!bytes) return;
     try {
-      const ok = await this.app.editWithPdfLib(`Pagine copiate da «${this.doc.name}»`, async (pdfDoc) => {
+      const ok = await modificaDoc(this.app, `Pagine copiate da «${this.doc.name}»`, async (pdfDoc) => {
         const src = await caricaPdf(bytes);
         await inserisciDaPdf(pdfDoc, src, [...Array(src.getPageCount()).keys()], pdfDoc.getPageCount());
       }, dest);

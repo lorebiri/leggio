@@ -3,6 +3,7 @@ import { PDFDocument } from '@cantoo/pdf-lib';
 import * as D from '../logica/dividi.js';
 import { senzaEstensione, nomeFileSicuro } from '../logica/util.js';
 import { trovaPagineBianche, mostraErrore } from './comune.js';
+import { apriVeloce } from '../logica/struttura.js';
 
 export async function apriDividi(app) {
   const doc = app.activeDoc; const n = doc.pageCount;
@@ -42,12 +43,12 @@ export async function apriDividi(app) {
       const ok = await app.ui.confirm(`Ho trovato ${bianche.length} pagine bianche: otterrai ${parti.length} file (le pagine bianche vengono tolte).`, { title: 'Dividi PDF', okLabel: 'Continua' });
       if (!ok) return;
     } else if (v.modo === 'segnalibri') {
-      parti = D.pianoSegnalibri(await app.lib.openPdfLib(await app.currentBytes(doc), doc.password));
+      parti = D.pianoSegnalibri(await apriVeloce(await app.currentBytes(doc), doc.password));
     }
     const cartella = await app.platform.chooseFolder('Dove salvo i file divisi?');
     if (!cartella) return;
     const bytesDoc = await app.currentBytes(doc);
-    const carica = () => PDFDocument.load(bytesDoc, { password: doc.password || undefined, ignoreEncryption: !doc.password, updateMetadata: false });
+    const carica = () => apriVeloce(bytesDoc, doc.password);
     let scritti = 0; let troppo = 0;
     await app.ui.withProgress('Divisione del PDF', async (p) => {
       if (v.modo === 'dimensione') {

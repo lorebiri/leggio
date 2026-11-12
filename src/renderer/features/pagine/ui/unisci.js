@@ -5,6 +5,8 @@ import { icon } from '../../../core/icons.js';
 import { unisci as unisciLogica } from '../logica/crea.js';
 import { intervalli, formatoMB, senzaEstensione } from './util-ui.js';
 import { caricaEsterno, preparaImmagine, eImmagine, ePdf, leggiFile, mostraErrore, apriRisultato, FILTRO_TUTTI } from './comune.js';
+import { apriVeloce } from '../logica/struttura.js';
+import { salva } from '../logica/util.js';
 
 function firmato(lib) {
   try {
@@ -48,7 +50,7 @@ export async function apriUnisci(app, { file = [], includiAttivo = true, titolo 
 
   const aggiungiDoc = async (d) => {
     const bytes = await app.currentBytes(d);
-    const lib = await app.lib.openPdfLib(bytes, d.password);
+    const lib = await apriVeloce(bytes, d.password);
     voci.push({ id: ++seq, nome: d.name, tipo: 'pdf', bytes, lib, pagine: lib.getPageCount(), intervallo: '', firmato: firmato(lib), password: d.password });
     disegna();
     const cv = await miniaturaPdf(bytes, d.password); const v = voci.find((x) => x.lib === lib); if (v) { v.thumb = cv; disegna(); }
@@ -64,7 +66,7 @@ export async function apriUnisci(app, { file = [], includiAttivo = true, titolo 
         } else if (ePdf(f.name) || f.bytes?.[0] === 0x25) {
           const lib = await caricaEsterno(app, f.bytes, f.name);
           if (!lib) continue;
-          const bytes = lib.isEncrypted ? await lib.save() : f.bytes;
+          const bytes = lib.isEncrypted ? await salva(lib) : f.bytes;
           const v = { id: ++seq, nome: f.name, tipo: 'pdf', bytes, lib, pagine: lib.getPageCount(), intervallo: '', firmato: firmato(lib) };
           voci.push(v); disegna();
           miniaturaPdf(bytes).then((cv) => { v.thumb = cv; disegna(); });
@@ -152,7 +154,7 @@ export async function apriUnisci(app, { file = [], includiAttivo = true, titolo 
       onProgress: (f, nome) => p.set(f * 0.85, `Aggiunto «${nome}»`), signal: p.signal,
     });
     p.set(0.9, 'Salvataggio…');
-    return out.save({ useObjectStreams: true });
+    return salva(out);
   }).catch((err) => { mostraErrore(app, err, 'Unisci PDF'); return null; });
   pulisci();
   if (bytes) await apriRisultato(app, bytes, nomeRisultato || (voci.length === 1 ? `${senzaEstensione(voci[0].nome)}.pdf` : `${senzaEstensione(voci[0].nome)}_unito.pdf`));

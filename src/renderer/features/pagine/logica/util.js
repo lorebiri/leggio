@@ -20,7 +20,13 @@ export const mmToPt = (mm) => (mm / 25.4) * 72;
 export const ptToMm = (pt) => (pt / 72) * 25.4;
 
 /** Cede il controllo al ciclo degli eventi (l'interfaccia resta reattiva sulle operazioni lunghe). */
-export const cedi = () => new Promise((r) => setTimeout(r, 0));
+export const cedi = () => new Promise((r) => {
+  // MessageChannel non viene rallentato come setTimeout quando la finestra è in secondo piano
+  if (typeof MessageChannel === 'undefined') { setTimeout(r, 0); return; }
+  const c = new MessageChannel();
+  c.port1.onmessage = () => { c.port1.close(); r(); };
+  c.port2.postMessage(0);
+});
 
 /**
  * Esegue fn(i) per i = 0..n-1 cedendo il controllo ogni `blocco` iterazioni.
@@ -181,3 +187,12 @@ export function nomeFileSicuro(s, ripiego = 'documento') {
   return t || ripiego;
 }
 export function senzaEstensione(nome) { return String(nome || 'documento').replace(/\.[a-z0-9]{2,5}$/i, ''); }
+
+/**
+ * pdf-lib cede il controllo ogni 50 oggetti (setTimeout): nel browser questo moltiplica i tempi
+ * per 10 (1200 pagine: 3,5 s invece di 0,3 s). Con blocchi più grandi l'interfaccia resta reattiva
+ * (pause massime misurate ~170 ms) e le operazioni sono molto più rapide.
+ */
+export const LETTURA = { parseSpeed: 1500, updateMetadata: false };
+export const SCRITTURA = { useObjectStreams: true, objectsPerTick: 1500 };
+export const salva = (doc) => doc.save(SCRITTURA);

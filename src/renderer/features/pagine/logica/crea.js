@@ -1,6 +1,6 @@
 // Creazione di PDF da immagini, testo o pagine vuote; unione di file misti. Logica pura.
 import { PDFDocument, StandardFonts, degrees } from '@cantoo/pdf-lib';
-import { ErroreUtente, FORMATI, mmToPt, aBlocchi, testoWinAnsi, tipoImmagine, orientamentoJpeg } from './util.js';
+import { ErroreUtente, FORMATI, mmToPt, aBlocchi, testoWinAnsi, tipoImmagine, orientamentoJpeg, cedi } from './util.js';
 import { copiaPagineEsterne, caricaPdf } from './struttura.js';
 import { leggiSegnalibri, scriviSegnalibri, rimappa } from './segnalibri.js';
 
@@ -146,7 +146,7 @@ export async function unisci(voci, opts = {}) {
     if (opts.segnalibri !== false) albero.push({ titolo: v.titolo || v.nome?.replace(/\.[a-z0-9]{2,5}$/i, '') || `File ${albero.length + 1}`, pagina: inizio, aperto: false, figli, cambiato: true });
     else albero.push(...figli);
     fatte++; opts.onProgress?.(fatte / totale, v.nome);
-    await new Promise((r) => setTimeout(r, 0));
+    await cedi();
   }
   if (albero.length) scriviSegnalibri(out, albero);
   out.setCreator('Leggio');

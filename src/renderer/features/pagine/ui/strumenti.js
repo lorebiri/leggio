@@ -7,6 +7,8 @@ import * as T from '../logica/timbri.js';
 import { FORMATI, FORMATI_ETICHETTE, mmToPt, intervalli, indiciInTesto, nomeFileSicuro, senzaEstensione } from '../logica/util.js';
 import { pdfDaImmagini } from '../logica/crea.js';
 import { caricaEsterno, caricaAttivo, mostraErrore, protetto, apriRisultato, nomeRisultato, preparaImmagine, eImmagine, FILTRO_TUTTI, trovaPagineBianche } from './comune.js';
+import { salva } from '../logica/util.js';
+import { modificaDoc } from './comune.js';
 
 const pagineDi = (app, s) => intervalli(s, app.activeDoc.pageCount);
 const valida = (app, s) => { try { pagineDi(app, s); return null; } catch (e) { return e.message; } };
@@ -17,10 +19,10 @@ export async function modifica(app, etichetta, fn) {
   const doc = app.activeDoc;
   try {
     const grande = doc.pageCount > 150 || doc.bytes.length > 20e6;
-    if (!grande) return await app.editWithPdfLib(etichetta, fn, doc);
+    if (!grande) return await modificaDoc(app, etichetta, (d, dd) => fn(d, null, dd), doc);
     return await app.ui.withProgress(etichetta, async (p) => {
       p.set(null, `Elaborazione di ${doc.pageCount} pagine…`);
-      return app.editWithPdfLib(etichetta, (pdfDoc, L, d) => fn(pdfDoc, L, d, p), doc);
+      return modificaDoc(app, etichetta, (pdfDoc, d) => fn(pdfDoc, null, d, p), doc);
     });
   } catch (err) { mostraErrore(app, err, etichetta); return false; }
 }
@@ -33,7 +35,7 @@ export async function scegliPdf(app, titolo = 'Scegli un PDF', { immagini = true
     const imgs = [];
     for (const f of files) imgs.push({ ...(await preparaImmagine(app, f.bytes, f.name)), nome: f.name });
     const d = await pdfDaImmagini(imgs, { formato: 'A4', margine: 10 });
-    return { nome: files.length === 1 ? files[0].name : `${files.length} immagini`, lib: await S.caricaPdf(await d.save()) };
+    return { nome: files.length === 1 ? files[0].name : `${files.length} immagini`, lib: await S.caricaPdf(await salva(d)) };
   }
   const f = files[0];
   const lib = await caricaEsterno(app, f.bytes, f.name);
@@ -63,13 +65,13 @@ export async function estrai(app, preset) {
           if (p.cancelled) throw Object.assign(new Error(), { name: 'AbortError' });
           p.set(k / indici.length, `Pagina ${indici[k] + 1}`);
           const out = await S.estraiInNuovo(src, [indici[k]]);
-          await app.platform.writeInFolder(cartella, `${nomeFileSicuro(base)}_pag${String(indici[k] + 1).padStart(cifre, '0')}.pdf`, await out.save());
+          await app.platform.writeInFolder(cartella, `${nomeFileSicuro(base)}_pag${String(indici[k] + 1).padStart(cifre, '0')}.pdf`, await salva(out));
           if (k % 25 === 24) src = await caricaAttivo(app);
         }
       });
       app.ui.toast(`Salvati ${indici.length} file`, { kind: 'success', timeout: 6000 });
     } else {
-      const bytes = await app.ui.withProgress('Estrazione delle pagine', async (p) => { p.set(null); const src = await caricaAttivo(app); return (await S.estraiInNuovo(src, indici)).save(); });
+      const bytes = await app.ui.withProgress('Estrazione delle pagine', async (p) => { p.set(null); const src = await caricaAttivo(app); return salva(await S.estraiInNuovo(src, indici)); });
       if (bytes) await apriRisultato(app, bytes, nomeRisultato(app, 'estratto'));
     }
     return true;
@@ -213,7 +215,7 @@ export async function nUpDialogo(app) {
   const indici = pagineDi(app, v.pages);
   const bytes = await protetto(app, 'Più pagine per foglio', () => app.ui.withProgress('Impaginazione', async (p) => {
     const out = await I.nUp(await caricaAttivo(app), { perFoglio: +v.n, formato: FORMATI[v.formato], bordo: v.bordo, indici, onProgress: (f) => p.set(f), signal: p.signal });
-    return out.save();
+    return salva(out);
   }));
   if (bytes) await apriRisultato(app, bytes, nomeRisultato(app, `${v.n}xfoglio`));
 }
@@ -223,7 +225,7 @@ export async function opuscoloDialogo(app) {
     { name: 'ril', label: 'Rilegatura', type: 'radio', value: 'sinistra', options: [{ value: 'sinistra', label: 'A sinistra (come un libro)' }, { value: 'destra', label: 'A destra' }] },
   ], okLabel: 'Crea' });
   if (!v) return;
-  const bytes = await protetto(app, 'Opuscolo', () => app.ui.withProgress('Impaginazione dell\'opuscolo', async (p) => (await I.opuscolo(await caricaAttivo(app), { formato: FORMATI[v.formato], rilegatura: v.ril, onProgress: (f) => p.set(f), signal: p.signal })).save()));
+  const bytes = await protetto(app, 'Opuscolo', () => app.ui.withProgress('Impaginazione dell\'opuscolo', async (p) => salva(await I.opuscolo(await caricaAttivo(app), { formato: FORMATI[v.formato], rilegatura: v.ril, onProgress: (f) => p.set(f), signal: p.signal }))));
   if (bytes) await apriRisultato(app, bytes, nomeRisultato(app, 'opuscolo'));
 }
 

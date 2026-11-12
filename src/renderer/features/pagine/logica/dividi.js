@@ -1,5 +1,5 @@
 // Divisione di un PDF in più file. Logica pura.
-import { ErroreUtente, gruppiIntervalli, nomeFileSicuro, cedi, annullato } from './util.js';
+import { ErroreUtente, gruppiIntervalli, nomeFileSicuro, cedi, annullato, salva } from './util.js';
 import { estraiInNuovo } from './struttura.js';
 import { leggiSegnalibri, scriviSegnalibri, rimappa } from './segnalibri.js';
 
@@ -75,7 +75,7 @@ async function costruisci(src, indici, { segnalibri = true } = {}) {
       if (alb.length) scriviSegnalibri(out, alb);
     } catch { /* segnalibri non essenziali */ }
   }
-  return out.save({ useObjectStreams: true });
+  return salva(out);
 }
 
 /**

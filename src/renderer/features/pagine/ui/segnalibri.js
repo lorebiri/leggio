@@ -2,7 +2,7 @@
 // rinomina, elimina, trascina per riordinare o annidare. Sostituisce il pannello di base (stesso id).
 import { icon } from '../../../core/icons.js';
 import * as B from '../logica/segnalibri.js';
-import { mostraErrore } from './comune.js';
+import { mostraErrore, modificaDoc } from './comune.js';
 
 /** Albero da pdf.js con le pagine risolte. → [{ titolo, pagina, dest, url, figli, grassetto, corsivo }] */
 async function leggiDaPdfJs(pdf) {
@@ -89,7 +89,7 @@ export function pannelloSegnalibri(app) {
       /** Modifica l'albero dentro pdf-lib (stessa struttura letta da pdf.js) e salva in modo annullabile. */
       async function modifica(etichetta, fn) {
         try {
-          await app.editWithPdfLib(etichetta, (pdfDoc) => {
+          await modificaDoc(app, etichetta, (pdfDoc) => {
             const t = B.leggiSegnalibri(pdfDoc);
             const r = fn(t, pdfDoc);
             if (r === false) return false;

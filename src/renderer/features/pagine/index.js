@@ -11,7 +11,7 @@ import { apriIntestazioni, apriFiligrana, apriSfondo } from './ui/timbri.js';
 import { apriCrea, installaTrascinamento } from './ui/crea.js';
 import { pannelloSegnalibri } from './ui/segnalibri.js';
 import * as U from './ui/strumenti.js';
-import { mostraErrore } from './ui/comune.js';
+import { mostraErrore, modificaDoc } from './ui/comune.js';
 
 registerIcon('rotateLeft', '<path d="M4 11a8 8 0 1 1 2.3 5.7"/><path d="M4 4v7h7"/>');
 registerIcon('copy', '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>');
@@ -122,7 +122,7 @@ function correggiDestroyPdfJs(app) {
  */
 function correggiRiordinoNucleo(app) {
   app.reorderPages = async (order, label = 'Pagine riordinate') => {
-    try { return await app.editWithPdfLib(label, (src) => S.riordina(src, order)); }
+    try { return await modificaDoc(app, label, (src) => S.riordina(src, order)); }
     catch (err) { mostraErrore(app, err, 'Riordino delle pagine'); return false; }
   };
 }

@@ -5,7 +5,7 @@ import {
   PDFDocument, PDFName, PDFArray, PDFDict, PDFRef, PDFNumber, PDFString, PDFHexString,
   PDFPage, PDFPageLeaf, PDFObjectCopier, degrees,
 } from '@cantoo/pdf-lib';
-import { ErroreUtente, validaIndici, aBlocchi } from './util.js';
+import { ErroreUtente, validaIndici, aBlocchi, LETTURA } from './util.js';
 
 const N = (s) => PDFName.of(s);
 const EREDITABILI = ['Resources', 'MediaBox', 'CropBox', 'Rotate'];
@@ -495,7 +495,7 @@ export function dimensioniVisibili(page) {
 /** Carica un PDF esterno per le operazioni (usa e getta). Lancia ErroreUtente leggibili. */
 export async function caricaPdf(bytes, { password, nome = 'il file' } = {}) {
   try {
-    return await PDFDocument.load(bytes, { password: password || undefined, ignoreEncryption: false, updateMetadata: false, throwOnInvalidObject: false });
+    return await PDFDocument.load(bytes, { ...LETTURA, password: password || undefined, ignoreEncryption: false, throwOnInvalidObject: false });
   } catch (err) {
     const msg = String(err?.message || err);
     if (/encrypt|password/i.test(msg) || err?.name === 'EncryptedPDFError') {
@@ -503,4 +503,9 @@ export async function caricaPdf(bytes, { password, nome = 'il file' } = {}) {
     }
     throw new ErroreUtente(`«${nome}» non sembra un PDF valido o è danneggiato.`);
   }
+}
+
+/** Apre i byte del documento attivo (anche cifrato con password nota), in modo rapido. */
+export async function apriVeloce(bytes, password) {
+  return PDFDocument.load(bytes, { ...LETTURA, password: password || undefined, ignoreEncryption: !password });
 }

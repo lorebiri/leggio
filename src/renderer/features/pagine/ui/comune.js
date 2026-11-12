@@ -1,7 +1,7 @@
 // Funzioni d'interfaccia condivise dagli strumenti dell'area «pagine».
 import { PDFDocument } from '@cantoo/pdf-lib';
-import { caricaPdf } from '../logica/struttura.js';
-import { tipoImmagine, sembraPdf, senzaEstensione, ErroreUtente } from '../logica/util.js';
+import { caricaPdf, apriVeloce } from '../logica/struttura.js';
+import { tipoImmagine, sembraPdf, senzaEstensione, ErroreUtente, LETTURA, salva } from '../logica/util.js';
 import { analizzaPixel } from '../logica/impaginazione.js';
 
 export { senzaEstensione, ErroreUtente };
@@ -28,11 +28,11 @@ export async function caricaEsterno(app, bytes, nome) {
   try { return await caricaPdf(bytes, { nome }); } catch (err) {
     if (!err.protetto) throw err;
     // prima prova: solo restrizioni (password di apertura vuota)
-    try { return await PDFDocument.load(bytes, { password: '', updateMetadata: false }); } catch {}
+    try { return await PDFDocument.load(bytes, { ...LETTURA, password: '' }); } catch {}
     for (let tentativo = 0; tentativo < 3; tentativo++) {
       const pw = await app.ui.prompt(tentativo ? 'Password errata, riprova:' : `«${nome}» è protetto. Inserisci la password per usarlo:`, '', { title: 'File protetto', type: 'password', okLabel: 'Usa il file' });
       if (pw == null) return null;
-      try { return await PDFDocument.load(bytes, { password: pw, updateMetadata: false }); } catch {}
+      try { return await PDFDocument.load(bytes, { ...LETTURA, password: pw }); } catch {}
     }
     throw new ErroreUtente(`Password non corretta per «${nome}».`);
   }
@@ -42,7 +42,7 @@ export async function caricaEsterno(app, bytes, nome) {
 export async function caricaAttivo(app) {
   const doc = app.activeDoc;
   const bytes = await app.currentBytes(doc);
-  return app.lib.openPdfLib(bytes, doc.password);
+  return apriVeloce(bytes, doc.password);
 }
 
 /** Byte di un file di immagine → { bytes, tipo:'jpg'|'png' } convertendo i formati non supportati. */
@@ -173,4 +173,17 @@ export async function apriRisultato(app, bytes, nome) {
   const d = await app.openBytes(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes), { name: nome });
   if (d) { d.dirty = true; app.ui.toast(`Creato «${nome}» in una nuova scheda. Ricordati di salvarlo.`, { kind: 'success', timeout: 8000 }); }
   return d;
+}
+
+/**
+ * Modifica annullabile con pdf-lib (come app.editWithPdfLib) ma con lettura/scrittura rapide.
+ * fn(pdfDoc, doc) → false per annullare. Passa sempre da app.applyEdit.
+ */
+export function modificaDoc(app, etichetta, fn, doc = app.activeDoc) {
+  return app.applyEdit(etichetta, async (bytes, d) => {
+    const pdfDoc = await apriVeloce(bytes, d.password);
+    const r = await fn(pdfDoc, d);
+    if (r === false) return null;
+    return salva(pdfDoc);
+  }, doc);
 }

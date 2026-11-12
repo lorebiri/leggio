@@ -5,6 +5,8 @@ import { inserisciDaPdf, caricaPdf } from '../logica/struttura.js';
 import { pdfDaImmagini } from '../logica/crea.js';
 import { apriUnisci } from './unisci.js';
 import { apriRisultato, mostraErrore, eImmagine, preparaImmagine, leggiFile, FILTRO_IMMAGINI } from './comune.js';
+import { salva } from '../logica/util.js';
+import { modificaDoc } from './comune.js';
 
 export async function apriCrea(app) {
   const v = await app.ui.dialog({ title: 'Crea PDF', message: 'Da cosa vuoi creare il PDF?', fields: [
@@ -55,7 +57,7 @@ export async function creaDaTesto(app, file) {
   app.settings.set('pagine.testo', v);
   const bytes = await app.ui.withProgress('Impaginazione del testo', async (p) => {
     const d = await pdfDaTesto(decodifica(file.bytes), { ...v, titolo: senzaEstensione(file.name), onProgress: (f) => p.set(f), signal: p.signal });
-    return d.save();
+    return salva(d);
   }).catch((e) => { mostraErrore(app, e, 'Crea PDF'); return null; });
   if (bytes) await apriRisultato(app, bytes, `${senzaEstensione(file.name)}.pdf`);
 }
@@ -68,7 +70,7 @@ export async function creaVuoto(app) {
   ], okLabel: 'Crea', validate: (x) => (!(Number.isInteger(x.pagine) && x.pagine >= 1 && x.pagine <= 1000) ? 'Da 1 a 1000 pagine.' : null) });
   if (!v) return;
   const d = await pdfVuoto({ formato: v.formato, pagine: v.pagine, orizzontale: v.orizz });
-  await apriRisultato(app, await d.save(), 'Nuovo documento.pdf');
+  await apriRisultato(app, await salva(d), 'Nuovo documento.pdf');
 }
 
 /** Foto o testi trascinati nella finestra (non PDF). */
@@ -90,8 +92,8 @@ export function installaTrascinamento(app) {
         if (scelta === 'nuovo') await creaDaImmagini(app, letti);
         else {
           const imgs = []; for (const f of letti) imgs.push({ ...(await preparaImmagine(app, f.bytes, f.name)), nome: f.name });
-          const src = await caricaPdf(await (await pdfDaImmagini(imgs, { formato: 'A4', margine: 10 })).save());
-          await app.editWithPdfLib(`Aggiunte ${imgs.length} foto`, (d) => inserisciDaPdf(d, src, [...Array(src.getPageCount()).keys()], d.getPageCount()));
+          const src = await caricaPdf(await salva(await pdfDaImmagini(imgs, { formato: 'A4', margine: 10 })));
+          await modificaDoc(app, `Aggiunte ${imgs.length} foto`, (d) => inserisciDaPdf(d, src, [...Array(src.getPageCount()).keys()], d.getPageCount()));
         }
       }
       for (const f of testi) await creaDaTesto(app, await leggiFile(f));
