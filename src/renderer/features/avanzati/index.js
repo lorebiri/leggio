@@ -25,7 +25,8 @@ import { looksLikeP7m } from './lib/cades.js';
 import { extOf } from './native.js';
 import { dichiarazioneConformita, rinominaIntelligente, apriEml } from './ui/coda.js';
 import { setupEnte, modificaProfiloEnte, inserisciEnteTool, compilaConEnte } from './ui/ente.js';
-import { registerDatiChiave } from './ui/datichiave.js';
+import { registerControlli } from './ui/controlli.js';
+import { MODELLI_PREDEFINITI as LISTE, leggiModello, valutaLista, doppioUtilizzo } from './lib/checklist.js';
 import { praticaMissione, fascicoloConIndice, pacchettoRendicontazione } from './ui/raccoglitori.js';
 import { prontoPubblicazione } from './ui/pubblicabile.js';
 
@@ -92,7 +93,19 @@ export default function register(app) {
 
   // ---------- flussi dell'ufficio amministrativo ----------
   setupEnte(app);
-  registerDatiChiave(app);
+  registerControlli(app);
+  // liste di controllo per le pratiche (acquisti, PNRR): spente di default, modificabili, mostrate nella pratica dell'archivio
+  app.bus.on('settings:fields', (arr) => {
+    arr.push({ key: 'avanzati.liste.attive', field: { label: 'Mostra le liste di controllo nella pratica dell\'archivio (acquisti, PNRR)', type: 'checkbox', value: false } });
+    for (const [id, m] of Object.entries(LISTE)) arr.push({ key: 'avanzati.liste.' + id, field: { label: `Lista «${m.nome}» (una voce per riga: testo | parole da cercare | fonte)`, type: 'textarea', rows: 5, value: m.righe.join('\n') } });
+  });
+  app.services.listeControllo = {
+    attive: () => app.settings.get('avanzati.liste.attive', false) === true,
+    modelli: () => Object.entries(LISTE).map(([id, m]) => ({ id, ...leggiModello(app.settings.get('avanzati.liste.' + id, m.righe.join('\n')), m.nome) })),
+    /** documenti: [{ nome, testo }] → [{ voce, stato, documenti, mancanti? }] */
+    valuta: (id, documenti) => { const m = app.services.listeControllo.modelli().find((x) => x.id === id); return m ? valutaLista(m, documenti) : []; },
+    doppioUtilizzo,
+  };
   app.registerTool({ id: 'mission-file', name: 'Pratica di missione', category: 'crea', icon: 'merge', needsDoc: false,
     description: 'Modulo e giustificativi (PDF, foto, scansioni) in un solo PDF sotto la dimensione scelta',
     keywords: 'missione rimborso trasferta giustificativi scontrini ricevute biglietti foto heic pratica',

@@ -203,7 +203,7 @@ export function datiPerTitulus({ fattura, dati, analisi, firma, nomeFile } = {})
     if (fattura.corpi.length > 1) add('nota', 'Nota', `Il file contiene ${fattura.corpi.length} documenti`);
   } else if (dati || analisi) {
     const a = analisi || {}; const d = dati || { cig: [], cup: [], piva: [] };
-    const tipo = a.tipo && a.tipo !== 'Documento' ? a.tipo.replace('NotaCredito', 'Nota di credito') : 'Documento';
+    const tipo = a.tipo && a.tipo !== 'Documento' ? a.tipo.replace('NotaCredito', 'Nota di credito') : (nomeFile ? String(nomeFile).replace(/(\.pdf)?(\.p7m)*$/i, '').replace(/_+/g, ' ') : 'Documento');
     const cig = d.cig?.map((x) => x.valore).join(', '); const cup = d.cup?.map((x) => x.valore).join(', ');
     add('oggetto', 'Oggetto (proposta)', [`${tipo}${a.numero ? ` n. ${a.numero}` : ''}${a.data ? ` del ${dataIt(a.data)}` : ''}`, a.soggetto, cig ? `CIG ${cig}` : '', cup ? `CUP ${cup}` : '', d.durc?.scadenza ? `scadenza ${dataIt(d.durc.scadenza)}` : ''].filter(Boolean).join(' – '));
     add('mittente', 'Mittente / fornitore', a.soggetto);

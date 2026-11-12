@@ -24,6 +24,38 @@ Tutto funziona senza rete (tranne «Crea PDF da pagina web», che scarica la pag
 
 Pannelli: `p7m` (Firme .p7m), `fattura` (Fattura elettronica), `layers` (Livelli). I pannelli `p7m` e `fattura` appartengono al loro documento: passando a un altro documento si torna alle miniature. Impostazione: «riapri i documenti dell'ultima volta» (`avanzati.restoreSession`, attiva).
 
+## Riquadro «Controlli» (quarto ciclo)
+Un solo pannello laterale (`controlli`) sul documento aperto, al posto di «Dati chiave» e «Dati per Titulus». Parla solo se c'è
+qualcosa da dire («Nessun controllo da segnalare» altrimenti); ogni avviso è una frase breve con un'azione (Copia il motivo,
+Indica la data di ricezione, Cerca nell'archivio, Apri l'ordine, Cerca la ricevuta F24…) e un pulsante «Fonte». In fondo una sola
+sezione «Dati da copiare» (Per Titulus, Per U-GOV, ordine abbinato o riconosciuto) e la versione delle regole con le fonti.
+Nessuno strumento nuovo. Leggio segnala soltanto: non rifiuta fatture (lo si fa in U-GOV).
+
+| Controllo | Regola (file `dati/regole-ufficio.json`, fonte e data per ciascuna) |
+|---|---|
+| Giorni per accettare o rifiutare | 15 dalla consegna SdI; la data di ricezione si chiede una volta (o si legge dai metadati SdI) |
+| CIG / CUP mancanti o non validi | indicati come causa di rifiuto ammessa (art. 25 DL 66/2014; DM 132/2020); CUP solo come «se l'acquisto è su un progetto» |
+| Nota di credito senza fattura collegata | manuale CNR fatturazione elettronica |
+| Scissione dei pagamenti con ritenuta; fornitore estero con split | art. 17-ter DPR 633/72, DL 87/2018 |
+| Bollo mancante sulle fatture esenti | 2 € oltre 77,47 € di importi senza IVA (Agenzia Entrate) |
+| Abbinamento fattura ↔ ordine/determina (anche ODA, TD, RdO MePA) | CIG, numero d'ordine citato in fattura, P.IVA; avviso se l'imponibile supera l'ordinato. Cerca nell'indice dell'archivio (`app.archivio.cerca` + `documento`) |
+| Bollo sui contratti | All. I.4 d.lgs. 36/2023 (fasce 40/120/250/500/1.000 €); cerca la ricevuta F24 con codice 1573 tra i documenti con lo stesso CIG |
+| DURC scaduto o in scadenza | validità dal file di regole (120 giorni, da verificare) |
+
+Le regole aggiornate si caricano da un file JSON con la stessa struttura («Aggiorna le regole da un file…» in fondo al riquadro).
+
+**Dati per U-GOV**: soggetto, P.IVA/CF, tipo, numero, data, descrizione, imponibile, IVA, totale, esigibilità IVA, natura, CIG, CUP,
+riferimento ordine, fattura collegata, ritenuta, scadenza, IBAN. L'ordine segue la registrazione della fattura passiva come descritta
+nelle fonti pubbliche (manuale e Compendio U-GOV): **va confermato con un utente U-GOV**.
+
+**Pratica di missione → giustificativi per U-Web**: opzione «Anche un file per ogni spesa»: un PDF per spesa (`nn_data_tipo_importo.pdf`),
+tipo di spesa, data, importo e pagamento letti con l'OCR, tipo di allegato U-Web proposto; avviso per le spese che sembrano pagate in
+contanti (L. 207/2024 art. 1 c. 81 → «Pagamento non tracciabile»). Leggio propone, non calcola il rimborso.
+
+**Liste di controllo** (acquisti, PNRR): spente di default (`avanzati.liste.attive`), modificabili nelle Impostazioni (una voce per riga:
+`testo | parole da cercare | fonte`; `§CUP` = CUP su ogni documento). Servizio per l'archivio, che le mostra nella pratica:
+`app.services.listeControllo.{ attive(), modelli(), valuta(id, documenti[{nome,testo}]), doppioUtilizzo(fatture[{progetto,piva,numero,data}]) }`.
+
 ## Titulus (protocollo informatico del CNR)
 - **Segnatura**: `lib/titulus.js › segnatureTitulus(testo, { modelli, origine, mascheraUor })` / `segnaturaTitulus` →
   `{ aoo, numero (com'è scritto, con gli zeri), numeroIntero, data (ISO), dataTesto, uor, anno, classifica, fascicolo, testo, origine: 'testo'|'immagine' }`
@@ -48,7 +80,7 @@ Pannelli: `p7m` (Firme .p7m), `fattura` (Fattura elettronica), `layers` (Livelli
   l'archivio, se trova il documento, imposta `ricevuto = true` in modo sincrono (altrimenti Leggio dice di cambiare lo stato a mano).
   `path` è il file ORIGINALE (anche per una fattura impaginata da XML o un PDF estratto da .p7m). L'area archivio ascolta l'evento e applica
   la modifica al documento con quel percorso. La segnatura predefinita è la striscia verticale a sinistra (non copre numero e data della fattura).
-- **Dati per Titulus** (pannello `dati-titulus`): oggetto proposto, mittente, P.IVA, numero e data del documento, CIG/CUP, importo, firmatari; «Copia»
+- **Dati per Titulus** (nel riquadro «Controlli»): oggetto proposto, mittente, P.IVA, numero e data del documento, CIG/CUP, importo, firmatari; «Copia»
   per ciascuno e «Copia tutto». Da FatturaPA (dati esatti) o dal testo (da controllare). `lib/titulus.js › datiPerTitulus`, `testoDatiTitulus`.
 
 ## Flussi dell'ufficio amministrativo (terzo ciclo)
