@@ -494,8 +494,9 @@ export function dimensioniVisibili(page) {
 
 /** Carica un PDF esterno per le operazioni (usa e getta). Lancia ErroreUtente leggibili. */
 export async function caricaPdf(bytes, { password, nome = 'il file' } = {}) {
+  let doc;
   try {
-    return await PDFDocument.load(bytes, { ...LETTURA, password: password || undefined, ignoreEncryption: false, throwOnInvalidObject: false });
+    doc = await PDFDocument.load(bytes, { ...LETTURA, password: password || undefined, ignoreEncryption: false, throwOnInvalidObject: false });
   } catch (err) {
     const msg = String(err?.message || err);
     if (/encrypt|password/i.test(msg) || err?.name === 'EncryptedPDFError') {
@@ -503,9 +504,27 @@ export async function caricaPdf(bytes, { password, nome = 'il file' } = {}) {
     }
     throw new ErroreUtente(`«${nome}» non sembra un PDF valido o è danneggiato.`);
   }
+  let n = 0;
+  try { n = doc.getPageCount(); } catch { n = 0; }
+  if (!n) throw new ErroreUtente(`«${nome}» è danneggiato: non contiene pagine leggibili.`);
+  return doc;
 }
 
 /** Apre i byte del documento attivo (anche cifrato con password nota), in modo rapido. */
 export async function apriVeloce(bytes, password) {
   return PDFDocument.load(bytes, { ...LETTURA, password: password || undefined, ignoreEncryption: !password });
+}
+
+/**
+ * Dopo l'apertura con password, toglie la cifratura residua (dizionario /Encrypt rimasto come oggetto),
+ * così i byte salvati si riaprono senza password. Da usare solo su copie usa e getta di file esterni.
+ */
+export function togliCifratura(doc) {
+  const ctx = doc.context;
+  delete ctx.trailerInfo.Encrypt;
+  for (const [ref, obj] of ctx.enumerateIndirectObjects()) {
+    if (obj instanceof PDFDict && !(obj instanceof PDFPageLeaf) && obj.get(PDFName.of('Filter'))?.toString() === '/Standard' && obj.get(PDFName.of('O')) && obj.get(PDFName.of('U'))) ctx.delete(ref);
+  }
+  doc.isEncrypted = false;
+  return doc;
 }

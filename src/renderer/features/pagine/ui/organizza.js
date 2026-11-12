@@ -5,7 +5,7 @@ import { openPdfJs } from '../../../core/pdf.js';
 import { icon } from '../../../core/icons.js';
 import { applicaDisposizione, caricaPdf, inserisciDaPdf } from '../logica/struttura.js';
 import { pdfDaImmagini } from '../logica/crea.js';
-import { indiciInTesto } from '../logica/util.js';
+import { indiciInTesto, ErroreUtente } from '../logica/util.js';
 import { caricaEsterno, preparaImmagine, eImmagine, ePdf, leggiFile, analizzaPagina, mostraErrore, apriRisultato, nomeRisultato, FILTRO_TUTTI } from './comune.js';
 import { apriVeloce } from '../logica/struttura.js';
 import { salva } from '../logica/util.js';
@@ -203,8 +203,11 @@ class Organizza {
     const file = 'f' + seq++;
     // se protetto, salviamo una versione senza cifratura per anteprima e unione
     let b = bytes;
-    if (libDoc.isEncrypted || password) b = await salva(libDoc);
-    const { pdf } = await openPdfJs(b, { password });
+    if (libDoc.decifrato || password) b = await salva(libDoc);
+    if (!libDoc.getPageCount()) throw new ErroreUtente(`«${nome}» non contiene pagine leggibili: forse è danneggiato.`);
+    let pdf;
+    try { ({ pdf } = await openPdfJs(b, { password })); }
+    catch { throw new ErroreUtente(`«${nome}» sembra danneggiato o non è un PDF valido.`); }
     this.esterni.set(file, { nome, bytes: b, pdf });
     let idx = indici || [...Array(pdf.numPages).keys()];
     if (max != null) idx = idx.slice(0, Math.max(0, max));

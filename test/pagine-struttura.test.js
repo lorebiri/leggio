@@ -141,3 +141,10 @@ describe('struttura delle pagine', () => {
     await expect(S.caricaPdf(new Uint8Array([1, 2, 3]), { nome: 'x.pdf' })).rejects.toThrow(/non sembra un PDF/);
   });
 });
+
+describe('file danneggiati', () => {
+  it('PDF senza catalogo o senza pagine: messaggio chiaro', async () => {
+    const enc = new TextEncoder();
+    await expect(S.caricaPdf(enc.encode('%PDF-1.7\nniente\n%%EOF'), { nome: 'rotto.pdf' })).rejects.toThrow(/rotto.pdf/);
+  });
+});

@@ -1,6 +1,6 @@
 // Funzioni d'interfaccia condivise dagli strumenti dell'area «pagine».
 import { PDFDocument } from '@cantoo/pdf-lib';
-import { caricaPdf, apriVeloce } from '../logica/struttura.js';
+import { caricaPdf, apriVeloce, togliCifratura } from '../logica/struttura.js';
 import { tipoImmagine, sembraPdf, senzaEstensione, ErroreUtente, LETTURA, salva } from '../logica/util.js';
 import { analizzaPixel } from '../logica/impaginazione.js';
 
@@ -14,7 +14,18 @@ export const FILTRO_TUTTI = [{ name: 'PDF e immagini', extensions: ['pdf', 'jpg'
 export function mostraErrore(app, err, contesto) {
   if (err?.name === 'AbortError') { app.ui.toast('Operazione annullata'); return; }
   if (err?.name === 'ErroreUtente') { app.ui.dialog({ title: contesto || 'Attenzione', message: err.message, cancelLabel: null, okLabel: 'Ho capito' }); return; }
+  const tecnico = String(err?.message || err);
+  const tradotto = traduciErrore(tecnico);
+  if (tradotto) { console.error(contesto, err); app.ui.dialog({ title: contesto || 'Attenzione', message: tradotto, cancelLabel: null, okLabel: 'Ho capito' }); return; }
   app.reportError(err, contesto || 'Operazione non riuscita');
+}
+
+/** Messaggi tecnici di pdf.js / pdf-lib → frasi comprensibili (null se sconosciuto). */
+export function traduciErrore(m) {
+  if (/password|encrypt/i.test(m)) return 'Il file è protetto da password: aprilo prima con la password, poi riprova.';
+  if (/Invalid PDF|XRef|xref|Missing PDF|PDF header|trailer|startxref|Failed to parse|Expected|corrupt|Unexpected (end|token)|Invalid object/i.test(m)) return 'Il file sembra danneggiato o non è un PDF valido. Prova a riaprirlo dall\'originale o a farti rimandare il documento.';
+  if (/out of memory|Array buffer allocation|allocation failed/i.test(m)) return 'Il file è troppo grande per questa operazione: prova a dividerlo in parti più piccole.';
+  return null;
 }
 
 /** Esegue fn gestendo gli errori; ritorna il risultato o undefined. */
@@ -28,11 +39,11 @@ export async function caricaEsterno(app, bytes, nome) {
   try { return await caricaPdf(bytes, { nome }); } catch (err) {
     if (!err.protetto) throw err;
     // prima prova: solo restrizioni (password di apertura vuota)
-    try { return await PDFDocument.load(bytes, { ...LETTURA, password: '' }); } catch {}
+    try { const d = await PDFDocument.load(bytes, { ...LETTURA, password: '' }); d.decifrato = true; return togliCifratura(d); } catch {}
     for (let tentativo = 0; tentativo < 3; tentativo++) {
       const pw = await app.ui.prompt(tentativo ? 'Password errata, riprova:' : `«${nome}» è protetto. Inserisci la password per usarlo:`, '', { title: 'File protetto', type: 'password', okLabel: 'Usa il file' });
       if (pw == null) return null;
-      try { return await PDFDocument.load(bytes, { ...LETTURA, password: pw }); } catch {}
+      try { const d = await PDFDocument.load(bytes, { ...LETTURA, password: pw }); d.decifrato = true; return togliCifratura(d); } catch {}
     }
     throw new ErroreUtente(`Password non corretta per «${nome}».`);
   }

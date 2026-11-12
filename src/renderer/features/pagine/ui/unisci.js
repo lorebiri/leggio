@@ -4,6 +4,7 @@ import { openPdfJs } from '../../../core/pdf.js';
 import { icon } from '../../../core/icons.js';
 import { unisci as unisciLogica } from '../logica/crea.js';
 import { intervalli, formatoMB, senzaEstensione } from './util-ui.js';
+import { ErroreUtente } from '../logica/util.js';
 import { caricaEsterno, preparaImmagine, eImmagine, ePdf, leggiFile, mostraErrore, apriRisultato, FILTRO_TUTTI } from './comune.js';
 import { apriVeloce } from '../logica/struttura.js';
 import { salva } from '../logica/util.js';
@@ -66,7 +67,8 @@ export async function apriUnisci(app, { file = [], includiAttivo = true, titolo 
         } else if (ePdf(f.name) || f.bytes?.[0] === 0x25) {
           const lib = await caricaEsterno(app, f.bytes, f.name);
           if (!lib) continue;
-          const bytes = lib.isEncrypted ? await salva(lib) : f.bytes;
+          if (!lib.getPageCount()) throw new ErroreUtente(`«${f.name}» non contiene pagine leggibili: forse è danneggiato.`);
+          const bytes = lib.decifrato ? await salva(lib) : f.bytes;
           const v = { id: ++seq, nome: f.name, tipo: 'pdf', bytes, lib, pagine: lib.getPageCount(), intervallo: '', firmato: firmato(lib) };
           voci.push(v); disegna();
           miniaturaPdf(bytes).then((cv) => { v.thumb = cv; disegna(); });
