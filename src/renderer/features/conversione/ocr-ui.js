@@ -41,7 +41,8 @@ export async function ocrSuBytes(app, bytes, opts = {}) {
       renderPage: (p, i, s) => renderPagina(p, i, s, { pdfjs: app.lib.pdfjs }), fontWidth,
     });
     if (opts.report) Object.assign(opts.report, res);
-    if (!res.pagine.length) return bytes;
+    // niente da scrivere (pagine bianche o senza testo riconoscibile): il documento resta identico
+    if (!res.pagine.some((p) => p.parole.length || p.immagine)) return bytes;
     opts.progress?.set(1, 'Scrivo il testo nel documento…');
     const pdfDoc = await app.lib.openPdfLib(bytes, opts.password);
     let font;
@@ -99,7 +100,7 @@ async function avviaOcr(app, { proposta = false } = {}) {
     return app.reportError(new Error(messaggioErrore(err)), 'Riconoscimento del testo non riuscito');
   }
   if (!out) return; // annullato
-  if (out === bytes0 || !report.pagine?.length) {
+  if (out === bytes0 || !report.pagine?.some((p) => p.parole.length || p.immagine)) {
     const s = report.saltate?.length || 0;
     return app.ui.toast(s ? `Nessuna pagina da riconoscere: ${s === 1 ? 'la pagina ha' : `le ${s} pagine hanno`} già del testo.` : 'Nessun testo riconosciuto.', { kind: 'info', timeout: 5000 });
   }

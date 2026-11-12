@@ -490,7 +490,7 @@ export function paroleInOrdine(frags) {
         while ((m = re.exec(str))) {
           const x0 = p.x + (p.w * m.index) / n;
           const x1 = p.x + (p.w * (m.index + m[0].length)) / n;
-          out.push({ text: m[0], x0, x1, top: seg.y - p.size * 0.85, bottom: seg.y + p.size * 0.25 });
+          out.push({ text: m[0], x0, x1, top: seg.y - p.size * 0.85, bottom: seg.y + p.size * 0.25, size: p.size });
         }
       }
     }

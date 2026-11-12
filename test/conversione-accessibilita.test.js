@@ -54,3 +54,13 @@ describe('controllo accessibilità', () => {
     expect(by.testo.ok).toBe(false); expect(by.testo.correzione).toBe('ocr');
   });
 });
+
+import { confiniBlocchi } from '../src/renderer/features/conversione/lib/frasi.js';
+describe('confini tra titoli e paragrafi', () => {
+  it('un titolo senza punto non si fonde con il paragrafo', () => {
+    const p = [{ text: 'Introduzione', top: 100, size: 16 }, { text: 'Il', top: 130, size: 10 }, { text: 'testo.', top: 130, size: 10 }];
+    const c = confiniBlocchi(p);
+    expect([...c]).toEqual([1]);
+    expect(dividiFrasi(p.map((x) => x.text), { confini: c }).map((f) => f.text)).toEqual(['Introduzione', 'Il testo.']);
+  });
+});

@@ -36,7 +36,10 @@ export async function pdfaSuBytes(app, bytes, opts = {}) {
     src = await app.services.ocr(src, { password: opts.password, langs: opts.langs, progress: { set: (f, m) => progress.set(0.02 + f * 0.7, m), signal: progress.signal } });
   }
   progress.set(0.75, 'Converto in PDF/A…');
-  const doc = await app.lib.openPdfLib(src, opts.password);
+  let doc;
+  try { doc = await app.lib.openPdfLib(src, opts.password); }
+  catch (err) { throw new Error(/password|encrypt/i.test(String(err?.message)) ? 'Il documento è protetto: serve la password per convertirlo.' : 'Il file PDF sembra danneggiato: non riesco a convertirlo. Prova prima a ripararlo.'); }
+  if (!doc.getPageCount()) throw new Error('Il file PDF sembra danneggiato: non contiene pagine leggibili.');
   let fontCorretti = 0;
   try { fontCorretti = incorporaFontSans(doc, PDFLib, await fontLiberation(), fontkit); }
   catch (e) { console.warn('[pdfa] font non incorporati', e); }

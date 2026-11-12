@@ -1,6 +1,6 @@
 // «Leggi ad alta voce»: sintesi vocale del sistema (offline), dalla pagina corrente, con la frase letta evidenziata.
 import { paroleInOrdine } from './lib/testo.js';
-import { dividiFrasi } from './lib/frasi.js';
+import { dividiFrasi, confiniBlocchi } from './lib/frasi.js';
 import { testoPagina } from './comune.js';
 
 const synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
@@ -40,7 +40,10 @@ export function registraLettura(app) {
       else righe.push({ ...w });
     }
     for (const r of righe) {
-      const css = app.viewer.pdfRectToCss(st.pagina, [r.x0, r.y0, r.x1, r.y1]);
+      // (pdf.js 6 non ha più convertToViewportRectangle: si convertono i due angoli)
+      const vp = app.viewer.getViewport(st.pagina); if (!vp) return;
+      const [ax, ay] = vp.convertToViewportPoint(r.x0, r.y0); const [bx, by] = vp.convertToViewportPoint(r.x1, r.y1);
+      const css = { left: Math.min(ax, bx), top: Math.min(ay, by), width: Math.abs(bx - ax), height: Math.abs(by - ay) };
       ov.append(app.ui.h('div', { class: 'conv-tts-hl', style: { left: css.left - 2 + 'px', top: css.top - 1 + 'px', width: css.width + 4 + 'px', height: css.height + 2 + 'px' } }));
     }
   }
@@ -52,12 +55,14 @@ export function registraLettura(app) {
     const vp = page.getViewport({ scale: 1 });
     page.cleanup();
     // posizioni in punti PDF (indipendenti da zoom e rotazione della vista)
-    st.parole = paroleInOrdine(t.frags).map((w) => {
+    const parole = paroleInOrdine(t.frags);
+    const confini = confiniBlocchi(parole);
+    st.parole = parole.map((w) => {
       const [x0, y0] = vp.convertToPdfPoint(w.x0, w.bottom);
       const [x1, y1] = vp.convertToPdfPoint(w.x1, w.top);
       return { text: w.text, x0: Math.min(x0, x1), x1: Math.max(x0, x1), y0: Math.min(y0, y1), y1: Math.max(y0, y1) };
     });
-    st.frasi = dividiFrasi(st.parole.map((w) => w.text));
+    st.frasi = dividiFrasi(st.parole.map((w) => w.text), { confini });
     st.pagina = i; st.idx = 0;
   }
 

@@ -28,6 +28,17 @@ async function workerBlobUrl(langs) {
   return URL.createObjectURL(new Blob([prelude, code], { type: 'application/javascript' }));
 }
 
+/** Rifiuta subito la promessa se l'operazione viene annullata (i worker terminati non rispondono più). */
+export function conAbort(promise, signal) {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(new DOMException('Annullato', 'AbortError'));
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(new DOMException('Annullato', 'AbortError'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then((v) => { signal.removeEventListener('abort', onAbort); resolve(v); }, (e) => { signal.removeEventListener('abort', onAbort); reject(e); });
+  });
+}
+
 /** Crea un worker Tesseract pronto per le lingue indicate (es. ['ita','eng']). */
 export async function creaWorkerOcr(langs, { onLog } = {}) {
   dbg('worker: script');
@@ -85,7 +96,13 @@ export async function riconosciPagine(opts) {
   const onAbort = () => { for (const w of workers) w.terminate().catch(() => {}); };
   signal?.addEventListener('abort', onAbort, { once: true });
   try {
-    for (let k = 0; k < nWorkers; k++) { check(); workers.push(await creaWorkerOcr(langs)); dbg('worker pronto', k); }
+    // i worker partono in parallelo; quelli creati vengono registrati subito per poterli terminare all'annullamento
+    await conAbort(Promise.all(Array.from({ length: nWorkers }, async (_, k) => {
+      const w = await creaWorkerOcr(langs);
+      workers.push(w);
+      if (signal?.aborted) w.terminate().catch(() => {});
+      dbg('worker pronto', k);
+    })), signal);
     check();
     let next = 0; let fatte = 0;
     const totale = pages.length;
@@ -93,6 +110,7 @@ export async function riconosciPagine(opts) {
       while (next < pages.length) {
         check();
         const index = pages[next++];
+        const ordine = next;
         dbg('page', index);
         const page = await pdf.getPage(index + 1);
         try {
@@ -107,7 +125,8 @@ export async function riconosciPagine(opts) {
           scale = Math.min(scale, maxSide / Math.max(base.width, base.height), Math.sqrt(maxPixels / (base.width * base.height)));
           const vp = page.getViewport({ scale });
           dbg('render', index, scale);
-          let canvas = await renderPage(pdf, index, scale);
+          if (fatte === 0) progress?.set(0, `Riconosco il testo: pagina ${ordine} di ${totale}…`);
+          let canvas = await conAbort(renderPage(pdf, index, scale), signal);
           dbg('rendered', index);
           check();
           const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -116,12 +135,13 @@ export async function riconosciPagine(opts) {
           canvas.width = 0; canvas.height = 0; canvas = null; // libera subito la memoria del canvas
           const immagine = new Blob([pgmGrigio(img.data, w, h)], { type: 'image/x-portable-graymap' });
           dbg('recognize', index);
-          const r = await worker.recognize(immagine, { rotateAuto: !!deskew }, { blocks: true, text: false, imageColor: !!deskew });
+          const r = await conAbort(worker.recognize(immagine, { rotateAuto: !!deskew }, { blocks: true, text: false, imageColor: !!deskew }), signal);
           check();
           const rot = r.data.rotateRadians || 0;
           const entry = { index, viewportTransform: vp.transform, pxSize: [w, h], ptSize: [base.width, base.height], rotateRadians: rot, scale };
           if (deskew && Math.abs(rot) > 0.003 && r.data.imageColor) {
-            entry.immagine = r.data.imageColor; // PNG base64 dell'immagine raddrizzata (stesse coordinate delle parole)
+            // immagine raddrizzata (stesse coordinate delle parole), ricompressa in JPEG per non gonfiare il file
+            entry.immagine = await inJpeg(r.data.imageColor).catch(() => r.data.imageColor);
           }
           const lines = righeDaRisultato(r.data);
           let imgToPdf;
@@ -138,7 +158,7 @@ export async function riconosciPagine(opts) {
         }
       }
     };
-    await Promise.all(workers.map(lavora));
+    await conAbort(Promise.all(workers.map((w) => { const pr = lavora(w); pr.catch(() => {}); return pr; })), signal);
     check();
   } finally {
     signal?.removeEventListener('abort', onAbort);
@@ -146,6 +166,18 @@ export async function riconosciPagine(opts) {
   }
   results.sort((a, b) => a.index - b.index);
   return { pagine: results, saltate: saltate.sort((a, b) => a - b), ms: performance.now() - t0 };
+}
+
+async function inJpeg(b64png) {
+  const bmp = await createImageBitmap(new Blob([base64ToBytes(b64png)], { type: 'image/png' }));
+  const c = document.createElement('canvas');
+  c.width = bmp.width; c.height = bmp.height;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(bmp, 0, 0); bmp.close?.();
+  const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', 0.85));
+  c.width = 0; c.height = 0;
+  return new Uint8Array(await blob.arrayBuffer());
 }
 
 function base64ToBytes(b64) {
@@ -167,7 +199,7 @@ export async function applicaTestoOcr(pdfDoc, PDFLib, font, risultati) {
     if (!page) continue;
     if (r.immagine) {
       // pagina storta: sostituita dall'immagine raddrizzata, in JPEG se possibile
-      const bytes = base64ToBytes(r.immagine);
+      const bytes = typeof r.immagine === 'string' ? base64ToBytes(r.immagine) : r.immagine;
       const img = bytes[0] === 0x89 ? await pdfDoc.embedPng(bytes) : await pdfDoc.embedJpg(bytes);
       const [w, h] = r.ptSize;
       page.node.set(PDFName.of('Contents'), pdfDoc.context.obj([]));

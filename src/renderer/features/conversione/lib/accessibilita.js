@@ -37,7 +37,7 @@ export function controllaAccessibilita(pdfDoc, PDFLib, dati = {}) {
   const { PDFDict, PDFName, PDFBool, PDFArray, PDFNumber } = PDFLib;
   const cat = pdfDoc.catalog;
   const out = [];
-  const add = (id, ok, titolo, spiegazione, correzione = null, livello) => out.push({ id, ok, livello: livello || (ok ? 'ok' : 'errore'), titolo, spiegazione, correzione: ok ? null : correzione });
+  const add = (id, ok, titolo, spiegazione, correzione = null, livello, valore) => out.push({ id, ok, livello: livello || (ok ? 'ok' : 'errore'), titolo, spiegazione, correzione: ok ? null : correzione, valore });
 
   // tag e struttura
   const mark = cat.lookup(PDFName.of('MarkInfo'));
@@ -52,7 +52,7 @@ export function controllaAccessibilita(pdfDoc, PDFLib, dati = {}) {
   // titolo
   let title = '';
   try { title = pdfDoc.getTitle() || ''; } catch { /* */ }
-  add('titolo', !!title.trim(), title.trim() ? `Titolo: «${title.trim()}»` : 'Manca il titolo del documento', title.trim() ? '' : 'Il titolo viene letto per primo dai lettori di schermo e mostrato nelle schede.', 'titolo');
+  add('titolo', !!title.trim(), title.trim() ? `Titolo: «${title.trim()}»` : 'Manca il titolo del documento', title.trim() ? '' : 'Il titolo viene letto per primo dai lettori di schermo e mostrato nelle schede.', 'titolo', undefined, title.trim());
   const vp = cat.lookup(PDFName.of('ViewerPreferences'));
   const showTitle = vp instanceof PDFDict && vp.lookup(PDFName.of('DisplayDocTitle')) === PDFBool.True;
   add('mostraTitolo', showTitle, showTitle ? 'Nella finestra compare il titolo' : 'Nella finestra compare il nome del file, non il titolo', showTitle ? '' : 'Impostazione richiesta da PDF/UA: si corregge con un clic.', 'mostraTitolo', showTitle ? 'ok' : 'avviso');

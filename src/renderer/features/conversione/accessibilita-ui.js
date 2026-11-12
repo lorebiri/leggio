@@ -53,7 +53,7 @@ function mostra(app, risultati) {
     if (tipo === 'tag') return tagTool ? app.tools.run(tagTool.id) : app.ui.toast('La preparazione dei tag non è ancora disponibile in questa versione.', { kind: 'info' });
     if (tipo === 'segnalibri') { const t = app.tools.list().find((x) => /bookmark|segnalib/i.test(`${x.id} ${x.keywords}`)); return t ? app.tools.run(t.id) : app.ui.toast('Aggiungi i segnalibri dal pannello Segnalibri.'); }
     if (tipo === 'titolo') {
-      const t = await app.ui.prompt('Titolo del documento', '', { title: 'Aggiungi titolo', okLabel: 'Imposta' });
+      const t = await app.ui.prompt('Titolo del documento', app.activeDoc?.name.replace(/\.pdf$/i, '') || '', { title: 'Aggiungi titolo', okLabel: 'Imposta' });
       if (!t?.trim()) return;
       await app.editWithPdfLib('Titolo del documento impostato', (d, L) => { d.setTitle(t.trim(), { showInWindowTitleBar: true }); });
     } else if (tipo === 'lingua') {
@@ -70,7 +70,7 @@ function mostra(app, risultati) {
     h('p', { class: 'conv-esito ' + (errori.length ? 'ko' : 'ok'), role: 'status' }, errori.length ? `${errori.length} ${errori.length === 1 ? 'problema' : 'problemi'}${avvisi.length ? ` e ${avvisi.length} ${avvisi.length === 1 ? 'avviso' : 'avvisi'}` : ''}` : avvisi.length ? `Nessun problema grave, ${avvisi.length} ${avvisi.length === 1 ? 'avviso' : 'avvisi'}` : 'Nessun problema trovato'),
     correzioniRapide.length > 1 ? h('button', { class: 'btn primary', onclick: async () => {
       const v = await app.ui.dialog({ title: 'Correzione rapida', fields: [
-        { name: 't', label: 'Titolo del documento', type: 'text', value: '' },
+        { name: 't', label: 'Titolo del documento', type: 'text', value: risultati.find((x) => x.id === 'titolo')?.valore || app.activeDoc?.name.replace(/\.pdf$/i, '') || '' },
         { name: 'l', label: 'Lingua principale', type: 'select', value: 'it-IT', options: LINGUE.map(([value, label]) => ({ value, label })) },
       ], okLabel: 'Correggi' });
       if (!v) return;

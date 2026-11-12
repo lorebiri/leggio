@@ -12,7 +12,7 @@ const MIME = {
 };
 
 /** Estrae la struttura di tutte le pagine richieste, una per volta (memoria costante). */
-export async function estraiStruttura(pdf, pages, { progress, from = 0, to = 1, label = 'Analizzo' } = {}) {
+export async function estraiStruttura(pdf, pages, { progress, from = 0, to = 1, label = 'Analizzo', keepFrags = false } = {}) {
   const signal = progress?.signal;
   const bodySize = await corpoDocumento(pdf, pages, signal);
   const out = [];
@@ -23,7 +23,7 @@ export async function estraiStruttura(pdf, pages, { progress, from = 0, to = 1, 
     let t;
     try { t = await testoPagina(pdf, i); } catch (err) { t = { frags: [], width: 595, height: 842, chars: 0, errore: messaggioErrore(err) }; }
     const blocks = ricostruisciPagina(t.frags, { width: t.width, height: t.height, bodySize });
-    out.push({ index: i, blocks, width: t.width, height: t.height, chars: t.chars, frags: t.frags, errore: t.errore });
+    out.push({ index: i, blocks, width: t.width, height: t.height, chars: t.chars, frags: keepFrags ? t.frags : null, errore: t.errore });
     const eta = stimaTempo(performance.now() - t0, k + 1, pages.length);
     progress?.set(from + (to - from) * ((k + 1) / pages.length), `${label}: pagina ${k + 1} di ${pages.length}${eta ? ' · ' + eta : ''}`);
     if (k % 8 === 7) await new Promise((r) => setTimeout(r)); // lascia respirare l'interfaccia
@@ -70,7 +70,7 @@ export async function convertiPdf(app, pdf, formato, opts = {}) {
     return pptx(slides, { title });
   }
   const conImmagini = opts.immaginiPagina || 'senza-testo';
-  const strutt = await estraiStruttura(pdf, pages, { progress, to: conImmagini === 'mai' ? 1 : 0.7 });
+  const strutt = await estraiStruttura(pdf, pages, { progress, to: conImmagini === 'mai' ? 1 : 0.7, keepFrags: formato === 'xlsx' || formato === 'csv' });
   if (['docx', 'odt', 'html'].includes(formato) && conImmagini !== 'mai') {
     const target = strutt.filter((s) => conImmagini === 'tutte' || s.chars < 20);
     for (let k = 0; k < target.length; k++) {
