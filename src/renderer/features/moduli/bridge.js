@@ -17,3 +17,9 @@ export function onProgress(fn) {
   if (!isDesktop()) return () => {};
   try { return window.leggio.on('feat:moduli:progress', fn); } catch { return () => {}; }
 }
+
+/** Eventi dal processo principale (canale «feat:…»). → funzione per smettere di ascoltare */
+export function onEvent(channel, fn) {
+  if (!isDesktop()) return () => {};
+  try { return window.leggio.on(channel, fn); } catch { return () => {}; }
+}

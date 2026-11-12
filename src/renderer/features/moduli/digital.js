@@ -1,6 +1,6 @@
 // Firma digitale con certificato («Usa un certificato»), firma CAdES .p7m, firma di più file, ID digitale,
 // verifica delle firme con verdetto in italiano. Le operazioni crittografiche avvengono nel processo principale.
-import { isDesktop, invoke, onProgress } from './bridge.js';
+import { isDesktop, invoke, onProgress, onEvent } from './bridge.js';
 import { countSignatures } from './formtools.js';
 
 const fmtDate = (iso, time = true) => { if (!iso) return '—'; const d = new Date(iso); return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', ...(time ? { hour: '2-digit', minute: '2-digit' } : {}) }); };
@@ -13,40 +13,78 @@ function desktopOnly(app, what) {
   });
 }
 
-/** Campo «ID digitale»: pulsante per scegliere il file, ricorda l'ultimo scelto nella sessione. */
 let sessionId = null; // { name, bytes } — solo in memoria, mai salvato su disco; la password non viene mai conservata
-function idField(app) {
+
+/**
+ * Campo «Certificato»: certificati del sistema e delle smart card (portachiavi macOS / archivio Windows),
+ * file .p12/.pfx, oppure il programma di firma installato. Restituisce la scelta come credenziale.
+ */
+function certificateField(app, systemList, { allowExternal = true, lastChoice } = {}) {
   return {
-    name: 'id', label: 'ID digitale (file .p12 o .pfx)', type: 'custom',
-    help: 'È il file del certificato che ti ha dato il tuo ente o che hai creato con «Crea ID digitale».',
+    name: 'cred', label: 'Firma con', type: 'custom',
     render(c) {
       const { h } = app.ui;
-      const label = h('span', { class: 'mod-idname' }, sessionId ? sessionId.name : 'Nessun file scelto');
-      const btn = h('button', { type: 'button', class: 'btn small', onclick: async () => {
-        const f = (await app.platform.openFiles({ filters: P12_FILTERS, raw: true, title: 'Scegli il tuo ID digitale' }))?.[0];
-        if (!f) return;
-        if (f.bytes.length > 1024 * 1024) { app.ui.toast('Il file è troppo grande per essere un ID digitale.', { kind: 'error' }); return; }
-        sessionId = { name: f.name, bytes: f.bytes }; label.textContent = f.name;
-      } }, 'Scegli…');
-      c.append(h('div', { class: 'mod-idrow' }, label, btn));
-      return { get: () => sessionId };
+      const opts = [];
+      for (const x of systemList.ids || []) {
+        const detail = [x.fiscalCode && 'CF ' + x.fiscalCode, 'emesso da ' + x.issuer, (x.expired ? 'SCADUTO il ' : 'valido fino al ') + fmtDate(x.notAfter, false)].filter(Boolean).join(' · ');
+        opts.push({ value: x.id, title: x.subject + (x.organization ? ' — ' + x.organization : ''), detail, badge: x.qualified ? 'qualificato' : x.source === 'smart card' ? 'smart card' : x.selfSigned ? 'autofirmato' : '', disabled: x.expired });
+      }
+      opts.push({ value: 'p12', title: 'File ID digitale (.p12 o .pfx)…', detail: sessionId ? 'Scelto: ' + sessionId.name : 'Il file del certificato con la sua password' });
+      if (allowExternal) opts.push({ value: 'external', title: 'Programma di firma installato (Dike, ArubaSign, FirmaOK…)', detail: 'Leggio apre il documento nel programma e riapre da solo il file firmato' });
+      const first = opts.find((o) => o.value === lastChoice && !o.disabled) || opts.find((o) => !o.disabled);
+      let chosen = first?.value;
+      const pwd = h('input', { type: 'password', autocomplete: 'new-password', placeholder: 'Password del file .p12/.pfx', 'aria-label': 'Password dell\'ID digitale' });
+      const fileLabel = h('span', { class: 'mod-idname' }, sessionId ? sessionId.name : 'Nessun file scelto');
+      const p12Row = h('div', { class: 'mod-p12row' },
+        h('div', { class: 'mod-idrow' }, fileLabel, h('button', { type: 'button', class: 'btn small', onclick: async () => {
+          const f = (await app.platform.openFiles({ filters: P12_FILTERS, raw: true, title: 'Scegli il tuo ID digitale' }))?.[0];
+          if (!f) return;
+          if (f.bytes.length > 1024 * 1024) { app.ui.toast('Il file è troppo grande per essere un ID digitale.', { kind: 'error' }); return; }
+          sessionId = { name: f.name, bytes: f.bytes }; fileLabel.textContent = f.name;
+        } }, 'Scegli…')), pwd);
+      const group = h('div', { class: 'mod-certlist', role: 'radiogroup', 'aria-label': 'Certificato con cui firmare' });
+      const name = 'cert' + Math.random().toString(36).slice(2);
+      const sync = () => { p12Row.hidden = chosen !== 'p12'; };
+      for (const o of opts) {
+        const input = h('input', { type: 'radio', name, value: o.value, checked: o.value === chosen, disabled: o.disabled, onchange: () => { chosen = o.value; sync(); } });
+        group.append(h('label', { class: 'mod-cert' + (o.disabled ? ' disabled' : '') }, input,
+          h('span', { class: 'mod-cert-txt' }, h('strong', {}, o.title, o.badge ? h('span', { class: 'mod-badge' }, o.badge) : null), h('small', {}, o.detail))));
+      }
+      c.append(group, p12Row);
+      if (systemList.note) c.append(h('p', { class: 'help' }, systemList.note));
+      sync();
+      return { get: () => {
+        if (chosen === 'p12') return sessionId ? { type: 'p12', p12: sessionId.bytes, password: pwd.value, choice: 'p12' } : { missing: 'Scegli il file del tuo ID digitale (.p12 o .pfx).' };
+        if (chosen === 'external') return { type: 'external', choice: 'external' };
+        return chosen ? { type: 'system', id: chosen, choice: chosen } : { missing: 'Scegli un certificato.' };
+      } };
     },
   };
 }
 
-async function askCertificate(app, { title, extraFields = [], okLabel = 'Firma', initial = {} }) {
-  let values = initial;
+async function loadSystemIds(app) {
+  const r = await app.ui.withProgress('Lettura dei certificati', async (p) => { p.set(null, 'Certificati del sistema e smart card…'); return invoke('moduli:list-system-ids', {}); }, { cancellable: false });
+  return r?.ok ? r.result : { supported: false, ids: [], note: r?.error || '' };
+}
+
+/** Sceglie il certificato e lo controlla. → { ...valori, credential, cert } | { ...valori, external:true } | null */
+async function askCertificate(app, store, { title, extraFields = [], okLabel = 'Firma', allowExternal = true }) {
+  const systemList = await loadSystemIds(app);
+  let values = {};
   for (;;) {
     const v = await app.ui.dialog({
-      title, width: 560, okLabel,
-      fields: [idField(app), { name: 'password', label: 'Password dell\'ID digitale', type: 'password', value: '' }, ...extraFields.map((f) => ({ ...f, value: values[f.name] ?? f.value }))],
-      validate: (x) => (!x.id ? 'Scegli il file del tuo ID digitale (.p12 o .pfx).' : null),
+      title, width: 620, okLabel,
+      fields: [certificateField(app, systemList, { allowExternal, lastChoice: store.getPref('lastCert', '') }), ...extraFields.map((f) => ({ ...f, value: values[f.name] ?? f.value }))],
+      validate: (x) => x.cred?.missing || null,
     });
     if (!v) return null;
     values = v;
-    const r = await invoke('moduli:describe-id', { p12: v.id.bytes, password: v.password });
-    if (r.ok) return { ...v, cert: r.result };
-    await app.ui.dialog({ title: 'ID digitale non utilizzabile', message: r.error, cancelLabel: null, okLabel: 'Riprova' });
+    store.setPref('lastCert', v.cred.choice);
+    if (v.cred.type === 'external') return { ...v, external: true };
+    const { choice, ...credential } = v.cred;
+    const r = await app.ui.withProgress('Controllo del certificato', async (p) => { p.set(null, 'Apertura del certificato…'); return invoke('moduli:describe-id', { credential }); }, { cancellable: false });
+    if (r?.ok) return { ...v, credential, cert: r.result };
+    await app.ui.dialog({ title: 'Certificato non utilizzabile', message: r?.error || 'Errore', cancelLabel: null, okLabel: 'Riprova' });
   }
 }
 
@@ -126,15 +164,16 @@ export function registerDigital(app, store) {
         { name: 'location', label: 'Luogo (facoltativo)', type: 'text', value: store.getPref('dsLocation', ''), placeholder: 'es. Sesto Fiorentino' },
         { name: 'standard', label: 'Formato della firma nel PDF', type: 'select', value: store.getPref('dsStandard', 'cades'), options: [{ value: 'cades', label: 'PAdES europeo (consigliato)' }, { value: 'pkcs7', label: 'Compatibile con lettori vecchi (adbe.pkcs7)' }] },
       ];
-      const v = await askCertificate(app, { title: 'Usa un certificato', extraFields: extra, okLabel: 'Continua' });
+      const v = await askCertificate(app, store, { title: 'Usa un certificato', extraFields: extra, okLabel: 'Continua' });
       if (!v) return;
+      if (v.external) return externalSign(app, store, doc);
       for (const k of ['kind', 'visible', 'image', 'reason', 'location', 'standard']) if (k in v) store.setPref('ds' + k[0].toUpperCase() + k.slice(1), v[k]);
       const warn = certWarnings(v.cert);
       const confirmMsg = `Firmerai come «${v.cert.subject}»${v.cert.organization ? ` (${v.cert.organization})` : ''}, certificato valido fino al ${fmtDate(v.cert.notAfter, false)}.` + (warn.length ? '\n\n' + warn.join('\n') : '');
       if (v.kind === 'cades') {
         if (!(await app.ui.confirm(confirmMsg, { title: 'Conferma la firma', okLabel: 'Firma e salva .p7m' }))) return;
         const bytes = await app.currentBytes(doc);
-        const r = await app.ui.withProgress('Firma in corso', async (p) => { p.set(null, 'Creazione della busta .p7m…'); return invoke('moduli:sign-p7m', { data: bytes, p12: v.id.bytes, password: v.password }); }, { cancellable: false });
+        const r = await app.ui.withProgress('Firma in corso', async (p) => { p.set(null, 'Creazione della busta .p7m…'); return invoke('moduli:sign-p7m', { data: bytes, credential: v.credential }); }, { cancellable: false });
         if (!r?.ok) return app.ui.dialog({ title: 'Firma non riuscita', message: r?.error || 'Errore sconosciuto', cancelLabel: null, okLabel: 'Chiudi' });
         const saved = await app.exportFile(r.result.bytes, doc.name.replace(/(\.pdf)?$/i, '.pdf.p7m'), [{ name: 'File firmato (.p7m)', extensions: ['p7m'] }]);
         if (saved) app.ui.toast('File firmato salvato: ' + (saved.name || ''), { kind: 'success', timeout: 5000 });
@@ -153,15 +192,32 @@ export function registerDigital(app, store) {
       };
       let result = null;
       const ok = await app.applyEdit('Firma digitale', async (bytes) => {
-        const r = await app.ui.withProgress('Firma in corso', async (p) => { p.set(null, 'Calcolo della firma e verifica del risultato…'); return invoke('moduli:sign', { pdf: bytes, p12: v.id.bytes, password: v.password, options }); }, { cancellable: false });
+        const r = await app.ui.withProgress('Firma in corso', async (p) => { p.set(null, 'Calcolo della firma e verifica del risultato…'); return invoke('moduli:sign', { pdf: bytes, credential: v.credential, options }); }, { cancellable: false });
         if (!r?.ok) throw new Error(r?.error || 'Firma non riuscita');
         result = r.result;
         return r.result.bytes;
-      }, doc).catch((err) => { app.ui.dialog({ title: 'Firma non riuscita', message: err.message, cancelLabel: null, okLabel: 'Chiudi' }); return false; });
+      }, doc, { signatureWarning: false }).catch(async (err) => {
+        // ripiego: con smart card e certificati di sistema si può sempre passare dal programma del fornitore
+        if (v.credential.type === 'system') {
+          const c = await app.ui.choice({ title: 'Firma non riuscita', message: err.message + '\n\nPuoi firmare con il programma installato dal tuo fornitore (Dike, ArubaSign, FirmaOK…): Leggio riaprirà da solo il file firmato.', buttons: [{ value: 'close', label: 'Chiudi' }, { value: 'ext', label: 'Firma con il programma installato', primary: true }] });
+          if (c === 'ext') externalSign(app, store, doc);
+        } else app.ui.dialog({ title: 'Firma non riuscita', message: err.message, cancelLabel: null, okLabel: 'Chiudi' });
+        return false;
+      });
       if (ok && result) {
         const save = await app.ui.dialog({ title: 'Documento firmato', message: `${result.verification.verdict.title}. Salva ora il documento: ${doc.path ? 'puoi sovrascrivere l\'originale o farne una copia' : 'scegli dove'}.`, okLabel: 'Salva con nome…', cancelLabel: 'Più tardi' });
         if (save) await app.save(doc, { as: true });
       }
+    },
+  });
+
+  app.registerTool({
+    id: 'sign-external', name: 'Firma con il programma installato', category: 'moduli', icon: 'signature',
+    description: 'Apre il documento in Dike, ArubaSign, FirmaOK… e riapre da solo il file firmato',
+    keywords: 'dike arubasign firmaok firmacerta gosign smart card token cns firma qualificata programma esterno p7m',
+    async run() {
+      if (!isDesktop()) return desktopOnly(app, 'Firma con il programma installato');
+      return externalSign(app, store, app.activeDoc);
     },
   });
 
@@ -172,7 +228,7 @@ export function registerDigital(app, store) {
     keywords: 'firma in blocco più file massiva multipla p7m pades cartella',
     async run() {
       if (!isDesktop()) return desktopOnly(app, 'Firma più file');
-      const v = await askCertificate(app, { title: 'Firma più file', okLabel: 'Scegli i file…', extraFields: [
+      const v = await askCertificate(app, store, { title: 'Firma più file', okLabel: 'Scegli i file…', allowExternal: false, extraFields: [
         { name: 'format', label: 'Tipo di firma', type: 'radio', value: store.getPref('batchFmt', 'pdf'), options: [{ value: 'pdf', label: 'Firma nei PDF (PAdES, invisibile) → nome_firmato.pdf' }, { value: 'p7m', label: 'Buste .p7m (CAdES), anche per file non PDF → nome.pdf.p7m' }] },
         { name: 'reason', label: 'Motivo (facoltativo)', type: 'text', value: store.getPref('dsReason', '') },
         { name: 'info', type: 'info', text: 'I file originali non vengono modificati: le copie firmate sono salvate accanto agli originali.' },
@@ -183,7 +239,7 @@ export function registerDigital(app, store) {
       const r = await app.ui.withProgress('Firma dei file', async (p) => {
         p.set(null, 'Scegli i file da firmare…');
         off = onProgress((x) => p.set(x.index / Math.max(1, x.total), `${x.index + 1} di ${x.total}: ${x.name}`));
-        return invoke('moduli:sign-batch', { p12: v.id.bytes, password: v.password, format: v.format, options: { reason: v.reason || '', subFilter: 'cades', name: v.cert.subject } });
+        return invoke('moduli:sign-batch', { credential: v.credential, format: v.format, options: { reason: v.reason || '', subFilter: 'cades', name: v.cert.subject } });
       }, { cancellable: false }).finally(() => off?.());
       if (!r?.ok) return app.ui.dialog({ title: 'Firma non riuscita', message: r?.error || 'Errore', cancelLabel: null, okLabel: 'Chiudi' });
       if (r.result.cancelled) return;
@@ -234,6 +290,51 @@ export function registerDigital(app, store) {
 
   // I file .p7m (apertura, trascinamento, verifica) sono gestiti dall'area «avanzati»:
   // un solo punto d'ingresso evita doppie finestre.
+}
+
+/**
+ * Ripiego «Firma con il programma installato»: apre il documento nel programma di firma del fornitore
+ * e osserva la cartella; quando compare il file firmato (.p7m o PDF firmato) Leggio lo apre da solo.
+ */
+async function externalSign(app, store, doc) {
+  let apps = (await invoke('moduli:external-apps', {}))?.result || [];
+  const { h } = app.ui;
+  let appId = store.getPref('extApp', '');
+  if (!apps.some((a) => a.id === appId)) appId = apps[0]?.id || '';
+  const v = await app.ui.dialog({
+    title: 'Firma con il programma installato', width: 560, okLabel: 'Apri nel programma',
+    message: 'Leggio apre il documento nel programma di firma (Dike, ArubaSign, FirmaOK…). Firma lì come al solito, salvando nella stessa cartella: quando il file firmato compare, Leggio lo apre da solo.',
+    fields: [{ name: 'app', label: 'Programma', type: 'custom', render(c) {
+      const sel = h('select', { 'aria-label': 'Programma di firma' });
+      const fill = () => { sel.textContent = ''; for (const a of apps) sel.append(h('option', { value: a.id, selected: a.id === appId }, a.name)); if (!apps.length) sel.append(h('option', { value: '' }, 'Nessun programma trovato')); };
+      fill();
+      c.append(h('div', { class: 'mod-idrow' }, sel, h('button', { type: 'button', class: 'btn small', onclick: async () => {
+        const r = await invoke('moduli:external-choose', {});
+        if (r?.ok && r.result) { apps = (await invoke('moduli:external-apps', {}))?.result || apps; appId = r.result.id; fill(); }
+      } }, 'Scegli programma…')));
+      return { get: () => sel.value };
+    } }],
+    validate: (x) => (!x.app ? 'Scegli il programma di firma (pulsante «Scegli programma…»).' : null),
+  });
+  if (!v) return;
+  store.setPref('extApp', v.app);
+  // se il documento è già su disco e non ha modifiche si apre l'originale, altrimenti una copia di lavoro
+  const unchanged = doc.path && !doc.dirty && !doc.formsDirty;
+  const payload = unchanged ? { appId: v.app, path: doc.path, name: doc.name } : { appId: v.app, pdf: await app.currentBytes(doc), name: doc.name };
+  const r = await invoke('moduli:external-sign', payload);
+  if (!r?.ok) return app.ui.dialog({ title: 'Programma non avviato', message: r?.error || 'Errore', cancelLabel: null, okLabel: 'Chiudi' });
+  const { token, folder } = r.result;
+  let off = null;
+  const t = app.ui.toast(`In attesa del file firmato nella cartella ${folder}…`, { timeout: 30 * 60 * 1000, action: { label: 'Smetti di attendere', run: () => { off?.(); invoke('moduli:external-cancel', { token }); } } });
+  off = onEvent('feat:moduli:external-result', async (res) => {
+    if (!res || res.token !== token) return;
+    off?.(); t.remove?.();
+    if (res.timeout) return app.ui.toast('Nessun file firmato comparso nella cartella: se hai firmato, aprilo con «Apri».', { kind: 'warning', timeout: 8000 });
+    if (res.error) return app.ui.toast('File firmato non leggibile: ' + res.error, { kind: 'error' });
+    app.ui.toast('File firmato trovato: ' + res.name, { kind: 'success' });
+    try { await (app.openFile ? app.openFile({ path: res.path, name: res.name, bytes: res.bytes }) : app.openBytes(res.bytes, { name: res.name, path: res.path })); }
+    catch (e) { app.reportError(e, 'Apertura del file firmato'); }
+  });
 }
 
 async function openP7m(app, f) {
