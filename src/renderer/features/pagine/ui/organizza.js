@@ -312,7 +312,7 @@ class Organizza {
     this.aperto = false; this.root.hidden = true;
     window.removeEventListener('keydown', this.onKey, true);
     this.app.el.root.classList.remove('pg-org-aperto');
-    if (this.barraLaterale) { this.app.sidebar.show(this.barraLaterale); this.barraLaterale = null; }
+    if (this.barraLaterale) { this.app.el.root.classList.remove('sidebar-closed'); this.barraLaterale = false; }
     return true;
   }
   mostra() {
@@ -321,7 +321,7 @@ class Organizza {
     window.addEventListener('keydown', this.onKey, true);
     this.app.el.root.classList.add('pg-org-aperto');
     // più spazio alla griglia: la barra laterale si richiude e torna com'era alla chiusura
-    if (!this.app.el.root.classList.contains('sidebar-closed')) { this.barraLaterale = this.app.sidebar.current; this.app.sidebar.close(); }
+    if (!this.app.el.root.classList.contains('sidebar-closed')) { this.barraLaterale = true; this.app.el.root.classList.add('sidebar-closed'); }
     this.render();
     requestAnimationFrame(() => { (this.cards.get(this.focus) || this.grid).focus({ preventScroll: true }); if (!this.focus) this.#scorriA(this.items[this.app.viewer.pageIndex]?.id); });
   }

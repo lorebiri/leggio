@@ -8,11 +8,17 @@ export function strumentoRitaglia(app) {
   let stato = null;
   const { h } = app.ui;
 
+  // (il nucleo usa convertToViewportRectangle, che pdf.js 6 non ha più: calcoliamo da due angoli)
+  function rettCss(i, [x1, y1, x2, y2]) {
+    const vp = app.viewer.getViewport(i);
+    const a = vp.convertToViewportPoint(x1, y1), b = vp.convertToViewportPoint(x2, y2);
+    return { left: Math.min(a[0], b[0]), top: Math.min(a[1], b[1]), width: Math.abs(b[0] - a[0]), height: Math.abs(b[1] - a[1]) };
+  }
   function disegna(i) {
     const ov = app.viewer.getOverlay(i); if (!ov) return;
     ov.querySelector('.pg-crop-rett')?.remove();
     const r = stato?.rett; if (!r || r.pagina !== i) return;
-    const css = app.viewer.pdfRectToCss(i, r.box);
+    const css = rettCss(i, r.box);
     const el = h('div', { class: 'pg-crop-rett', style: { left: css.left + 'px', top: css.top + 'px', width: css.width + 'px', height: css.height + 'px' } },
       ...['nw', 'ne', 'sw', 'se'].map((k) => h('span', { class: 'pg-h ' + k, 'data-h': k })),
       h('span', { class: 'pg-crop-misure' }, `${Math.round(ptToMm(Math.abs(r.box[2] - r.box[0])))} × ${Math.round(ptToMm(Math.abs(r.box[3] - r.box[1])))} mm`));
@@ -38,6 +44,8 @@ export function strumentoRitaglia(app) {
     ov.setPointerCapture?.(e.pointerId);
     aggiornaBarra();
   }
+  // evita che il trascinamento selezioni il testo della pagina
+  function mouseDown(e) { if (e.target.closest?.('.leggio-overlay')) { e.preventDefault(); window.getSelection()?.removeAllRanges(); } }
   function pointerMove(e) {
     const d = stato?.drag; if (!d) return;
     const p = app.viewer.clientToPdf(d.pagina, e.clientX, e.clientY); if (!p) return;
@@ -146,12 +154,14 @@ export function strumentoRitaglia(app) {
         stato.off = app.bus.on('page:rendered', ({ pageIndex }) => { if (stato?.rett?.pagina === pageIndex) disegna(pageIndex); });
         stato.offDoc = app.bus.on('document:changed', () => { if (stato) { stato.rett = null; aggiornaBarra(); } });
         app.viewer.container.addEventListener('pointerdown', pointerDown, true);
+        app.viewer.container.addEventListener('mousedown', mouseDown, true);
         window.addEventListener('pointermove', pointerMove);
         window.addEventListener('pointerup', pointerUp);
       },
       deactivate() {
         stato?.off?.(); stato?.offDoc?.();
         app.viewer.container.removeEventListener('pointerdown', pointerDown, true);
+        app.viewer.container.removeEventListener('mousedown', mouseDown, true);
         window.removeEventListener('pointermove', pointerMove);
         window.removeEventListener('pointerup', pointerUp);
         document.querySelectorAll('.pg-crop-rett').forEach((e) => e.remove());
