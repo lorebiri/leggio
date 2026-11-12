@@ -119,7 +119,7 @@ export async function compressTool(app) {
     const ok = await app.ui.dialog({ title: 'Riduci dimensioni file', okLabel: 'Salva la copia…', cancelLabel: 'Chiudi', body, width: 560 });
     if (ok) await salvaCopia(app, res.bytes, copyName(doc, 'ridotto'));
   } else {
-    const ok = await app.ui.dialog({ title: 'Riduci dimensioni file', okLabel: 'Sostituisci nel documento', cancelLabel: 'Annulla', body, width: 560 });
+    const ok = await app.ui.dialog({ title: 'Riduci dimensioni file', okLabel: 'Sostituisci nel documento', cancelLabel: 'Lascia perdere', body, width: 560 });
     if (ok) await app.applyEdit(`Dimensioni ridotte (−${pct}%)`, async () => res.bytes);
   }
   void st;
