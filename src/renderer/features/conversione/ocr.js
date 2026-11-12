@@ -5,7 +5,7 @@ import { pdfjs, fontkit } from '../../core/pdf.js';
 import workerScriptUrl from 'tesseract.js/dist/worker.min.js?url';
 import coreScriptUrl from 'tesseract.js-core/tesseract-core-simd-lstm.wasm.js?url';
 import { caricaRisorsa, blobRisorsa } from './lib/risorse.js';
-import { righeDaRisultato, disponiParole, invertiMatrice, caratteriTesto, bmpGrigio, stimaTempo } from './lib/ocr-layout.js';
+import { righeDaRisultato, disponiParole, invertiMatrice, caratteriTesto, pgmGrigio, stimaTempo } from './lib/ocr-layout.js';
 
 export const LINGUE_OCR = [
   { value: 'ita', label: 'Italiano' },
@@ -15,6 +15,7 @@ export const LINGUE_OCR = [
   { value: 'spa', label: 'Spagnolo' },
 ];
 
+const dbg = (...a) => { if (globalThis.__leggioOcrDebug) globalThis.__leggioOcrDebug.push([Math.round(performance.now()), ...a]); };
 const FAKE_LANG_BASE = 'https://leggio.invalid/ocr-lang';
 let workerBlobPromise = null;
 
@@ -29,14 +30,17 @@ async function workerBlobUrl(langs) {
 
 /** Crea un worker Tesseract pronto per le lingue indicate (es. ['ita','eng']). */
 export async function creaWorkerOcr(langs, { onLog } = {}) {
+  dbg('worker: script');
   const wurl = await workerBlobUrl(langs);
+  dbg('worker: core');
   const core = await blobRisorsa(coreScriptUrl, 'application/javascript');
+  dbg('worker: create');
   try {
     return await createWorker(langs, 1, {
       workerPath: wurl, workerBlobURL: false,
       corePath: core + '#tesseract-core.wasm.js', // il suffisso .js evita che tesseract cerchi una cartella
       langPath: FAKE_LANG_BASE, cacheMethod: 'none', gzip: true,
-      logger: onLog || (() => {}),
+      logger: onLog || ((m) => dbg('tess', m.status, m.progress)),
       errorHandler: (e) => console.warn('[ocr]', e),
     });
   } finally { URL.revokeObjectURL(wurl); }
@@ -81,7 +85,7 @@ export async function riconosciPagine(opts) {
   const onAbort = () => { for (const w of workers) w.terminate().catch(() => {}); };
   signal?.addEventListener('abort', onAbort, { once: true });
   try {
-    for (let k = 0; k < nWorkers; k++) { check(); workers.push(await creaWorkerOcr(langs)); }
+    for (let k = 0; k < nWorkers; k++) { check(); workers.push(await creaWorkerOcr(langs)); dbg('worker pronto', k); }
     check();
     let next = 0; let fatte = 0;
     const totale = pages.length;
@@ -89,6 +93,7 @@ export async function riconosciPagine(opts) {
       while (next < pages.length) {
         check();
         const index = pages[next++];
+        dbg('page', index);
         const page = await pdf.getPage(index + 1);
         try {
           if (skipText) {
@@ -101,14 +106,17 @@ export async function riconosciPagine(opts) {
           const maxSide = 5000; const maxPixels = 24e6;
           scale = Math.min(scale, maxSide / Math.max(base.width, base.height), Math.sqrt(maxPixels / (base.width * base.height)));
           const vp = page.getViewport({ scale });
+          dbg('render', index, scale);
           let canvas = await renderPage(pdf, index, scale);
+          dbg('rendered', index);
           check();
           const ctx = canvas.getContext('2d', { willReadFrequently: true });
           const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const w = canvas.width; const h = canvas.height;
           canvas.width = 0; canvas.height = 0; canvas = null; // libera subito la memoria del canvas
-          const bmp = new Blob([bmpGrigio(img.data, w, h)], { type: 'image/bmp' });
-          const r = await worker.recognize(bmp, { rotateAuto: !!deskew }, { blocks: true, text: false, imageColor: !!deskew });
+          const immagine = new Blob([pgmGrigio(img.data, w, h)], { type: 'image/x-portable-graymap' });
+          dbg('recognize', index);
+          const r = await worker.recognize(immagine, { rotateAuto: !!deskew }, { blocks: true, text: false, imageColor: !!deskew });
           check();
           const rot = r.data.rotateRadians || 0;
           const entry = { index, viewportTransform: vp.transform, pxSize: [w, h], ptSize: [base.width, base.height], rotateRadians: rot, scale };

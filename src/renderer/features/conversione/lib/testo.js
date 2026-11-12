@@ -89,7 +89,7 @@ export function costruisciSegmenti(frags, { gapFactor = 1.25 } = {}) {
         const needSpace = gap > 0.12 * size && !/\s$/.test(prev.str) && !/^\s/.test(it.str);
         if (needSpace) prev.str += ' ';
       }
-      cur.parts.push({ str: it.str, bold: it.bold, italic: it.italic, size });
+      cur.parts.push({ str: it.str, bold: it.bold, italic: it.italic, size, x: it.x, w: it.w });
       cur.x1 = Math.max(cur.x1, it.x + it.w);
       cur.x0 = Math.min(cur.x0, it.x);
     }
@@ -470,4 +470,37 @@ export function tabellaDaFrammenti(frags, { gapFactor = 1.0 } = {}) {
     }
     return cells;
   });
+}
+
+/**
+ * Parole con posizione, in ordine di lettura (per confronto e lettura ad alta voce).
+ * → [{ text, x0, x1, top, bottom }] (coordinate della viewport a scala 1)
+ */
+export function paroleInOrdine(frags) {
+  const segments = costruisciSegmenti(frags);
+  const out = [];
+  for (const region of ordineLettura(segments)) {
+    const lines = [...region].sort((a, b) => a.top - b.top || a.x0 - b.x0);
+    for (const seg of lines) {
+      for (const p of seg.parts) {
+        const str = p.str;
+        const n = str.length || 1;
+        const re = /\S+/g;
+        let m;
+        while ((m = re.exec(str))) {
+          const x0 = p.x + (p.w * m.index) / n;
+          const x1 = p.x + (p.w * (m.index + m[0].length)) / n;
+          out.push({ text: m[0], x0, x1, top: seg.y - p.size * 0.85, bottom: seg.y + p.size * 0.25 });
+        }
+      }
+    }
+  }
+  // parole spezzate tra due frammenti senza spazio ("Contrat"+"to") vengono riunite
+  const merged = [];
+  for (const w of out) {
+    const prev = merged[merged.length - 1];
+    if (prev && Math.abs(prev.top - w.top) < 0.5 && w.x0 - prev.x1 < 0.3 && w.x0 >= prev.x1 - 0.5) { prev.text += w.text; prev.x1 = w.x1; }
+    else merged.push({ ...w });
+  }
+  return merged;
 }

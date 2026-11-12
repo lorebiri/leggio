@@ -86,39 +86,20 @@ export function caratteriTesto(textContent) {
 }
 
 /**
- * Codifica RGBA (ImageData) in BMP 8 bit a toni di grigio con tavolozza.
- * Molto più veloce di PNG e letta nativamente da Leptonica/Tesseract.
+ * Codifica RGBA (ImageData) in PGM binario (P5) a toni di grigio: niente compressione, quindi
+ * velocissimo, e letto nativamente da Leptonica/Tesseract. (Il BMP no: tesseract.js lo ricodifica
+ * in JavaScript con un costo enorme sulle pagine grandi.)
  */
-export function bmpGrigio(rgba, width, height) {
-  const rowSize = (width + 3) & ~3;
-  const paletteSize = 256 * 4;
-  const offset = 14 + 40 + paletteSize;
-  const size = offset + rowSize * height;
-  const buf = new Uint8Array(size);
-  const dv = new DataView(buf.buffer);
-  buf[0] = 0x42; buf[1] = 0x4d;
-  dv.setUint32(2, size, true);
-  dv.setUint32(10, offset, true);
-  dv.setUint32(14, 40, true);
-  dv.setInt32(18, width, true);
-  dv.setInt32(22, height, true); // positivo: righe dal basso
-  dv.setUint16(26, 1, true);
-  dv.setUint16(28, 8, true);
-  dv.setUint32(34, rowSize * height, true);
-  dv.setUint32(38, 11811, true); dv.setUint32(42, 11811, true);
-  dv.setUint32(46, 256, true);
-  for (let i = 0; i < 256; i++) { const o = 54 + i * 4; buf[o] = i; buf[o + 1] = i; buf[o + 2] = i; }
-  for (let y = 0; y < height; y++) {
-    const src = y * width * 4;
-    const dst = offset + (height - 1 - y) * rowSize;
-    for (let x = 0; x < width; x++) {
-      const s = src + x * 4;
-      const a = rgba[s + 3];
-      // pixel trasparenti → bianco
-      let g = (rgba[s] * 77 + rgba[s + 1] * 150 + rgba[s + 2] * 29) >> 8;
-      if (a < 255) g = (g * a + 255 * (255 - a)) / 255 | 0;
-      buf[dst + x] = g;
-    }
+export function pgmGrigio(rgba, width, height) {
+  const head = new TextEncoder().encode(`P5\n${width} ${height}\n255\n`);
+  const buf = new Uint8Array(head.length + width * height);
+  buf.set(head, 0);
+  let o = head.length;
+  for (let i = 0, n = width * height * 4; i < n; i += 4) {
+    let g = (rgba[i] * 77 + rgba[i + 1] * 150 + rgba[i + 2] * 29) >> 8;
+    const a = rgba[i + 3];
+    if (a < 255) g = ((g * a + 255 * (255 - a)) / 255) | 0; // trasparente → bianco
+    buf[o++] = g;
   }
   return buf;
 }

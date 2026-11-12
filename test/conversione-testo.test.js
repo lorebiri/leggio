@@ -177,3 +177,13 @@ describe('paragrafo spezzato tra colonne', () => {
     expect(b[0].text).toContain('senza punto continua nella seconda colonna');
   });
 });
+
+import { paroleInOrdine } from '../src/renderer/features/conversione/lib/testo.js';
+describe('parole con posizione', () => {
+  it('divide i frammenti in parole con riquadri crescenti e riunisce i pezzi', () => {
+    const w = paroleInOrdine([L('Il gatto', 50, 100), { str: 'Contrat', x: 50, y: 120, w: 35, size: 10 }, { str: 'to firmato', x: 85, y: 120, w: 50, size: 10 }]);
+    expect(w.map((x) => x.text)).toEqual(['Il', 'gatto', 'Contratto', 'firmato']);
+    expect(w[1].x0).toBeGreaterThan(w[0].x1);
+    expect(w[0].top).toBeLessThan(100);
+  });
+});
