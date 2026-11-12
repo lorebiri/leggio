@@ -113,9 +113,16 @@ export async function safePageEdit(app, label, pageIndex, run, { exclude = [] } 
 // ------------------------------------------------------------------ documenti firmati
 
 export async function confirmSigned(app, doc = app.activeDoc) {
+  let pdfDoc = null;
+  try { pdfDoc = await readOnlyPdfLib(app, doc); } catch (err) { app.reportError(err, 'Impossibile leggere il documento per modificarlo'); return false; }
+  if (pdfDoc.isEncrypted) {
+    // aperto senza decifrare (protezione "solo proprietario"): riscrivere il contenuto lo rovinerebbe
+    await app.ui.dialog({ title: 'Documento protetto', message: 'Questo documento è protetto contro le modifiche. Per modificarne il contenuto togli prima la protezione (strumenti «Proteggi»), poi riprova.', cancelLabel: null, okLabel: 'Ho capito' });
+    return false;
+  }
   if (doc.data.modificaSignedOk) return true;
   let signed = false;
-  try { signed = hasDigitalSignatures(await readOnlyPdfLib(app, doc)); } catch { signed = false; }
+  try { signed = hasDigitalSignatures(pdfDoc); } catch { signed = false; }
   if (!signed) { doc.data.modificaSignedOk = true; return true; }
   const ok = await app.ui.confirm('Questo documento è firmato digitalmente. Se lo modifichi la firma non sarà più valida. Ti consigliamo di salvare le modifiche in una copia (File › Salva con nome) e di conservare l\'originale firmato.', { title: 'Documento firmato', okLabel: 'Modifica comunque' });
   if (ok) doc.data.modificaSignedOk = true;

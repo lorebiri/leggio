@@ -1,6 +1,6 @@
 // «Trova e sostituisci»: cerca nel testo vero del PDF, mostra le occorrenze, sostituisce una per una o tutte.
 import { findInPage, pageSearchText, replaceMatches } from '../operations.js';
-import { pageAnalysis, textContentOf, verifyPages, confirmSigned, ENV, forEachRenderedPage, toolLayer, clearLayers, place, rectToCss } from './common.js';
+import { pageAnalysis, readOnlyPdfLib, textContentOf, verifyPages, confirmSigned, ENV, forEachRenderedPage, toolLayer, clearLayers, place, rectToCss } from './common.js';
 
 const LAYER = 'lgm-find';
 
@@ -50,6 +50,8 @@ export function findReplaceTool(app) {
     const query = S.q.value;
     if (!query.trim()) { S.status.textContent = 'Scrivi il testo da cercare.'; return; }
     const doc = app.activeDoc; const n = doc.pageCount;
+    try { if ((await readOnlyPdfLib(app, doc)).isEncrypted) { S.status.textContent = 'Il documento è protetto contro le modifiche: togli prima la protezione (strumenti «Proteggi»).'; return; } }
+    catch (err) { app.reportError(err, 'Impossibile leggere il documento'); return; }
     const opts = { caseSensitive: S.cs.checked, wholeWord: S.ww.checked };
     const results = []; let unreadable = 0;
     const work = async (p) => {
