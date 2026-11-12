@@ -85,6 +85,24 @@ export default function register(app) {
   setupPortfolio(app, deps);
   setupSession(app, deps);
 
+  // ---------- apertura dal Finder / Esplora risorse / dialogo Apri ----------
+  if (typeof app.registerOpener === 'function') {
+    app.registerOpener({
+      id: 'avanzati-firmati', name: 'File firmati (.p7m)', extensions: [...SIGNED_EXT],
+      open: (f) => deps.openSignedFile(app, { bytes: f.bytes, name: f.name, path: f.path }),
+    });
+    app.registerOpener({
+      id: 'avanzati-xml', name: 'Fattura elettronica (.xml)', extensions: ['xml'],
+      open: (f) => (isFattura(f.bytes) ? deps.openFattura(app, f.bytes, f.name)
+        : looksLikeP7m(f.bytes) ? deps.openSignedFile(app, { bytes: f.bytes, name: f.name, path: f.path })
+        : app.ui.toast(`«${f.name}» non è una fattura elettronica.`, { kind: 'warning' })),
+    });
+    app.registerOpener({
+      id: 'avanzati-office', name: 'Documenti Office', extensions: [...OFFICE_EXT],
+      open: (f) => convertOfficeBytes(app, f.bytes, f.name),
+    });
+  }
+
   // ---------- file non PDF trascinati ----------
   app.bus.on('files:dropped-nonpdf', safe(async ({ files }) => {
     for (const f of files.slice(0, 50)) {

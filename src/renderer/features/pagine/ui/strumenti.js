@@ -93,7 +93,8 @@ export async function eliminaPagine(app, indici) {
   const n = app.activeDoc.pageCount;
   if (indici.length >= n) return app.ui.toast('Non puoi eliminare tutte le pagine: un PDF deve averne almeno una.', { kind: 'warning', timeout: 6000 });
   const ok = await modifica(app, indici.length === 1 ? `Eliminata la pagina ${indici[0] + 1}` : `Eliminate ${indici.length} pagine`, (d) => S.elimina(d, indici));
-  if (ok) app.ui.toast(indici.length === 1 ? `Eliminata la pagina ${indici[0] + 1}` : `Eliminate ${indici.length} pagine (${indiciInTesto(indici)})`, { kind: 'success', timeout: 10000, action: { label: 'Annulla', run: () => app.undo() } });
+  // il nucleo mostra già il messaggio con «Annulla» (10 s) dopo ogni modifica
+  return ok;
 }
 export async function eliminaBianche(app) {
   const doc = app.activeDoc;
