@@ -126,14 +126,19 @@ export function simplify(points, tol = 0.5) {
   }
   return points.filter((_, i) => keep[i]);
 }
-/** Smussamento a media mobile (strength 0..1), estremi fissi. */
-export function smooth(points, strength = 0.5) {
+/** Smussamento: media dei punti vicini entro un raggio (strength 0..1 → fino a ~3 pt); estremi fissi. */
+export function smooth(points, strength = 0.5, maxRadius = 3) {
   if (points.length < 3 || strength <= 0) return points.slice();
-  const k = Math.max(1, Math.round(strength * 4));
+  const R = strength * maxRadius;
   return points.map((p, i) => {
     if (i === 0 || i === points.length - 1) return p;
-    let sx = 0, sy = 0, n = 0;
-    for (let j = Math.max(0, i - k); j <= Math.min(points.length - 1, i + k); j++) { sx += points[j][0]; sy += points[j][1]; n++; }
+    let sx = p[0], sy = p[1], n = 1;
+    for (const dir of [-1, 1]) {
+      for (let j = i + dir; j >= 0 && j < points.length; j += dir) {
+        if (Math.hypot(points[j][0] - p[0], points[j][1] - p[1]) > R) break;
+        sx += points[j][0]; sy += points[j][1]; n++;
+      }
+    }
     return [sx / n, sy / n];
   });
 }

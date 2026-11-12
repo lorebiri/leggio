@@ -3,8 +3,8 @@
 // Le annotazioni sono "vere" annotazioni standard con aspetto /AP generato (appearance.js),
 // così le vedono allo stesso modo Acrobat, Anteprima, i browser e pdf.js.
 import { PDFName, PDFNumber, PDFString, PDFHexString, PDFArray, PDFDict, PDFRef, PDFStream, PDFBool, StandardFonts } from '@cantoo/pdf-lib';
-import { buildAppearance } from './appearance.js';
-import { normRect, rectFromPoints, pairs, quadsBounds, inflate, pdfDate, newName, r2, flattenPts } from './geom.js';
+import { buildAppearance, safeText } from './appearance.js';
+import { normRect, rectFromPoints, pairs, quadsBounds, inflate, pdfDate, newName, r2, flattenPts, wrapText } from './geom.js';
 
 /** Tipi considerati "commenti" (si escludono Link, Widget, Popup e simili). */
 export const COMMENT_TYPES = new Set(['Text', 'FreeText', 'Line', 'Square', 'Circle', 'Polygon', 'PolyLine', 'Highlight', 'Underline', 'Squiggly', 'StrikeOut', 'Stamp', 'Caret', 'Ink', 'FileAttachment', 'Sound']);
@@ -207,6 +207,18 @@ export async function getFonts(pdfDoc) {
   return f;
 }
 
+/** Casella di testo: allunga il rettangolo verso il basso finché tutto il testo ci sta (bordo superiore fisso). */
+export async function fitFreeText(pdfDoc, spec) {
+  if (spec.type !== 'FreeText' || !spec.text) return spec;
+  const { regular } = await getFonts(pdfDoc);
+  const fs = spec.fontSize || 12, pad = 2 + (spec.borderWidth ?? 1);
+  const [x1, y1, x2, y2] = spec.rect;
+  const lines = wrapText(safeText(regular, spec.text), x2 - x1 - pad * 2, (t) => regular.widthOfTextAtSize(t, fs));
+  const need = lines.length * fs * 1.18 + pad * 2;
+  if (y2 - y1 < need) spec.rect = [x1, y2 - need, x2, y2];
+  return spec;
+}
+
 /** Crea e assegna /AP /N al dizionario. spec.imageRef per i timbri da immagine. */
 export async function writeAppearance(pdfDoc, dict, spec) {
   const ctx = pdfDoc.context;
@@ -280,6 +292,7 @@ export async function createAnnot(pdfDoc, pageIndex, spec0, opts = {}) {
   if (!spec.rect) spec.rect = geometryBounds(spec);
   spec.rect = normRect(spec.rect);
   if (!spec.rect) throw new Error('Posizione dell\'annotazione non valida');
+  await fitFreeText(pdfDoc, spec);
   if (opts.imageBytes) {
     const img = opts.imageType === 'jpg' ? await pdfDoc.embedJpg(opts.imageBytes) : await pdfDoc.embedPng(opts.imageBytes);
     spec.imageRef = img.ref; spec.image = { w: img.width, h: img.height };
@@ -353,6 +366,7 @@ export async function updateAnnot(pdfDoc, target, changes = {}) {
   if ('width' in changes && spec.type === 'FreeText') spec.borderWidth = changes.width;
   if (changes.inkList) spec.rect = geometryBounds(spec);
   if (spec.type === 'Text' && get(dict, 'IRT')) spec.reply = true;
+  if ('text' in changes || 'fontSize' in changes) await fitFreeText(pdfDoc, spec);
   if (changes.author != null) dict.set(N('T'), txt(changes.author));
   // spostamento puro: l'aspetto originale segue il rettangolo, nessuna perdita di fedeltà
   if (onlyMove && hadAP) {

@@ -27,9 +27,9 @@ export function stampById(id) { return STAMPS.find((s) => s.id === id || s.name 
 
 /** Dimensione naturale (in punti) di un timbro vettoriale. */
 export function stampSize(label, sub, bold) {
-  const fs = 22;
-  const w = Math.max(bold.widthOfTextAtSize(label, fs), sub ? bold.widthOfTextAtSize(sub, 8) : 0) + 28;
-  return { w: Math.max(80, w), h: sub ? 52 : 40, fs };
+  const fs = 20;
+  const w = Math.max(bold.widthOfTextAtSize(label, fs), sub ? bold.widthOfTextAtSize(sub, 9) : 0) + 30;
+  return { w: Math.max(80, w), h: sub ? 58 : 44, fs };
 }
 
 /** Ripulisce il testo dai caratteri che il font standard non sa codificare. */
@@ -44,6 +44,7 @@ export function safeText(font, s) {
     if (font.__cs.has(cp)) out += ch;
     else if (ch === '’' || ch === '‘') out += font.__cs.has(39) ? "'" : '?';
     else if (ch === '\t') out += ' ';
+    else if (ch === '\n' || ch === '\r') out += ch;
     else out += font.__cs.has(63) ? '?' : '';
   }
   return out;
@@ -140,7 +141,8 @@ export function buildAppearance(spec, fonts = {}) {
     }
     case 'Square': case 'Circle': {
       const r = inflate(bbox, -w / 2);
-      const path = spec.cloud ? cloudPathOps(t === 'Square' ? rectVertices(inflate(r, -spec.cloud * 4)) : ellipsePoints(inflate(r, -spec.cloud * 4)), spec.cloud, w)
+      const inset = cloudInset(spec.cloud, w);
+      const path = spec.cloud ? cloudPathOps(t === 'Square' ? rectVertices(inflate(r, -inset)) : ellipsePoints(inflate(r, -inset)), spec.cloud, w)
         : t === 'Square' ? `${r2(r[0])} ${r2(r[1])} ${r2(r[2] - r[0])} ${r2(r[3] - r[1])} re` : ellipseOps(r);
       content = `/GS0 gs ${r2(w)} w ${dash}${col(spec.color, 'RG')} ${col(spec.interior, 'rg')} ${path} ${paintOp(spec, w)}`;
       break;
@@ -153,7 +155,7 @@ export function buildAppearance(spec, fonts = {}) {
       content = `/GS0 gs 1 j ${r2(w)} w ${dash}${col(spec.color, 'RG')} ${col(spec.interior, 'rg')} ${path} ${t === 'Polygon' ? paintOp(spec, w) : (w > 0 && spec.color ? 'S' : 'n')} `;
       if (t === 'PolyLine' && pts.length > 1 && spec.lineEnding) content += endings(spec, pts[0], pts[1], pts[pts.length - 1], pts[pts.length - 2], w);
       if (spec.measureLabel && fonts.regular) { const c = centroid(pts); content += labelOps(fonts.regular, spec.measureLabel, c, spec.color); fontsUsed.F1 = 'regular'; }
-      bbox = inflate(bbox, w * 2 + (spec.cloud ? 10 : 0));
+      bbox = inflate(bbox, w * 2 + (spec.cloud ? cloudInset(spec.cloud, w) : 0));
       break;
     }
     case 'Line': {
@@ -185,11 +187,11 @@ export function buildAppearance(spec, fonts = {}) {
       const c = s.color;
       content = `/GS0 gs ${col(c, 'RG')} ${col(c, 'rg')} 2.5 w ${rounded(1.5, 1.5, sw - 3, sh - 3, 7)} S 0.8 w ${rounded(5, 5, sw - 10, sh - 10, 5)} S `;
       const lw = bold.widthOfTextAtSize(safeText(bold, s.label), fs);
-      const ty = s.sub ? sh - 9 - fs * 0.78 : (sh - fs * 0.7) / 2;
+      const ty = s.sub ? sh - 13 - fs * 0.72 : (sh - fs * 0.72) / 2;
       content += `BT /F2 ${fs} Tf 1 0 0 1 ${r2((sw - lw) / 2)} ${r2(ty)} Tm ${enc(bold, s.label)} Tj ET `;
       if (s.sub) {
-        const subw = bold.widthOfTextAtSize(safeText(bold, s.sub), 8);
-        content += `BT /F2 8 Tf 1 0 0 1 ${r2((sw - subw) / 2)} 10 Tm ${enc(bold, s.sub)} Tj ET`;
+        const subw = bold.widthOfTextAtSize(safeText(bold, s.sub), 9);
+        content += `BT /F2 9 Tf 1 0 0 1 ${r2((sw - subw) / 2)} 12 Tm ${enc(bold, s.sub)} Tj ET`;
       }
       fontsUsed.F2 = 'bold';
       break;
@@ -200,6 +202,8 @@ export function buildAppearance(spec, fonts = {}) {
   return { content: content.trim(), bbox: bbox.map(r2), gs, fonts: fontsUsed, xobjects };
 }
 
+/** Quanto sporgono gli archi della nuvola (stessa formula di cloudPathOps). */
+export function cloudInset(intensity, w) { if (!intensity) return 0; const arc = Math.max(4, 6 * intensity + w * 2); return arc * 0.85 + w / 2; }
 function paintOp(spec, w) {
   const stroke = spec.color && w > 0; const fill = !!spec.interior;
   return stroke && fill ? 'B' : fill ? 'f' : stroke ? 'S' : 'n';

@@ -167,3 +167,21 @@ describe('modello e riepilogo', () => {
     expect(back.getPageCount()).toBe(1);
   });
 });
+
+import { hitTest } from '../src/renderer/features/commenti/tool-select.js';
+describe('selezione: hitTest', () => {
+  const list = [
+    { key: '1R', type: 'Square', rect: [0, 0, 100, 100] },
+    { key: '2R', type: 'Ink', rect: [0, 0, 100, 100], inkList: [[[0, 0], [100, 100]]] },
+    { key: '3R', type: 'Text', rect: [10, 10, 30, 30], irt: '1R' },
+    { key: '4R', type: 'Highlight', rect: [0, 200, 100, 230], quadPoints: [0, 230, 100, 230, 0, 220, 100, 220, 0, 212, 50, 212, 0, 200, 50, 200] },
+  ];
+  it('sceglie il commento più in alto e rispetta la geometria', () => {
+    expect(hitTest(list, 50, 50, 2).key).toBe('2R'); // sul tratto
+    expect(hitTest(list, 90, 10, 2).key).toBe('1R'); // lontano dal tratto → rettangolo sotto
+    expect(hitTest(list, 20, 20, 2).key).not.toBe('3R'); // le risposte non si selezionano
+    expect(hitTest(list, 80, 205, 1)).toBe(null); // fuori dalla seconda riga evidenziata
+    expect(hitTest(list, 20, 205, 1).key).toBe('4R');
+    expect(hitTest([], 0, 0, 1)).toBe(null);
+  });
+});

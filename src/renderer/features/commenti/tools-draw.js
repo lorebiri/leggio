@@ -127,7 +127,7 @@ export function freeTextTool(app) {
           const scale = app.viewer.scale;
           const res = await inlineEditor(app, ov, { left: p.x, top: p.y, fontPx: f.size * scale, color: f.color, bg: f.bg === 'none' ? 'transparent' : f.bg, border: f.border === 'none' ? '#1c7ed6' : f.border, minW: 60 });
           if (!res) return;
-          const rect = cssRectToPdf(app, pi, res.box);
+          const rect = cssRectToPdf(app, pi, { ...res.box, width: res.box.width + 6 * app.viewer.scale });
           const who = await author(app);
           await edit(app, 'Casella di testo aggiunta', (pdfDoc) => createAnnot(pdfDoc, pi, {
             type: 'FreeText', rect, text: res.text, fontSize: f.size, textColor: rgb(f.color), color: rgb(f.border), interior: rgb(f.bg), borderWidth: f.border === 'none' ? 0 : f.borderW,
@@ -193,7 +193,8 @@ export function inkTool(app) {
         };
         const onMove = (e) => {
           if (!cur) return;
-          for (const ev of e.getCoalescedEvents?.() || [e]) {
+          const co = e.getCoalescedEvents?.();
+          for (const ev of co && co.length ? co : [e]) {
             const p = eventPoint(app, cur.ov, ev);
             const last = cur.css[cur.css.length - 1];
             if (Math.hypot(p.x - last[0], p.y - last[1]) < 1.5) continue;

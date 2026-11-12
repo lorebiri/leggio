@@ -120,6 +120,17 @@ describe('annotazioni pdf-lib', () => {
     expect(() => deleteAllComments(d)).not.toThrow();
   });
 
+  it('la casella di testo si allunga per contenere tutto il testo', async () => {
+    const d = await blank(1);
+    const k = await createAnnot(d, 0, { type: 'FreeText', rect: [100, 700, 160, 712], text: 'Visto, si liquida\nseconda riga con accenti àèìòù', fontSize: 12, borderWidth: 1, color: [1, 0, 0] });
+    let a = readAllAnnotations(d)[0];
+    expect(a.rect[3]).toBe(712); // bordo superiore fermo
+    expect(a.rect[3] - a.rect[1]).toBeGreaterThan(40);
+    await updateAnnot(d, { key: k }, { text: 'corto' });
+    a = readAllAnnotations(d)[0];
+    expect(a.text).toBe('corto');
+  });
+
   it('target inesistente → errore chiaro', async () => {
     const d = await blank(1);
     await expect(updateAnnot(d, { key: '999R' }, { color: [0, 0, 0] })).rejects.toThrow(/non trovato/);

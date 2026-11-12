@@ -42,7 +42,7 @@ export async function placeStamp(pdfDoc, pageIndex, st, resolved, { cx, cy, size
   }
   const { bold } = await getFonts(pdfDoc);
   const { w, h } = stampSize(safeText(bold, resolved.label), resolved.sub ? safeText(bold, resolved.sub) : '', bold);
-  const W = w * size * 0.8, Hh = h * size * 0.8;
+  const W = w * size, Hh = h * size;
   const r = rect || [cx - W / 2, cy - Hh / 2, cx + W / 2, cy + Hh / 2];
   return createAnnot(pdfDoc, pageIndex, { type: 'Stamp', rect: r, stamp: resolved, icon: st.name || 'Leggio.Personalizzato', text: [resolved.label, resolved.sub].filter(Boolean).join(' — '), subject: 'Timbro' }, { author: who });
 }
@@ -146,7 +146,7 @@ export function stampTool(app) {
           const p = eventPoint(app, ov, e);
           const st = currentStamp(app);
           const size = S(app, 'stamp.size', 1) * app.viewer.scale;
-          const w = (st.image ? st.w : stampSize(st.label, st.sub, approxFont).w * 0.8) * size, hh = (st.image ? st.h : (st.sub ? 52 : 40) * 0.8) * size;
+          const w = (st.image ? st.w : stampSize(st.label, st.sub, approxFont).w) * size, hh = (st.image ? st.h : (st.sub ? 58 : 44)) * size;
           if (!ghost || ghost.ownerSVGElement?.parentNode !== ov) { ghost?.remove(); ghost = svgEl('rect', { class: 'lg-ghost lg-stamp-ghost', rx: 6, fill: 'none', stroke: rgbToHex(st.color || [0.1, 0.3, 0.7]) || '#1c5bb3', 'stroke-width': 2, 'stroke-dasharray': '5 3' }); previewSvg(ov).append(ghost); }
           Object.entries({ x: p.x - w / 2, y: p.y - hh / 2, width: w, height: hh }).forEach(([k, v]) => ghost.setAttribute(k, v));
         };
