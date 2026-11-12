@@ -479,9 +479,14 @@ export class App {
   #buildShell(root) {
     root.innerHTML = '';
     const tabs = h('div', { class: 'tabs', role: 'tablist', 'aria-label': 'Documenti aperti' });
+    const tabList = h('button', { class: 'tab-list', hidden: true, title: 'Tutte le schede aperte', 'aria-label': 'Tutte le schede aperte', 'aria-haspopup': 'menu', html: icon('pages', 16) }, h('span', { class: 'tab-count' }, '0'));
+    tabList.addEventListener('click', () => {
+      const r = tabList.getBoundingClientRect();
+      contextMenu(r.left, r.bottom + 4, this.docs.map((d) => ({ label: (d.dirty || d.formsDirty ? '● ' : '') + d.name, icon: d === this.activeDoc ? 'check' : 'file', run: () => this.activate(d) })));
+    });
     const titlebar = h('div', { class: 'titlebar' + (isMac ? ' mac' : '') },
       h('div', { class: 'brand' }, h('span', { class: 'brand-mark', html: logoSvg() }), h('span', {}, 'Leggio')),
-      tabs);
+      tabs, tabList);
     // short = etichetta visibile sotto l'icona (Impostazioni › Etichette nella barra)
     const btn = (ic, label, cmd, extra = {}, short) => {
       const b = h('button', { class: 'icon-btn' + (short ? ' has-label' : ''), title: label, 'aria-label': label, 'data-cmd': cmd, html: icon(ic), ...extra });
@@ -523,7 +528,7 @@ export class App {
     root.append(app, h('div', { id: 'overlay-root' }), h('div', { id: 'toast-root', 'aria-live': 'polite' }), h('div', { id: 'print-root' }));
     // la barra si ridispone quando cambia la larghezza (finestra, zoom dell'interfaccia, etichette)
     new ResizeObserver(() => { if (!this.layoutPending) { this.layoutPending = true; requestAnimationFrame(() => { this.layoutPending = false; this.layoutToolbar(); }); } }).observe(toolbar);
-    return { root: app, tabs, toolbar, quick, moreTools, pageInput, pageTotal, zoomSel, toolOptions, findbar, rail, sideBody, viewerContainer, home, right, status, main };
+    return { root: app, tabs, tabList, toolbar, quick, moreTools, pageInput, pageTotal, zoomSel, toolOptions, findbar, rail, sideBody, viewerContainer, home, right, status, main };
   }
 
   /** Pannello destro per strumenti con molte opzioni. → container (svuotato). close() lo nasconde. */
@@ -560,6 +565,21 @@ export class App {
       t.append(tab);
     }
     t.append(h('button', { class: 'tab-new', title: 'Apri un PDF', 'aria-label': 'Apri un PDF', onclick: () => this.openDialog(), html: icon('plus', 15) }));
+    // molte schede: quella attiva resta visibile e un elenco le mostra tutte
+    const list = this.el.tabList;
+    if (list) {
+      queueMicrotask(() => {
+        const over = t.scrollWidth > t.clientWidth + 1;
+        list.hidden = !over;
+        list.querySelector('.tab-count').textContent = String(this.docs.length);
+        const act = t.querySelector('.tab.active');
+        if (act) {
+          const a = act.getBoundingClientRect(); const b = t.getBoundingClientRect();
+          if (a.left < b.left) t.scrollLeft += a.left - b.left - 8;
+          else if (a.right > b.right) t.scrollLeft += a.right - b.right + 40;
+        }
+      });
+    }
   }
 
   async #renderHome() {

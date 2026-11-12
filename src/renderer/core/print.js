@@ -88,7 +88,7 @@ export async function printSources(app, sources, { preset: given } = {}) {
         if (s.queue && s.pdf) { bytes = await app.currentBytes(s); }                       // Doc aperto
         else if (!bytes && s.path) { const f = await platform.readFile(s.path); bytes = f.bytes; name = f.name; }
         try {
-          const { pdf } = await openPdfJs(bytes, { password });
+          const { pdf } = await openPdfJs(bytes, { password, ownWorker: true });
           opened.push(pdf);
           const pages = single && pageSpec ? parsePageRanges(pageSpec, pdf.numPages) : [...Array(pdf.numPages).keys()];
           out.push({ name, pdf, pages });
