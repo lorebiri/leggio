@@ -26,6 +26,7 @@ export class Doc {
     this.version = 0;            // identifica lo stato dei byte; cambia a ogni modifica/annulla
     this.savedVersion = 0;       // versione presente su disco (dirty = version !== savedVersion)
     this.closed = false;
+    this.readOnly = false;       // aperto in sola lettura (es. dall'archivio): modifiche solo su una copia
     this.history = historyConfig.makeHistory(this);
     this.queue = new TaskQueue();
     this.#versions = 0;

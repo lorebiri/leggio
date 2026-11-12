@@ -15,6 +15,7 @@ import { platform, isMac, modKey } from './platform.js';
 import { openPdfLib, savePdfLib, renderPageToCanvas, openPdfJs, verifyPdfBytes, destroyPdf, PDFLib, pdfjs, fontkit } from './pdf.js';
 import { isSignedPdf } from './signature.js';
 import { reorderPdfPages } from './pagetree.js';
+import { printSources } from './print.js';
 import * as ui from './ui.js';
 import { h, toast, dialog, confirm, withProgress, parsePageRanges, formatBytes, escapeHtml, contextMenu } from './ui.js';
 import { icon } from './icons.js';
@@ -75,12 +76,16 @@ export class App {
     return (ext && this.openers.find((o) => o.extensions.includes(ext))) || null;
   }
   /** Apre un file qualunque {path, name, bytes}: gestori registrati, poi PDF. */
-  async openFile(file) {
+  /**
+   * Apre un file qualunque {path, name, bytes}: gestori registrati, poi PDF.
+   * opts (solo PDF): { page (1-based), search (testo da cercare ed evidenziare), readOnly }.
+   */
+  async openFile(file, opts = {}) {
     const op = this.openerFor(file.name);
     if (op) {
-      try { return await op.open(file, this); } catch (err) { this.reportError(err, `Impossibile aprire «${file.name}»`); return null; }
+      try { return await op.open(file, this, opts); } catch (err) { this.reportError(err, `Impossibile aprire «${file.name}»`); return null; }
     }
-    return this.openBytes(file.bytes, { name: file.name, path: /\.pdf$/i.test(file.name) ? file.path : null });
+    return this.openBytes(file.bytes, { ...opts, name: file.name, path: /\.pdf$/i.test(file.name) ? file.path : null });
   }
 
   /** Il documento contiene firme digitali (campo firma con valore)? Risultato memorizzato per versione. */
@@ -120,6 +125,12 @@ export class App {
    */
   async applyEdit(label, fn, doc = this.activeDoc, { signatureWarning = true } = {}) {
     if (!doc) throw new Error('Nessun documento aperto');
+    if (doc.readOnly) {
+      const v = await ui.choice({ title: 'Documento in sola lettura', message: `«${doc.name}» è aperto in sola lettura (per esempio dall'archivio). Per modificarlo lavora su una copia: l'originale resta com'è.`, buttons: [{ value: 'cancel', label: 'Lascia perdere' }, { value: 'copy', label: 'Lavora su una copia', primary: true }] });
+      if (v !== 'copy') return false;
+      doc.readOnly = false; doc.path = null; doc.name = doc.name.replace(/(\.pdf)?$/i, '_copia.pdf'); doc.dirty = true;
+      this.#renderTabs(); this.#updateTitle();
+    }
     if (signatureWarning && !(await this.#confirmSignedEdit(doc))) return false;
     if (!(await this.#confirmRestrictedEdit(doc))) return false;
     return this.#exclusive(doc, label, async () => {
@@ -202,9 +213,9 @@ export class App {
   }
 
   /** Apre byte come nuova scheda. opts: { name, path, dirty } */
-  async openBytes(bytes, { name, path, dirty = false, _repaired = false } = {}) {
+  async openBytes(bytes, { name, path, dirty = false, _repaired = false, page, search, readOnly } = {}) {
     const existing = path && this.docs.find((d) => d.path === path);
-    if (existing) { this.activate(existing); return existing; }
+    if (existing) { this.activate(existing); this.#applyOpenOptions(existing, { page, search }); return existing; }
     const displayName = name || 'Senza titolo.pdf';
     const pre = precheck(bytes, displayName);
     if (pre) { this.#openFailed(pre, displayName); return null; }
@@ -245,11 +256,25 @@ export class App {
       return null;
     } finally { clearTimeout(timer); prog?.close(); }
     if (dirty) doc.dirty = true;
+    if (readOnly) doc.readOnly = true;
     this.#watchForms(doc);
     this.docs.push(doc);
     this.activate(doc);
     this.bus.emit('document:loaded', { doc });
+    this.#applyOpenOptions(doc, { page, search });
     return doc;
+  }
+
+  /** Pagina e ricerca richieste all'apertura (es. dall'archivio): si applicano quando la vista è pronta. */
+  #applyOpenOptions(doc, { page, search } = {}) {
+    if (!page && !search) return;
+    const go = () => {
+      if (doc !== this.activeDoc) return;
+      if (page) this.viewer.page = Math.max(1, Math.min(doc.pageCount, Number(page) || 1));
+      if (search) { this.openFind(); const inp = this.el.findbar.querySelector('input[type=search]'); if (inp) { inp.value = String(search); this.viewer.find(String(search)); } }
+    };
+    if (this.viewer.pdfViewer.pagesCount && this.viewer.doc === doc) setTimeout(go, 0);
+    else this.bus.once('viewer:pagesinit', () => setTimeout(go, 0));
   }
 
   #openFailed(message, name) {
@@ -269,8 +294,11 @@ export class App {
   }
 
   /** Apre un percorso (solo app desktop), es. dai recenti. */
-  async openPath(p) {
-    try { const f = await platform.readFile(p); if (f) return this.openFile(f); }
+  async openPath(p, opts) {
+    // già aperto: si attiva e si applicano pagina/ricerca
+    const existing = this.docs.find((d) => d.path === p);
+    if (existing) { this.activate(existing); this.#applyOpenOptions(existing, opts); return existing; }
+    try { const f = await platform.readFile(p); if (f) return this.openFile(f, opts); }
     catch (err) { this.#openFailed(cleanIpcMessage(err?.message || err), p.split(/[\\/]/).pop()); }
     return null;
   }
@@ -341,6 +369,7 @@ export class App {
    */
   async save(doc = this.activeDoc, { as = false } = {}) {
     if (!doc || doc.closed) return false;
+    if (doc.readOnly && !as) as = true; // sola lettura: mai sovrascrivere l'originale
     try {
       return await this.#exclusive(doc, 'Salvataggio', async () => {
         const version = doc.version;
@@ -353,6 +382,7 @@ export class App {
           const r = await platform.saveAs(bytes, doc.name);
           if (!r) return false;
           if (r.path) { doc.path = r.path; doc.name = r.name; }
+          doc.readOnly = false;
         }
         doc.replaceBytes(bytes);
         if (doc.version === version) doc.markSaved();
@@ -478,9 +508,14 @@ export class App {
   #buildShell(root) {
     root.innerHTML = '';
     const tabs = h('div', { class: 'tabs', role: 'tablist', 'aria-label': 'Documenti aperti' });
+    const tabList = h('button', { class: 'tab-list', hidden: true, title: 'Tutte le schede aperte', 'aria-label': 'Tutte le schede aperte', 'aria-haspopup': 'menu', html: icon('pages', 16) }, h('span', { class: 'tab-count' }, '0'));
+    tabList.addEventListener('click', () => {
+      const r = tabList.getBoundingClientRect();
+      contextMenu(r.left, r.bottom + 4, this.docs.map((d) => ({ label: (d.dirty || d.formsDirty ? '● ' : '') + d.name, icon: d === this.activeDoc ? 'check' : 'file', run: () => this.activate(d) })));
+    });
     const titlebar = h('div', { class: 'titlebar' + (isMac ? ' mac' : '') },
       h('div', { class: 'brand' }, h('span', { class: 'brand-mark', html: logoSvg() }), h('span', {}, 'Leggio')),
-      tabs);
+      tabs, tabList);
     // short = etichetta visibile sotto l'icona (Impostazioni › Etichette nella barra)
     const btn = (ic, label, cmd, extra = {}, short) => {
       const b = h('button', { class: 'icon-btn' + (short ? ' has-label' : ''), title: label, 'aria-label': label, 'data-cmd': cmd, html: icon(ic), ...extra });
@@ -522,7 +557,7 @@ export class App {
     root.append(app, h('div', { id: 'overlay-root' }), h('div', { id: 'toast-root', 'aria-live': 'polite' }), h('div', { id: 'print-root' }));
     // la barra si ridispone quando cambia la larghezza (finestra, zoom dell'interfaccia, etichette)
     new ResizeObserver(() => { if (!this.layoutPending) { this.layoutPending = true; requestAnimationFrame(() => { this.layoutPending = false; this.layoutToolbar(); }); } }).observe(toolbar);
-    return { root: app, tabs, toolbar, quick, moreTools, pageInput, pageTotal, zoomSel, toolOptions, findbar, rail, sideBody, viewerContainer, home, right, status, main };
+    return { root: app, tabs, tabList, toolbar, quick, moreTools, pageInput, pageTotal, zoomSel, toolOptions, findbar, rail, sideBody, viewerContainer, home, right, status, main };
   }
 
   /** Pannello destro per strumenti con molte opzioni. → container (svuotato). close() lo nasconde. */
@@ -551,7 +586,7 @@ export class App {
     for (const d of this.docs) {
       const unsaved = d.dirty || d.formsDirty;
       const tab = h('div', { class: 'tab' + (d === this.activeDoc ? ' active' : '') + (unsaved ? ' dirty' : ''), role: 'tab', 'aria-selected': String(d === this.activeDoc), title: (d.path || d.name) + (unsaved ? ' — modifiche non salvate' : ''), tabindex: 0 },
-        h('span', { class: 'tab-name' }, d.name),
+        h('span', { class: 'tab-name' }, d.name, d.readOnly ? h('small', { class: 'tab-ro' }, ' (sola lettura)') : null),
         h('button', { class: 'tab-close', title: 'Chiudi ' + d.name, 'aria-label': 'Chiudi ' + d.name, onclick: (e) => { e.stopPropagation(); this.closeDoc(d); }, html: icon('close', 13) }));
       tab.addEventListener('click', () => this.activate(d));
       tab.addEventListener('auxclick', (e) => { if (e.button === 1) this.closeDoc(d); });
@@ -559,6 +594,21 @@ export class App {
       t.append(tab);
     }
     t.append(h('button', { class: 'tab-new', title: 'Apri un PDF', 'aria-label': 'Apri un PDF', onclick: () => this.openDialog(), html: icon('plus', 15) }));
+    // molte schede: quella attiva resta visibile e un elenco le mostra tutte
+    const list = this.el.tabList;
+    if (list) {
+      queueMicrotask(() => {
+        const over = t.scrollWidth > t.clientWidth + 1;
+        list.hidden = !over;
+        list.querySelector('.tab-count').textContent = String(this.docs.length);
+        const act = t.querySelector('.tab.active');
+        if (act) {
+          const a = act.getBoundingClientRect(); const b = t.getBoundingClientRect();
+          if (a.left < b.left) t.scrollLeft += a.left - b.left - 8;
+          else if (a.right > b.right) t.scrollLeft += a.right - b.right + 40;
+        }
+      });
+    }
   }
 
   async #renderHome() {
@@ -700,7 +750,7 @@ export class App {
     const st = this.el.status; st.textContent = '';
     if (d) {
       if (d.dirty || d.formsDirty) st.append(h('span', { class: 'status-dirty' }, 'Modifiche non salvate ·'));
-      st.append(`${d.busy ? `In corso: ${d.queue.current}… · ` : ''}${d.pageCount} pagine · ${formatBytes(d.bytes.length)}${(d.bytes.length < 64 * MB ? this.isSigned(d) : d.data.__signed) ? ' · firmato digitalmente' : ''}${d.password ? ' · protetto da password' : ''}${d.path ? ' · ' + d.path : ''}`);
+      st.append(`${d.busy ? `In corso: ${d.queue.current}… · ` : ''}${d.pageCount} pagine · ${formatBytes(d.bytes.length)}${(d.bytes.length < 64 * MB ? this.isSigned(d) : d.data.__signed) ? ' · firmato digitalmente' : ''}${d.password ? ' · protetto da password' : ''}${d.readOnly ? ' · sola lettura' : ''}${d.path ? ' · ' + d.path : ''}`);
     }
   }
 
@@ -882,33 +932,13 @@ export class App {
   closeFind() { this.el.findbar.hidden = true; this.viewer.clearFind(); this.offFind?.(); }
 
   // ---------- stampa ----------
-  async print() {
-    const doc = this.activeDoc;
-    const v = await dialog({ title: 'Stampa', fields: [
-      { name: 'pages', label: 'Pagine', type: 'pages', value: '' },
-      { name: 'quality', label: 'Qualità', type: 'select', value: '150', options: [{ value: '96', label: 'Bozza (più veloce)' }, { value: '150', label: 'Normale' }, { value: '300', label: 'Alta qualità (firme e timbri piccoli)' }], help: 'Copie, fronte/retro e stampante si scelgono nella finestra di stampa che si apre subito dopo.' },
-      { name: 'annots', label: 'Stampa commenti e moduli', type: 'checkbox', value: true },
-    ], okLabel: 'Stampa…', validate: (x) => { try { this.parsePages(x.pages); } catch (e) { return e.message; } } });
-    if (!v) return;
-    const pages = this.parsePages(v.pages);
-    const bytes = await this.currentBytes(doc);
-    const { pdf } = await openPdfJs(bytes, { password: doc.password });
-    const root = document.getElementById('print-root'); root.innerHTML = '';
-    const ok = await withProgress('Preparazione della stampa', async (p) => {
-      for (let k = 0; k < pages.length; k++) {
-        if (p.cancelled) return false;
-        p.set(k / pages.length, `Pagina ${k + 1} di ${pages.length}`);
-        const cv = await renderPageToCanvas(pdf, pages[k], +v.quality / 72, { annotationMode: v.annots ? pdfjs.AnnotationMode.ENABLE_STORAGE : pdfjs.AnnotationMode.DISABLE, background: '#fff' });
-        const img = new Image(); img.src = cv.toDataURL('image/jpeg', 0.92);
-        await img.decode();
-        root.append(h('div', { class: 'print-page' }, img));
-      }
-      return true;
-    });
-    destroyPdf(pdf);
-    if (ok) { document.body.classList.add('printing'); window.print(); document.body.classList.remove('printing'); }
-    root.innerHTML = '';
-  }
+  /** Stampa il documento (stampante, copie, fronte/retro, timbro «COPIA», scelte ricordate). */
+  async print(doc = this.activeDoc) { if (doc) return printSources(this, [doc]); }
+  /**
+   * Stampa più documenti in una volta. sources: Doc aperti, { name, bytes, password } o { path } (app).
+   * opts.preset: stampa senza dialogo con queste scelte (vedi core/printplan.js DEFAULT_PRINT_PRESET).
+   */
+  async printFiles(sources, opts) { return printSources(this, sources, opts); }
 
   // ---------- proprietà ----------
   async showProperties() {
@@ -961,9 +991,24 @@ export class App {
     dialog({ title: 'Scorciatoie da tastiera', cancelLabel: null, okLabel: 'Chiudi', body: h('table', { class: 'props' }, rows.map(([k, l]) => h('tr', {}, h('th', {}, h('kbd', {}, k)), h('td', {}, l)))) });
   }
 
+  async #printManyDialog() {
+    let sources = this.docs.slice();
+    if (sources.length) {
+      const v = await ui.choice({ title: 'Stampa più documenti', message: `Vuoi stampare i ${sources.length} documenti aperti o scegliere altri file?`, buttons: [{ value: 'cancel', label: 'Lascia perdere', left: true }, { value: 'files', label: 'Scegli file…' }, { value: 'open', label: 'Documenti aperti', primary: true }] });
+      if (!v || v === 'cancel') return;
+      if (v === 'files') sources = null;
+    }
+    if (!sources) {
+      const files = await platform.openFiles({ multiple: true, title: 'Scegli i PDF da stampare' }).catch((err) => { this.reportError(err, 'Apertura dei file'); return []; });
+      sources = files.map((f) => ({ name: f.name, bytes: f.bytes }));
+    }
+    if (sources.length) await this.printFiles(sources);
+  }
+
   #registerCoreTools() {
     this.registerTool({ id: 'core-properties', name: 'Proprietà documento', category: 'avanzati', icon: 'info', description: 'Autore, date, formato, protezione', run: () => this.showProperties() });
-    this.registerTool({ id: 'core-print', name: 'Stampa', category: 'vista', icon: 'print', description: 'Stampa pagine scelte con qualità regolabile', run: () => this.print() });
+    this.registerTool({ id: 'core-print', name: 'Stampa', category: 'vista', icon: 'print', keywords: 'stampa stampante copie fronte retro', description: 'Stampante, copie, fronte/retro, pagine scelte, timbro «COPIA» solo sulla stampa', run: () => this.print() });
+    this.registerTool({ id: 'core-print-many', name: 'Stampa più documenti…', category: 'vista', icon: 'print', needsDoc: false, keywords: 'stampa tutti lotto più file schede aperte', description: 'Stampa in una volta i documenti aperti o altri file scelti', run: () => this.#printManyDialog() });
     this.registerTool({ id: 'core-reading', name: 'Modalità lettura', category: 'vista', icon: 'book', description: 'Nasconde barre e pannelli', run: () => this.command('reading-mode') });
     this.registerTool({ id: 'core-two-pages', name: 'Vista a due pagine', category: 'vista', icon: 'book', description: 'Pagine affiancate come un libro', run: () => { const pv = this.viewer.pdfViewer; pv.spreadMode = pv.spreadMode === 2 ? 0 : 2; } });
     this.registerTool({ id: 'core-theme', name: 'Tema chiaro/scuro', category: 'vista', icon: 'moon', needsDoc: false, description: 'Cambia aspetto dell\'app', run: () => this.#cycleTheme() });

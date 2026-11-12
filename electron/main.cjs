@@ -383,7 +383,26 @@ function registerCoreIpc() {
   handle('file:show-in-folder', (_e, p) => shell.showItemInFolder(V.absPath(p)));
   handle('app:open-external', (_e, url) => confirmExternal(V.str(url, 'url', 8192)));
   handle('app:info', () => ({ version: app.getVersion(), platform: process.platform, userData: app.getPath('userData'), resources: process.resourcesPath, packaged: app.isPackaged }));
-  handle('app:print', () => new Promise((resolve) => mainWindow.webContents.print({ silent: false, printBackground: true }, (ok, err) => resolve({ ok, err }))));
+  handle('app:printers', async () => {
+    const list = await mainWindow.webContents.getPrintersAsync();
+    return list.map((p) => ({ name: p.name, displayName: p.displayName || p.name, isDefault: !!p.isDefault, description: p.description || '' }));
+  });
+  // Stampa del contenuto preparato dal renderer (#print-root). Con una stampante scelta niente finestra di sistema.
+  handle('app:print', async (_e, o = {}) => {
+    const printer = o.printer ? V.str(o.printer, 'stampante', 512) : '';
+    if (printer) {
+      const ok = (await mainWindow.webContents.getPrintersAsync()).some((p) => p.name === printer);
+      if (!ok) return { ok: false, err: 'stampante non disponibile' };
+    }
+    const opts = {
+      silent: !!printer, deviceName: printer || undefined, printBackground: true,
+      copies: Math.max(1, Math.min(99, Math.floor(Number(o.copies) || 1))),
+      duplexMode: ['simplex', 'longEdge', 'shortEdge'].includes(o.duplex) ? o.duplex : 'simplex',
+      color: o.color !== false, margins: { marginType: 'none' },
+    };
+    L('info', 'stampa', { silent: opts.silent, copies: opts.copies, duplex: opts.duplexMode, color: opts.color });
+    return new Promise((resolve) => mainWindow.webContents.print(opts, (ok, err) => resolve({ ok, err: err || '' })));
+  });
   handle('app:set-theme', (_e, t) => { if (['system', 'light', 'dark'].includes(t)) nativeTheme.themeSource = t; });
   handle('app:set-title', (_e, t) => { if (mainWindow) mainWindow.setTitle(V.str(t, 'titolo', 500)); });
   handle('app:confirm-close', () => { forceClose = true; if (mainWindow) mainWindow.close(); });
