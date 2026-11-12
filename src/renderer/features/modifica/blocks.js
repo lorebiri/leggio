@@ -48,7 +48,8 @@ export function groupTextItems(items, styles = {}) {
         cur.text += el.str;
         cur.fs = Math.max(cur.fs, el.fs);
       } else if (!cur.text.endsWith(' ')) cur.text += ' ';
-      cur.right = Math.max(cur.right, el.lx + el.w);
+      // gli spazi lunghi (tabulazioni, celle vuote) non allungano la riga: separano colonne
+      cur.right = Math.max(cur.right, el.lx + (blank ? Math.min(el.w, 0.5 * el.fs) : el.w));
       cur.fontNames.push(el.fontName);
       continue;
     }

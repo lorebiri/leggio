@@ -1,5 +1,5 @@
 // Strumento «Modifica testo e immagini»: blocchi di testo modificabili in loco e immagini selezionabili.
-import { glyphsInBlock, glyphText, editBlock, transformImage, deleteImage, replaceImage } from '../operations.js';
+import { editorText, editBlock, transformImage, deleteImage, replaceImage } from '../operations.js';
 import { effectiveFontSize } from '../interpreter.js';
 import { mul } from '../interpreter.js';
 import { T } from '../rewrite.js';
@@ -9,7 +9,6 @@ import {
 } from './common.js';
 
 const LAYER = 'lgm-edit';
-const norm = (s) => String(s || '').replace(/\s+/g, '');
 
 export function editContentTool(app) {
   const { h } = app.ui;
@@ -42,6 +41,12 @@ export function editContentTool(app) {
         if (!im.inForm) el.addEventListener('mousedown', (e) => { if (e.button !== 0) return; e.stopPropagation(); selectImage(pageIndex, im); startImageDrag(e, 'move'); });
         layer.prepend(el);
       }
+      if (S.reselect && S.reselect.pageIndex === pageIndex) {
+        const want = S.reselect; S.reselect = null;
+        const near = (a, b) => a.every((v, i) => Math.abs(v - b[i]) < 1.5);
+        const hit = A.r.images.find((x) => !x.inForm && x.name === want.name && near(x.rect, want.rect));
+        if (hit) { S.image = { pageIndex, im: hit, crop: false }; renderBar(); }
+      }
       if (S.image && S.image.pageIndex === pageIndex) {
         const again = A.r.images.find((x) => x.opIndex === S.image.im.opIndex);
         if (again) { S.image.im = again; mountImageBox(); } else S.image = null;
@@ -65,9 +70,7 @@ export function editContentTool(app) {
     if (!(await confirmSigned(app))) return;
     let A;
     try { A = await pageAnalysis(app, pageIndex); } catch (err) { app.reportError(err, 'Impossibile leggere il contenuto della pagina'); return; }
-    const entries = glyphsInBlock(A, block);
-    const gt = entries.length ? glyphText(entries) : null;
-    const initial = gt && gt.complete && norm(gt.text) === norm(block.text) ? gt.text : block.text;
+    const { text: initial, entries, inPlacePossible } = editorText(A, block);
     const dom = entries.find((e) => e.g.u && e.g.u.trim()) || entries[0];
     const model = dom?.s.font;
     S.style = {
@@ -77,7 +80,7 @@ export function editContentTool(app) {
       efs: dom ? effectiveFontSize(dom.s) : block.fontSize,
     };
     if (S.pending !== pending) return;
-    S.editing = { pageIndex, block, initial, text: initial, click: pending.click, notInPlace: !gt || !gt.complete };
+    S.editing = { pageIndex, block, initial, text: initial, click: pending.click, notInPlace: !inPlacePossible };
     renderBar();
     mountEditor();
   }
@@ -261,6 +264,8 @@ export function editContentTool(app) {
     const I = S.image; if (!I) return;
     const { pageIndex, im } = I;
     const target = mul(im.ctm, t);
+    const pts = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([x, y]) => [x * target[0] + y * target[2] + target[4], x * target[1] + y * target[3] + target[5]]);
+    S.reselect = { pageIndex, name: im.name, rect: [Math.min(...pts.map((p) => p[0])), Math.min(...pts.map((p) => p[1])), Math.max(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[1]))] };
     await safePageEdit(app, label, pageIndex, (pdfDoc, mode) => { if (mode === 'cover') return false; transformImage(pdfDoc, pageIndex, im.opIndex, target, opts); return {}; });
   }
 

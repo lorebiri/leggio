@@ -34,7 +34,14 @@ export function glyphsInBlock(A, block, tolerance = 0.2) {
     const efs = effectiveFontSize(s);
     s.glyphs.forEach((g, gi) => {
       const [lx, ly] = toLocal(block.angle, g.p[0], g.p[1]);
-      if (lx >= x0 - tx && lx <= x1 + tx && ly >= y0 - ty && ly <= y1 + ty) out.push(entry(A, s, si, g, gi, efs, block.angle));
+      if (!(lx >= x0 - tx && lx <= x1 + tx && ly >= y0 - ty && ly <= y1 + ty)) return;
+      // il riquadro di un paragrafo può contenere testo di altri blocchi (tabelle, colonne): conta la riga
+      if (block.lines?.length) {
+        const [, by] = toLocal(block.angle, g.o[0], g.o[1]);
+        const onLine = block.lines.some((l) => Math.abs(by - l.base) < 0.45 * (l.fs || fs) && lx >= l.left - tx && lx <= l.right + tx);
+        if (!onLine) return;
+      }
+      out.push(entry(A, s, si, g, gi, efs, block.angle));
     });
   });
   return out;
@@ -95,6 +102,18 @@ export function glyphText(entries, { joinParagraph = true } = {}) {
     built.forEach((l, i) => { if (i) { text += '\n'; refs.push(null); } text += l.text; refs.push(...l.refs); });
   }
   return { text, refs, complete, lines: built };
+}
+
+/**
+ * Testo da mostrare nell'editor per un blocco: quello dei glifi (se completo e coerente con pdf.js),
+ * così una correzione può essere fatta "in loco"; altrimenti il testo di pdf.js.
+ */
+export function editorText(A, block) {
+  const entries = glyphsInBlock(A, block);
+  const gt = entries.length ? glyphText(entries) : null;
+  const norm = (t) => String(t || '').replace(/\s+/g, '');
+  const usable = !!(gt && gt.complete && norm(gt.text) === norm(block.text));
+  return { text: usable ? gt.text : block.text, inPlacePossible: usable, entries };
 }
 
 // ------------------------------------------------------------------ font per scrivere

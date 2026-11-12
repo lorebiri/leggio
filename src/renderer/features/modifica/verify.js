@@ -1,7 +1,6 @@
 // Verifica dopo la riscrittura: il resto del testo della pagina deve essere rimasto identico.
 // Puro: confronta gli item di getTextContent di pdf.js prima e dopo.
 
-const intersects = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
 
 /** Rettangolo approssimato (spazio pagina) di un item di pdf.js. */
 export function itemRect(it) {
@@ -15,17 +14,30 @@ export function itemRect(it) {
   return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
 }
 
-/** Caratteri (senza spazi) del testo fuori dalle zone escluse, ordinati: confronto insensibile all'ordine degli item. */
-export function textOutside(items, exclude) {
+/**
+ * Caratteri (senza spazi) del testo fuori dalle zone escluse, ordinati: confronto insensibile all'ordine e a come
+ * pdf.js spezza gli item. La posizione di ogni carattere è stimata dividendo la larghezza dell'item in parti uguali;
+ * il margine (in frazioni della dimensione del carattere) assorbe l'imprecisione della stima.
+ */
+export function textOutside(items, exclude, { marginFs = 0.6 } = {}) {
   const chars = [];
   for (const it of items || []) {
     if (!it || typeof it.str !== 'string' || !it.transform) continue;
-    const s = it.str.replace(/\s+/g, '');
-    if (!s) continue;
-    const r = itemRect(it);
-    // un item lungo che tocca appena la zona viene escluso del tutto (prudenza: confronto più debole ma senza falsi allarmi)
-    if (exclude.some((z) => intersects(r, z))) continue;
-    for (const ch of s) chars.push(ch);
+    const str = [...it.str];
+    if (!str.some((c) => c.trim())) continue;
+    const [a, b, c, d, e, f] = it.transform;
+    const fs = Math.hypot(c, d) || it.height || 1;
+    const ang = Math.atan2(b, a);
+    const cs = Math.cos(ang), sn = Math.sin(ang);
+    const w = it.width || 0;
+    const m = marginFs * fs;
+    str.forEach((ch, k) => {
+      if (!ch.trim()) return;
+      const t = ((k + 0.5) / str.length) * w;
+      const x = e + t * cs - 0.35 * fs * sn, y = f + t * sn + 0.35 * fs * cs;
+      if (exclude.some((z) => x >= z[0] - m && x <= z[2] + m && y >= z[1] - m && y <= z[3] + m)) return;
+      chars.push(ch);
+    });
   }
   return chars.sort().join('');
 }
@@ -35,9 +47,7 @@ export function textOutside(items, exclude) {
  * @returns {{ ok:boolean, missing:string, added:string }}
  */
 export function compareOutside(beforeItems, afterItems, exclude, { margin = 2 } = {}) {
-  const zones = exclude.map((z) => [z[0] - margin, z[1] - margin, z[2] + margin, z[3] + margin]);
-  // un item escluso "dopo" ma non "prima" (o viceversa) falserebbe il confronto: si escludono in entrambi
-  // tutti gli item che toccano una zona, prima e dopo.
+  const zones = exclude.filter(Boolean).map((z) => [Math.min(z[0], z[2]) - margin, Math.min(z[1], z[3]) - margin, Math.max(z[0], z[2]) + margin, Math.max(z[1], z[3]) + margin]);
   const a = textOutside(beforeItems, zones);
   const b = textOutside(afterItems, zones);
   if (a === b) return { ok: true, missing: '', added: '' };

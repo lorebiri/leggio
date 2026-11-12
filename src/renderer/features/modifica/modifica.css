@@ -67,5 +67,4 @@
 .lgm-tog.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .lgm-hint { color: var(--ink); opacity: .85; }
 .lgm-lbl { display: inline-flex; align-items: center; gap: 6px; }
-.btn.danger { color: var(--danger); }
 .tool-opts:has(.lgm-stylebar), .tool-opts:has(.lgm-hint) { min-height: 32px; }
