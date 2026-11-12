@@ -118,3 +118,17 @@
 .av-small { font-size: 13px; }
 .av-input { padding: 5px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; min-width: 0; }
 .av-resume { border: 2px solid var(--warning); }
+/* riquadro «Controlli» */
+.av-controlli { display: flex; flex-direction: column; gap: 8px; }
+.av-controllo { border-left: 4px solid var(--border-strong); background: var(--surface); border-radius: 6px; padding: 8px 10px; }
+.av-controllo.avviso { border-left-color: var(--warning); }
+.av-controllo p { margin: 0 0 6px; font-size: 14px; line-height: 1.4; }
+.av-gruppo { border-top: 1px solid var(--border); padding: 6px 0; }
+.av-gruppo summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+.av-copia { margin: 6px 0 0; }
+.av-copia dt { color: var(--muted); font-size: 12.5px; margin-top: 6px; }
+.av-copia dd { margin: 0; display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.av-copia dd span { overflow-wrap: anywhere; }
+.av-fonti summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.av-tabella { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 8px 0; }
+.av-tabella th, .av-tabella td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
