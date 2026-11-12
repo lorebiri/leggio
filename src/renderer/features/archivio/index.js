@@ -22,19 +22,19 @@ export default function register(app) {
   const apriId = async (id) => { const [r] = await A.righe([id]); if (r) apriDocumento(app, A, r, {}); };
 
   app.registerTool({
-    id: 'archivio', name: 'Archivio d\'ufficio', category: 'avanzati', icon: 'archive', needsDoc: false,
+    id: 'archivio', name: 'Archivio d\'ufficio', category: 'archivio', icon: 'archive', needsDoc: false,
     description: 'Trova subito fatture, DURC, ordini e PEC nelle cartelle dell\'ufficio; stati, scadenze e registro',
     keywords: 'archivio indice cerca documenti cartelle ufficio fatture durc ordini determine missioni contratti pec p7m scadenzario scadenze protocollo stato pagato registro cig cup fornitore oggi',
     run: () => apri({}),
   });
   app.registerTool({
-    id: 'archivio-oggi', name: 'Oggi: scadenze e cose da fare', category: 'avanzati', icon: 'archive', needsDoc: false,
+    id: 'archivio-oggi', name: 'Oggi: scadenze e cose da fare', category: 'archivio', icon: 'archive', needsDoc: false,
     description: 'DURC in scadenza, fatture da pagare, documenti da protocollare o da firmare, nuovi arrivi',
     keywords: 'oggi scadenzario scadenze durc scaduto fatture da pagare da protocollare da firmare nuovi documenti',
     run: () => apri({ scheda: 'oggi' }),
   });
   app.registerTool({
-    id: 'archivio-cartelle', name: 'Collega una cartella all\'archivio…', category: 'avanzati', icon: 'archive', needsDoc: false,
+    id: 'archivio-cartelle', name: 'Collega una cartella all\'archivio…', category: 'archivio', icon: 'archive', needsDoc: false,
     description: 'Aggiunge una cartella (anche di rete o OneDrive) all\'archivio d\'ufficio',
     keywords: 'collega cartella archivio rete onedrive indicizza aggiungi cartella',
     run: () => apriCartelle(app, A),

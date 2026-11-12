@@ -314,6 +314,8 @@ export class App {
       if (this.rightPanelDoc && this.rightPanelDoc !== doc) this.closeRightPanel({ notify: true });
       this.bus.emit('document:deactivated', { doc: prev, next: doc });
     }
+    // senza documenti (chiusa l'ultima scheda) non resta nulla del documento precedente
+    if (!doc && !this.el.findbar.hidden) this.closeFind();
     this.activeDoc = doc;
     this.el.root.classList.toggle('has-doc', !!doc);
     this.viewer.setDocument(doc);

@@ -80,7 +80,7 @@ restituisce oggetti grandi bloccava il renderer); **non inviare grandi Uint8Arra
 `LEGGIO_USER_DATA=/cartella` usa una cartella dati separata.
 
 ## Categorie strumenti
-`crea` · `pagine` · `commenta` · `modifica` · `moduli` · `proteggi` · `converti` · `avanzati` · `vista`.
+`archivio` · `crea` · `pagine` · `commenta` · `modifica` · `moduli` · `proteggi` · `converti` · `avanzati` · `vista`.
 
 Id riservati usati dalla schermata iniziale (se l'area li implementa, usare **esattamente** questi):
 `create-pdf`, `merge`, `compress`, `ocr`, `sign`, `protect`, `redact`, `convert-word`, `compare`, `fill-sign`, `organize`, `metadata`, `delete-pages` (anche come page action).

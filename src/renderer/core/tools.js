@@ -4,6 +4,7 @@ import { icon } from './icons.js';
 import { rankTools } from './toolsearch.js';
 
 export const CATEGORIES = [
+  ['archivio', 'Archivio d\'ufficio'],
   ['crea', 'Crea e combina'],
   ['pagine', 'Organizza pagine'],
   ['commenta', 'Commenta e rivedi'],
