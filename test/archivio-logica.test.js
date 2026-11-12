@@ -4,12 +4,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { normalizza, interpretaRicerca, paginaDi, estratto, numeroIt, dataDaTesto, giorniTra, aggiungiGiorni } from '../src/renderer/features/archivio/lib/testo.js';
-import { riconosciTipo, pivaValida, cfValido, trovaCigCup, trovaCodici, trovaImporto, datiDaTesto, datiDaFattura, eScansione, firmePdf, pulisciFornitore } from '../src/renderer/features/archivio/lib/estrai.js';
+import { ibanValido, trovaIban, trovaDataFine, riconosciTipo, pivaValida, cfValido, trovaCigCup, trovaCodici, trovaImporto, datiDaTesto, datiDaFattura, eScansione, firmePdf, pulisciFornitore } from '../src/renderer/features/archivio/lib/estrai.js';
 import { applica, haStato, descrivi, esportaJson, esportaCsv, importa, unisci, leggiCsv, conSegnatura, leggiElencoProtocolli, testoProtocollo, modificaDaEvento } from '../src/renderer/features/archivio/lib/stati.js';
 import { segnaturaGenerica, normalizzaSegnatura, numeroConfrontabile } from '../src/renderer/features/archivio/lib/segnatura.js';
 import { immaginiDisegnate, strisciaCandidata } from '../src/renderer/features/archivio/lib/striscia.js';
 import { riepilogoOggi, scadenzaDurc, testoGiorni } from '../src/renderer/features/archivio/lib/scadenze.js';
 import { Motore } from '../src/renderer/features/archivio/lib/motore.js';
+import { prontaPerPagamento, indiciFornitori, pagamentoPrevisto, giorniSdi } from '../src/renderer/features/archivio/lib/pagamento.js';
+import { aggiungiMesi } from '../src/renderer/features/archivio/lib/scadenze.js';
 import { Blocchi, leggiBlocco, manifestoValido, DIM } from '../src/renderer/features/archivio/lib/blocchi.js';
 import { registroCsv, registroXlsx, serialeExcel, zipSenzaCompressione } from '../src/renderer/features/archivio/lib/esporta.js';
 import { parseFattura } from '../src/renderer/features/avanzati/lib/fattura.js';
@@ -85,6 +87,17 @@ describe('estrazione dei dati chiave', () => {
     const d = datiDaTesto(t, { nome: 'durc.pdf' });
     expect(d).toMatchObject({ tipo: 'durc', piva: '00012345609', scadenza: '2026-11-24', numero: 'INPS_42702786' });
     expect(d.fornitore).toBe('Alfa Strumenti');
+  });
+  it('IBAN, tracciabilità, incarichi, MePA, data di fine', () => {
+    expect(ibanValido('IT60X0542811101000000123456')).toBe(true);
+    expect(ibanValido('IT61X0542811101000000123456')).toBe(false);
+    expect(trovaIban('Pagare su IBAN IT60 X054 2811 1010 0000 0123 456 entro')).toEqual(['IT60X0542811101000000123456']);
+    expect(riconosciTipo('DICHIARAZIONE SOSTITUTIVA - COMUNICAZIONE DEL CONTO CORRENTE DEDICATO ai sensi della L. 136/2010')).toBe('tracciabilita');
+    expect(riconosciTipo('CONTRATTO DI FORNITURA ... Art. 4 - Tracciabilità dei flussi finanziari ai sensi della L. 136/2010')).toBe('contratto');
+    expect(riconosciTipo('CONFERIMENTO DI INCARICO DI COLLABORAZIONE')).toBe('incarico');
+    expect(riconosciTipo('MERCATO ELETTRONICO DELLA PUBBLICA AMMINISTRAZIONE DOCUMENTO DI STIPULA - TRATTATIVA DIRETTA N. 1234567')).toBe('ordine');
+    expect(trovaDataFine('Durata: dal 01/02/2026 al 31/01/2027')).toBe('2027-01-31');
+    expect(datiDaTesto('CONFERIMENTO DI INCARICO\nDurata: dal 01/02/2026 al 31/01/2027\nData 01/02/2026').dataFine).toBe('2027-01-31');
   });
   it('ripulisce i nomi dei fornitori', () => {
     expect(pulisciFornitore('sociale Alfa Strumenti')).toBe('Alfa Strumenti');
@@ -220,6 +233,43 @@ describe('protocollo (Titulus): Leggio non genera numeri, li legge o li riceve',
   });
 });
 
+describe('pronta per il pagamento', () => {
+  const P = '00012345609';
+  const durc = (id, data, scadenza) => ({ id, nome: id, tipo: 'durc', piva: P, data, scadenza });
+  const fatt = (x) => ({ id: 'f', nome: 'f', tipo: 'fattura', piva: P, iban: 'IT60X0542811101000000123456', scadenza: '2026-12-10', mtime: Date.parse('2026-11-01T10:00:00'), ...x });
+  it('DURC valido alla data di pagamento prevista, non solo a oggi', () => {
+    const ind = indiciFornitori([durc('d1', '2026-08-01', '2026-11-29')]);
+    const p = prontaPerPagamento(fatt(), null, ind, { oggi: '2026-11-12' });
+    expect(p.esito).toBe('rosso');
+    expect(p.motivi[0].testo).toMatch(/scade il 29\/11\/2026, prima del pagamento previsto \(10\/12\/2026\)/);
+    const ind2 = indiciFornitori([durc('d1', '2026-08-01', '2026-11-29'), durc('d2', '2026-11-01', '2027-03-01')]);
+    expect(prontaPerPagamento(fatt(), null, ind2, { oggi: '2026-11-12' }).esito).toBe('verde');
+    // durata impostabile per i DURC senza scadenza scritta
+    expect(prontaPerPagamento(fatt(), null, indiciFornitori([durc('d3', '2026-09-01', '')], { durataDurc: 120 }), { oggi: '2026-11-12' }).esito).toBe('verde');
+  });
+  it('IBAN confrontato con la dichiarazione di tracciabilità, solo se c\'è', () => {
+    const base = [durc('d2', '2026-11-01', '2027-03-01')];
+    const t = (iban) => ({ id: 't', nome: 't', tipo: 'tracciabilita', piva: P, iban, data: '2026-01-01' });
+    expect(prontaPerPagamento(fatt(), null, indiciFornitori([...base, t('IT60X0542811101000000123456')]), { oggi: '2026-11-12' }).esito).toBe('verde');
+    const p = prontaPerPagamento(fatt(), null, indiciFornitori([...base, t('IT02L1234512345123456789012')]), { oggi: '2026-11-12' });
+    expect(p.esito).toBe('rosso');
+    expect(p.motivi.find((m) => m.livello === 'rosso').testo).toMatch(/non è quello dichiarato/);
+  });
+  it('30 giorni (PCC) dalla ricezione se manca la scadenza; pagata; non fattura', () => {
+    const r = fatt({ scadenza: '' });
+    expect(pagamentoPrevisto(r)).toMatchObject({ data: '2026-12-01', fonte: 'pcc' });
+    const p = prontaPerPagamento(r, null, indiciFornitori([durc('d2', '2026-11-01', '2027-03-01')]), { oggi: '2026-11-28' });
+    expect(p.giorniPcc).toBe(3);
+    expect(p.esito).toBe('giallo');
+    expect(p.motivi.some((m) => /stimata/.test(m.testo))).toBe(true);
+    expect(prontaPerPagamento(r, { pagamento: 'fatto' }, indiciFornitori([]))).toMatchObject({ esito: 'pagata' });
+    expect(prontaPerPagamento({ tipo: 'durc' }, null, indiciFornitori([]))).toBe(null);
+    expect(giorniSdi({ tipo: 'fattura', contenuto: 'fattura', mtime: Date.parse('2026-11-01T10:00:00') }, '2026-11-12')).toMatchObject({ fine: '2026-11-16', giorni: 4, stimata: true });
+    expect(giorniSdi({ tipo: 'fattura', contenuto: 'pdf', mtime: 1 })).toBe(null);
+    expect(aggiungiMesi('2026-11-30', 3)).toBe('2027-02-28');
+  });
+});
+
 describe('Oggi e scadenzario', () => {
   const recs = [
     { id: '1', nome: 'durc vecchio', tipo: 'durc', piva: '00012345609', fornitore: 'Alfa', data: '2026-01-01', scadenza: '2026-05-01', impronta: H1, aggiunto: 5 },
@@ -256,6 +306,30 @@ describe('Oggi e scadenzario', () => {
     expect(o.inScadenza.map((x) => x.id)).toEqual(['b', 'a']);
     expect(o.inScadenza[0]).toMatchObject({ scaduto: true, giorni: -11 });
     expect(o.fatture.map((x) => x.id)).toEqual(['d']);
+  });
+  it('SdI, non protocollati, anomalie di protocollo, pubblicazioni', () => {
+    const ora = Date.parse('2026-11-12T12:00:00');
+    const r = [
+      { id: 'x1', nome: 'IT1.xml', tipo: 'fattura', contenuto: 'fattura', mtime: Date.parse('2026-11-01T10:00:00'), aggiunto: ora - 2 * 86400000, impronta: 'a'.repeat(64) },
+      { id: 'p1', nome: 'pec.eml', tipo: 'pec', aggiunto: ora - 5 * 86400000, impronta: 'b'.repeat(64) },
+      { id: 'p2', nome: 'vecchio.pdf', tipo: 'pec', aggiunto: 10, impronta: 'c'.repeat(64) }, // arrivato prima dell'archivio
+      { id: 'p3', nome: 'Elaborati/copia.pdf', rel: 'x/Elaborati/copia.pdf', tipo: 'fattura', aggiunto: ora - 9 * 86400000, impronta: 'd'.repeat(64) },
+      { id: 'a1', nome: 'a1', tipo: 'ordine', segnatura: { numero: '0004200', data: '2026-10-01' }, impronta: 'e'.repeat(64), aggiunto: 10 },
+      { id: 'a2', nome: 'a2', tipo: 'fattura', segnatura: { numero: '4200', data: '2026-10-02' }, impronta: 'f'.repeat(64), aggiunto: 10 },
+      { id: 'a3', nome: 'a3-copia', rel: 'x/Elaborati/a3.pdf', tipo: 'fattura', segnatura: { numero: '4200', data: '2026-10-02' }, impronta: '1'.repeat(64), aggiunto: 10 },
+      { id: 'i1', nome: 'incarico', tipo: 'incarico', data: '2026-09-01', dataFine: '2027-08-31', impronta: '2'.repeat(64), aggiunto: 10 },
+    ];
+    const st = new Map([['2'.repeat(64), { pubblicato: 'da' }]]);
+    const o = riepilogoOggi({ records: r, stati: st, inizioArchivio: 100, oggi: '2026-11-12' });
+    expect(o.sdi.map((x) => x.id)).toEqual(['x1']);
+    expect(o.sdi[0]).toMatchObject({ fine: '2026-11-16', giorni: 4, stimata: true });
+    expect(o.nonProtocollati.map((x) => x.id)).toEqual(['p1']);
+    expect(o.anomalie).toHaveLength(1);
+    expect(o.anomalie[0].documenti.map((d) => d.id).sort()).toEqual(['a1', 'a2']);
+    expect(o.pubblicazioni[0]).toMatchObject({ id: 'i1', entro: '2026-12-01', finoAl: '2030-08-31' });
+    // «Non serve» toglie dai non protocollati
+    const o2 = riepilogoOggi({ records: r, stati: new Map([['b'.repeat(64), { protocollo: 'no' }]]), inizioArchivio: 100, oggi: '2026-11-12' });
+    expect(o2.nonProtocollati).toHaveLength(0);
   });
   it('un documento con la segnatura letta non è più «da protocollare»', () => {
     const r = [{ ...recs[3], segnatura: { numero: '77', data: '2026-11-12' } }];
@@ -313,6 +387,20 @@ describe('motore di ricerca', () => {
     expect(m.cerca({ stato: 'protocollato' }).totale).toBe(2);
     expect(m.cerca({ ordine: 'protocollo' }).righe.slice(0, 2).map((x) => x.id)).toEqual(['/a/1', '/a/4']);
     expect(m.riga('/a/4').chips[0].testo).toBe('Protocollato (Titulus) n. 0012345 del 12/11/2026 — letto dal documento');
+  });
+  it('pratica collegata: stesso protocollo, CIG o CUP, in ordine di data', () => {
+    const m = new Motore();
+    m.metti(doc(1, { tipo: 'ordine', data: '2026-01-10', cig: ['Z34F05AF62'] }));
+    m.metti(doc(2, { tipo: 'fattura', data: '2026-03-01', cig: ['Z34F05AF62'], cup: ['B53C22001230006'] }));
+    m.metti(doc(3, { tipo: 'durc', data: '2026-02-01', segnatura: { numero: '0004200', data: '2026-02-02' } }));
+    m.metti(doc(4, { tipo: 'ordine', data: '2025-12-01', segnatura: { numero: '4200', data: '2025-12-02' } }));
+    m.metti(doc(5, { tipo: 'altro', data: '2026-01-01' }));
+    m.stati.set('2'.repeat(64), { protocollo: 'fatto', numeroProtocollo: '0004200' });
+    const p = m.pratica('/a/2');
+    expect(p.documenti.map((d) => d.id)).toEqual(['/a/4', '/a/1', '/a/3', '/a/2']);
+    expect(p.documenti.find((d) => d.id === '/a/1').perche).toEqual(['CIG']);
+    expect(p.documenti.find((d) => d.id === '/a/4').perche).toEqual(['protocollo']);
+    expect(m.pratica('/a/5').documenti).toHaveLength(1);
   });
   it('fornitori raggruppati per P.IVA con il nome più frequente', () => {
     const m = new Motore();

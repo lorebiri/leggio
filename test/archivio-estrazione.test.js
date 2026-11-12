@@ -32,7 +32,7 @@ async function testoPdf(bytes) {
   } finally { await pdf.loadingTask.destroy(); }
 }
 const cartella = (p) => path.relative(dir, p).split(path.sep)[0];
-const ATTESO = { Fatture: 'fattura', 'Note di credito': 'nota-credito', DURC: 'durc', 'Ordini e determine': 'ordine', Missioni: 'missione', Contratti: 'contratto' };
+const ATTESO = { Fatture: 'fattura', 'Note di credito': 'nota-credito', DURC: 'durc', 'Ordini e determine': 'ordine', Missioni: 'missione', Contratti: 'contratto', Fornitori: 'tracciabilita', MePA: 'ordine', Incarichi: 'incarico' };
 
 describe('estrazione su un archivio generato', () => {
   it('riconosce il tipo e i dati chiave dei PDF (≥ 95 %)', async () => {

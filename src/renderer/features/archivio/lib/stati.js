@@ -15,6 +15,8 @@ export const VOCI_STATO = [
   { id: 'firmato', label: 'Firmato', campo: 'firma', valore: 'fatto' },
   { id: 'da-pagare', label: 'Da pagare', campo: 'pagamento', valore: 'da' },
   { id: 'pagato', label: 'Pagato', campo: 'pagamento', valore: 'fatto' },
+  { id: 'non-da-protocollare', label: 'Non da protocollare', campo: 'protocollo', valore: 'no' },
+  { id: 'da-pubblicare', label: 'Da pubblicare (Trasparenza)', campo: 'pubblicato', valore: 'da' },
   { id: 'pubblicato', label: 'Pubblicato', campo: 'pubblicato', valore: true },
   { id: 'archiviato', label: 'Archiviato', campo: 'archiviato', valore: true },
 ];
@@ -90,7 +92,9 @@ export function descrivi(s) {
   if (s.firma === 'fatto') out.push({ id: 'firmato', testo: 'Firmato', tipo: 'fatto' });
   if (s.pagamento === 'da') out.push({ id: 'da-pagare', testo: 'Da pagare', tipo: 'da' });
   if (s.pagamento === 'fatto') out.push({ id: 'pagato', testo: 'Pagato', tipo: 'fatto' });
-  if (s.pubblicato) out.push({ id: 'pubblicato', testo: 'Pubblicato', tipo: 'fatto' });
+  if (s.protocollo === 'no') out.push({ id: 'non-da-protocollare', testo: 'Non da protocollare', tipo: 'neutro' });
+  if (s.pubblicato === 'da') out.push({ id: 'da-pubblicare', testo: 'Da pubblicare', tipo: 'da' });
+  if (s.pubblicato === true) out.push({ id: 'pubblicato', testo: 'Pubblicato', tipo: 'fatto' });
   if (s.archiviato) out.push({ id: 'archiviato', testo: 'Archiviato', tipo: 'neutro' });
   for (const e of s.etichette || []) out.push({ id: 'etichetta:' + e, testo: e, tipo: 'etichetta' });
   return out;
@@ -170,10 +174,11 @@ export function modificaDaEvento(ev) {
 export function ripulisci(s) {
   if (!s || typeof s !== 'object') return null;
   const n = {};
-  if (s.protocollo === 'da' || s.protocollo === 'fatto') n.protocollo = s.protocollo;
+  if (['da', 'fatto', 'no'].includes(s.protocollo)) n.protocollo = s.protocollo;
   if (s.firma === 'da' || s.firma === 'fatto') n.firma = s.firma;
   if (s.pagamento === 'da' || s.pagamento === 'fatto') n.pagamento = s.pagamento;
   if (s.pubblicato === true || s.pubblicato === 'sì' || s.pubblicato === 'si') n.pubblicato = true;
+  else if (s.pubblicato === 'da' || s.pubblicato === 'da fare') n.pubblicato = 'da';
   if (s.archiviato === true || s.archiviato === 'sì' || s.archiviato === 'si') n.archiviato = true;
   if (s.numeroProtocollo) { n.numeroProtocollo = String(s.numeroProtocollo).slice(0, 40); n.protocollo = 'fatto'; }
   if (s.dataProtocollo && /^\d{4}-\d{2}-\d{2}$/.test(s.dataProtocollo)) n.dataProtocollo = s.dataProtocollo;
@@ -207,7 +212,7 @@ export function esportaJson(stati, nomi = {}, ora = new Date()) {
 
 const COLONNE = ['impronta', 'nome', 'percorso', 'protocollo', 'numero_protocollo', 'data_protocollo', 'firma', 'pagamento', 'pubblicato', 'archiviato', 'etichette', 'nota', 'aggiornato'];
 const sino = (v) => (v ? 'sì' : '');
-const fase = (v) => (v === 'da' ? 'da fare' : v === 'fatto' ? 'fatto' : '');
+const fase = (v) => (v === 'da' ? 'da fare' : v === 'fatto' ? 'fatto' : v === 'no' ? 'non serve' : '');
 function cella(v) { const s = String(v ?? ''); return /[;"\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }
 
 /** CSV (separatore «;», come Excel in italiano). */
@@ -216,7 +221,7 @@ export function esportaCsv(stati, nomi = {}) {
   for (const [impronta, s] of entries(stati)) {
     if (!IMPRONTA.test(impronta) || vuoto(s)) continue;
     const f = (nomi[impronta] || [])[0] || {};
-    righe.push([impronta, f.nome || '', f.percorso || '', fase(s.protocollo), s.numeroProtocollo || '', s.dataProtocollo || '', fase(s.firma), fase(s.pagamento), sino(s.pubblicato), sino(s.archiviato), (s.etichette || []).join(' | '), s.nota || '', s.aggiornato ? new Date(s.aggiornato).toISOString() : ''].map(cella).join(';'));
+    righe.push([impronta, f.nome || '', f.percorso || '', fase(s.protocollo), s.numeroProtocollo || '', s.dataProtocollo || '', fase(s.firma), fase(s.pagamento), s.pubblicato === 'da' ? 'da fare' : sino(s.pubblicato), sino(s.archiviato), (s.etichette || []).join(' | '), s.nota || '', s.aggiornato ? new Date(s.aggiornato).toISOString() : ''].map(cella).join(';'));
   }
   return '﻿' + righe.join('\r\n') + '\r\n';
 }
@@ -262,14 +267,14 @@ export function importa(testo) {
   const head = righe[0].map((x) => normalizza(x).trim().replace(/\s+/g, '_'));
   const col = (n) => head.indexOf(n);
   if (col('impronta') < 0) throw new Error('Nel CSV manca la colonna «impronta»: usa un file esportato da Leggio.');
-  const daFase = (v) => { const x = normalizza(v).trim(); return x === 'da fare' || x === 'da' ? 'da' : x === 'fatto' || x === 'si' || x === 'sì' ? 'fatto' : undefined; };
+  const daFase = (v) => { const x = normalizza(v).trim(); return x === 'da fare' || x === 'da' ? 'da' : x === 'fatto' || x === 'si' || x === 'sì' ? 'fatto' : x === 'non serve' || x === 'no' ? 'no' : undefined; };
   for (const r of righe.slice(1)) {
     const g = (n) => (col(n) >= 0 ? (r[col(n)] ?? '').trim() : '');
     const impronta = g('impronta').toLowerCase();
     const s = ripulisci({
       protocollo: daFase(g('protocollo')), numeroProtocollo: g('numero_protocollo'), dataProtocollo: g('data_protocollo'),
       firma: daFase(g('firma')), pagamento: daFase(g('pagamento')),
-      pubblicato: /^s[iì]$/i.test(g('pubblicato')), archiviato: /^s[iì]$/i.test(g('archiviato')),
+      pubblicato: /^s[iì]$/i.test(g('pubblicato')) ? true : normalizza(g('pubblicato')).trim() === 'da fare' ? 'da' : false, archiviato: /^s[iì]$/i.test(g('archiviato')),
       etichette: g('etichette').split('|'), nota: g('nota'), aggiornato: Date.parse(g('aggiornato')) || 0,
     });
     if (IMPRONTA.test(impronta) && s) voci.set(impronta, s); else scartate++;

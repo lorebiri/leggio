@@ -5,7 +5,7 @@ import { analizza, trovaDate } from '../../avanzati/lib/rinomina.js';
 import { numeroIt } from './testo.js';
 
 /** Versione delle regole di estrazione: se cambia, i documenti vengono riletti alla prossima scansione. */
-export const VERSIONE_ESTRAZIONE = 5; // 4: segnatura di protocollo (Titulus) nel testo; 5: striscia-immagine
+export const VERSIONE_ESTRAZIONE = 6; // 6: IBAN, tracciabilità, incarichi, data di fine // 4: segnatura di protocollo (Titulus) nel testo; 5: striscia-immagine
 
 export const TIPI = [
   { id: 'fattura', label: 'Fattura' },
@@ -14,6 +14,8 @@ export const TIPI = [
   { id: 'ordine', label: 'Ordine o determina' },
   { id: 'missione', label: 'Missione' },
   { id: 'contratto', label: 'Contratto' },
+  { id: 'incarico', label: 'Incarico o assegno' },
+  { id: 'tracciabilita', label: 'Tracciabilità (conto dedicato)' },
   { id: 'pec', label: 'PEC' },
   { id: 'p7m', label: 'File firmato (.p7m)' },
   { id: 'altro', label: 'Altro' },
@@ -26,11 +28,13 @@ export const CODICI_ENTE_PREDEFINITI = ['80054330586', '02118311006'];
 
 // Riconoscimento dal testo: per ogni tipo, frasi forti (titolo del documento) cercate all'inizio.
 const REGOLE = [
+  { id: 'tracciabilita', re: /\b(dichiarazione|comunicazione)\b[^.]{0,120}\bconto (corrente )?dedicato\b|\bconto corrente dedicato\b[^.]{0,80}\b(l\.|legge) ?136\/2010/i, peso: 6 },
+  { id: 'incarico', re: /\bconferimento (di |dell['’])?incarico\b|\bcontratto di (collaborazione|lavoro autonomo|ricerca)\b|\bassegno di ricerca\b|\bincarico (di collaborazione|post-?doc|di ricerca)\b|\bborsa di studio\b/i, peso: 5 },
   { id: 'durc', re: /\bdurc\b|documento unico di regolarit[aà] contributiva|regolarit[aà] contributiva/i, peso: 5 },
   { id: 'nota-credito', re: /\bnota di credito\b|\bnota credito\b/i, peso: 4 },
   { id: 'missione', re: /\b(ordine|incarico|autorizzazione|richiesta|rimborso)( spese)? (di |per |della )?missione\b|\bmissione n\.|\btrattamento di missione\b|\brimborso spese di viaggio\b|\btrasferta\b/i, peso: 4 },
   { id: 'fattura', re: /\bfattura( elettronica| accompagnatoria| differita| n\.?| numero| nr\.?)?\b/i, peso: 3 },
-  { id: 'ordine', re: /\bdetermina(zione)?( a contrarre| dirigenziale| n\.?)?\b|\bdecreto a contrarre\b|\bbuono d['’]ordine\b|\bordine (di acquisto|di fornitura|n\.?|nr\.?|numero)|\blettera d['’]ordine\b|\bordinativo\b/i, peso: 3 },
+  { id: 'ordine', re: /\bdetermina(zione)?( a contrarre| dirigenziale| n\.?)?\b|\bdecreto a contrarre\b|\bbuono d['’]ordine\b|\bordine (di acquisto|di fornitura|n\.?|nr\.?|numero)|\blettera d['’]ordine\b|\bordinativo\b|\bdocumento di stipula\b|\btrattativa diretta\b|\bordine diretto (d['’]acquisto|di acquisto)\b|\brichiesta di offerta\b/i, peso: 3 },
   { id: 'contratto', re: /\bcontratto( di| per| n\.?)?\b|\bconvenzione\b|\baccordo quadro\b|\bscrittura privata\b/i, peso: 2 },
   { id: 'pec', re: /posta elettronica certificata|ricevuta di (accettazione|avvenuta consegna)|\bdaticert\b/i, peso: 2 },
 ];
@@ -154,6 +158,30 @@ export function trovaScadenza(testo, tipo) {
   return m ? (trovaDate(m[2])[0]?.iso || '') : '';
 }
 
+/** Controllo dell'IBAN (mod 97). */
+export function ibanValido(iban) {
+  const s = String(iban || '').replace(/\s+/g, '').toUpperCase();
+  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(s)) return false;
+  const r = (s.slice(4) + s.slice(0, 4)).replace(/[A-Z]/g, (c) => String(c.charCodeAt(0) - 55));
+  let m = 0; for (const ch of r) m = (m * 10 + +ch) % 97;
+  return m === 1;
+}
+/** IBAN italiani (validi) citati nel testo. */
+export function trovaIban(testo) {
+  const out = [];
+  for (const m of String(testo || '').toUpperCase().matchAll(/\bIT\s?\d{2}\s?[A-Z]\s?(?:[0-9A-Z]\s?){22}/g)) {
+    const v = m[0].replace(/\s+/g, '');
+    if (v.length === 27 && ibanValido(v) && !out.includes(v)) out.push(v);
+  }
+  return out.slice(0, 5);
+}
+/** Data di fine (incarichi, contratti): «dal … al …», «fino al …», «scadenza del contratto …». */
+export function trovaDataFine(testo) {
+  const t = String(testo || '').replace(/\s+/g, ' ');
+  const m = t.match(/\bdal(?:l['’])? ?\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4} al (\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4})/i) || t.match(/\b(?:fino al|sino al|termine (?:il|del)|scadenza del contratto|cessazione(?: dell['’]incarico)?)\D{0,15}(\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4})/i);
+  return m ? trovaDate(m[1])[0]?.iso || '' : '';
+}
+
 /** Numero del documento. */
 export function trovaNumero(testo, tipo) {
   const t = String(testo || '').replace(/\s+/g, ' ').slice(0, 8000);
@@ -202,7 +230,9 @@ export function datiDaTesto(testo, { nome = '', escludi = CODICI_ENTE_PREDEFINIT
     piva, cf,
     numero: String(numero).slice(0, 40),
     data: base.data || '',
-    importo: ['fattura', 'nota-credito', 'ordine', 'contratto', 'missione'].includes(tipo) ? trovaImporto(t) : null,
+    importo: ['fattura', 'nota-credito', 'ordine', 'contratto', 'missione', 'incarico'].includes(tipo) ? trovaImporto(t) : null,
+    iban: ['fattura', 'nota-credito', 'tracciabilita', 'contratto', 'ordine'].includes(tipo) ? trovaIban(t)[0] || '' : '',
+    dataFine: ['incarico', 'contratto'].includes(tipo) ? trovaDataFine(t) : '',
     cig, cup,
     scadenza: ['durc', 'fattura', 'nota-credito'].includes(tipo) ? trovaScadenza(t, tipo) || (tipo === 'durc' ? base.scadenza : '') : '',
   };
@@ -213,7 +243,8 @@ export function datiDaFattura(f, { escludi = CODICI_ENTE_PREDEFINITI } = {}) {
   const c = f.corpi[0] || {};
   const no = new Set(escludi);
   const pivaCed = String(f.cedente?.partitaIva || '').replace(/^[A-Z]{2}/, '');
-  const scadenze = (c.pagamenti || []).flatMap((p) => p.dettagli || []).map((d) => d.scadenza).filter(Boolean).sort();
+  const dettagli = (c.pagamenti || []).flatMap((p) => p.dettagli || []);
+  const scadenze = dettagli.map((d) => d.scadenza).filter(Boolean).sort();
   return {
     tipo: c.tipo === 'TD04' ? 'nota-credito' : 'fattura',
     fornitore: (f.cedente?.nome || '').slice(0, 80),
@@ -225,6 +256,8 @@ export function datiDaFattura(f, { escludi = CODICI_ENTE_PREDEFINITI } = {}) {
     cig: (c.cig || []).slice(0, 10),
     cup: (c.cup || []).slice(0, 10),
     scadenza: scadenze[0] || '',
+    iban: (dettagli.map((d) => String(d.iban || '').replace(/\s+/g, '').toUpperCase()).find((x) => x) || ''),
+    dataFine: '',
   };
 }
 

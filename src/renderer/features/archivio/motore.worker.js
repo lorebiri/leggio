@@ -121,8 +121,8 @@ const H = {
   conteggi() { return M.conteggi(); },
   righe({ ids }) { return ids.map((id) => M.riga(id)).filter(Boolean); },
   documento({ id }) { const r = M.get(id); return r ? { ...M.riga(id), testo: r.testo } : null; },
-  oggi({ impostazioni, ultimaApertura, oggi }) {
-    return riepilogoOggi({ records: [...M.rec.values()], stati: M.stati, impostazioni, ultimaApertura, oggi });
+  oggi({ impostazioni, ultimaApertura, inizioArchivio, oggi }) {
+    return riepilogoOggi({ records: [...M.rec.values()], stati: M.stati, impostazioni, ultimaApertura, inizioArchivio, oggi });
   },
   'cambia-stato'({ ids = [], impronte: imp0 = [], modifica, ora }) {
     const impronte = new Set(imp0.filter((x) => /^[a-f0-9]{64}$/.test(x)));
@@ -190,6 +190,9 @@ const H = {
   },
   /** Percorsi (id) e impronte noti: servono al thread dell'interfaccia per rispondere subito agli eventi. */
   noti() { return { ids: [...M.rec.keys()], impronte: [...perImpronta.keys()] }; },
+  impostazioni({ imp }) { M.impostazioni(imp || {}); return true; },
+  pratica({ id }) { return M.pratica(id); },
+  fornitore({ piva }) { return M.fornitore(piva); },
   info() { return { documenti: M.size, stati: M.stati.size, impronte: perImpronta.size }; },
 };
 

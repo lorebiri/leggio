@@ -117,8 +117,12 @@ export default function register(app) {
     arr.push({ key: 'archivio.durataDurc', field: { name: 'archivio.durataDurc', label: 'Archivio: validità del DURC in giorni (se nel documento non c\'è la scadenza)', type: 'number', min: 1, max: 999, value: s.get('archivio.durataDurc', IMPOSTAZIONI_PREDEFINITE.durataDurc), help: 'Oggi 120 giorni per il DURC online: verifica sulla normativa vigente.' } });
     arr.push({ key: 'archivio.preavvisoDurc', field: { name: 'archivio.preavvisoDurc', label: 'Archivio: avvisa dei DURC in scadenza con quanti giorni di anticipo', type: 'number', min: 0, max: 365, value: s.get('archivio.preavvisoDurc', IMPOSTAZIONI_PREDEFINITE.preavvisoDurc) } });
     arr.push({ key: 'archivio.preavvisoFatture', field: { name: 'archivio.preavvisoFatture', label: 'Archivio: proponi in «Oggi» le fatture che scadono entro quanti giorni', type: 'number', min: 0, max: 365, value: s.get('archivio.preavvisoFatture', IMPOSTAZIONI_PREDEFINITE.preavvisoFatture) } });
+    arr.push({ key: 'archivio.giorniNonProtocollati', field: { name: 'archivio.giorniNonProtocollati', label: 'Archivio: segnala in «Oggi» i documenti arrivati da più di quanti giorni e non ancora protocollati', type: 'number', min: 1, max: 60, value: s.get('archivio.giorniNonProtocollati', IMPOSTAZIONI_PREDEFINITE.giorniNonProtocollati) } });
     arr.push({ key: 'archivio.codiciEnte', field: { name: 'archivio.codiciEnte', label: 'Archivio: codice fiscale e P.IVA del tuo ente (non vengono presi per quelli del fornitore)', type: 'text', value: s.get('archivio.codiciEnte', CODICI_ENTE_PREDEFINITI.join(', ')) } });
   });
+
+  const CHIAVI_REGOLE = ['archivio.durataDurc', 'archivio.preavvisoDurc', 'archivio.preavvisoFatture', 'archivio.giorniNonProtocollati', 'archivio.codiciEnte'];
+  app.bus.on('settings:changed', (e) => { if (CHIAVI_REGOLE.includes(e?.key)) A.impostazioniCambiate().catch(() => {}); });
 
   // ---------- operazioni in blocco offerte da altre aree (OCR, compressione) ----------
   app.bus.on('batch:operations', (list) => {

@@ -102,6 +102,11 @@ export class Archivio {
     } finally { this.applicando = false; }
   }
 
+  pratica(id) { return this.motore.call('pratica', { id }); }
+  fornitore(piva) { return this.motore.call('fornitore', { piva }); }
+  /** Le impostazioni sono cambiate: il motore ricalcola DURC e semafori. */
+  async impostazioniCambiate() { await this.motore.call('impostazioni', { imp: this.impostazioni() }); this.versione++; this.emit('cambiato'); }
+
   /** Lettura per le altre aree: stato d'ufficio (con protocollo) del documento con quel percorso, o null. */
   async statoArchivio(path) {
     if (!path) return null;
@@ -126,6 +131,9 @@ export class Archivio {
       preavvisoDurc: +s.get('archivio.preavvisoDurc', IMPOSTAZIONI_PREDEFINITE.preavvisoDurc) || 0,
       preavvisoFatture: +s.get('archivio.preavvisoFatture', IMPOSTAZIONI_PREDEFINITE.preavvisoFatture) || 0,
       scaduteDaProporre: IMPOSTAZIONI_PREDEFINITE.scaduteDaProporre,
+      avvisoSdi: IMPOSTAZIONI_PREDEFINITE.avvisoSdi,
+      giorniNonProtocollati: +s.get('archivio.giorniNonProtocollati', IMPOSTAZIONI_PREDEFINITE.giorniNonProtocollati) || IMPOSTAZIONI_PREDEFINITE.giorniNonProtocollati,
+      mesiPubblicazione: IMPOSTAZIONI_PREDEFINITE.mesiPubblicazione,
     };
   }
   codiciEnte() {
@@ -141,6 +149,8 @@ export class Archivio {
     this.emit('cartelle');
     if (!this.attivo && !(await this.#haIndice())) { this.caricato = true; this.emit('caricato'); return; }
     await this.carica();
+    // da quando l'archivio esiste: i «non protocollati» si contano solo per i documenti arrivati dopo
+    if (!this.app.settings.get('archivio.inizio', 0) && this.misure.caricamento?.documenti) this.app.settings.set('archivio.inizio', Date.now());
     if (this.attivo) setTimeout(() => this.aggiorna({ motivo: 'avvio' }).catch((e) => this.app.log?.('warn', 'archivio: aggiornamento non riuscito', { e: e.message })), 2500);
     this.#avviaSorveglianza();
   }
@@ -157,6 +167,7 @@ export class Archivio {
   /** Carica indice e stati dal disco nel worker. */
   async carica() {
     const t0 = performance.now();
+    await this.motore.call('impostazioni', { imp: this.impostazioni() });
     const { manifesto: grezzo, orfani } = await this.store.manifesto();
     const { manifesto } = await this.motore.call('carica-inizio', { manifesto: grezzo });
     const blocchi = [];
@@ -310,6 +321,7 @@ export class Archivio {
     if (av.fatti || av.rimossi) this.#cambiato();
     // prima indicizzazione: da qui in poi i file che arrivano sono «nuovi dall'ultima apertura»
     if (!this.soglia && !lavoro.annullato) { this.soglia = Date.now(); this.app.settings.set('archivio.vistoFino', this.soglia); }
+    if (!this.app.settings.get('archivio.inizio', 0) && !lavoro.annullato) this.app.settings.set('archivio.inizio', Date.now());
     else if (av.nuovi && ['periodico', 'sorveglianza'].includes(lavoro.motivo)) this.emit('nuovi', { n: av.nuovi });
     if (!lavoro.annullato) setTimeout(() => this.leggiSegnature().catch((e) => this.app.log?.('warn', 'archivio: coda segnature', { e: e.message })), 1500);
     return av;
@@ -467,7 +479,7 @@ export class Archivio {
   righe(ids) { return this.motore.call('righe', { ids }); }
   documento(id) { return this.motore.call('documento', { id }); }
   oggi() {
-    return this.motore.call('oggi', { impostazioni: this.impostazioni(), ultimaApertura: this.soglia, oggi: oggiIso() });
+    return this.motore.call('oggi', { impostazioni: this.impostazioni(), ultimaApertura: this.soglia, inizioArchivio: this.app.settings.get('archivio.inizio', 0), oggi: oggiIso() });
   }
   /** Segna che l'utente ha visto i documenti arrivati finora (per la prossima apertura). */
   segnaVisto() { this.app.settings.set('archivio.vistoFino', Date.now()); }

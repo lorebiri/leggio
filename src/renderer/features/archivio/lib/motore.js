@@ -4,13 +4,15 @@
 import { normalizza, interpretaRicerca, estratto, paginaDi } from './testo.js';
 import { haStato, descrivi, conSegnatura } from './stati.js';
 import { numeroConfrontabile } from './segnatura.js';
+import { indiciFornitori, prontaPerPagamento } from './pagamento.js';
 
 const TIPO_PAROLE = { durc: 'durc', fattura: 'fattura', fatture: 'fattura', 'nota di credito': 'nota-credito', determina: 'ordine', ordine: 'ordine', missione: 'missione', missioni: 'missione', contratto: 'contratto', contratti: 'contratto', pec: 'pec' };
 const coll = new Intl.Collator('it', { sensitivity: 'base', numeric: true });
 
 /** Campi del documento che vanno all'interfaccia (tutto tranne il testo). */
-export function riga(r, stato, offline, nomeFornitore) {
+export function riga(r, stato, offline, nomeFornitore, pagamento) {
   return {
+    pagamento: pagamento || null, iban: r.iban || '', dataFine: r.dataFine || '', ricezione: r.ricezione || '',
     id: r.id, path: r.path, rel: r.rel, cartella: r.cartella, nome: r.nome, ext: r.ext, size: r.size, mtime: r.mtime,
     impronta: r.impronta, tipo: r.tipo, fornitore: nomeFornitore || r.fornitore, fornitoreLetto: r.fornitore, piva: r.piva, cf: r.cf, numero: r.numero, data: r.data,
     importo: r.importo, cig: r.cig, cup: r.cup, scadenza: r.scadenza, segnatura: r.segnatura || null, striscia: r.striscia || null, segnaturaDaLeggere: segnale(r, 'segnatura-da-leggere'), segnaturaNonLetta: segnale(r, 'segnatura-non-letta'), firme: r.firme, firmatari: r.firmatari,
@@ -27,6 +29,48 @@ export class Motore {
     this.stati = new Map(); // impronta → stato
     this.offline = new Set(); // id delle cartelle non raggiungibili
     this.gruppi = null; // P.IVA → nome più frequente (ricalcolato quando cambiano i documenti)
+    this.imp = { durataDurc: 120 };
+    this.indici = null; // DURC e tracciabilità per P.IVA (ricalcolati quando cambiano i documenti)
+    this.oggi = null; // data di riferimento (i test la fissano)
+  }
+
+  impostazioni(imp) { this.imp = { ...this.imp, ...imp }; this.indici = null; }
+  #indici() { return (this.indici ??= indiciFornitori(this.rec.values(), this.imp)); }
+  /** Semaforo «pronta per il pagamento» di una fattura (null per gli altri documenti). */
+  pagamento(r) { return r.tipo === 'fattura' ? prontaPerPagamento(r, this.stato(r), this.#indici(), this.oggi ? { oggi: this.oggi } : {}) : null; }
+  #riga(r) { return riga(r, this.stato(r), this.offline.has(r.cartella), this.nomeFornitore(r), this.pagamento(r)); }
+
+  /**
+   * Pratica collegata: i documenti con lo stesso numero di protocollo, CIG o CUP, in ordine cronologico.
+   * → { chiavi: { protocollo, cig[], cup[] }, documenti: [riga + perche[]] }
+   */
+  pratica(id) {
+    const r0 = this.rec.get(id);
+    if (!r0) return null;
+    const s0 = this.stato(r0);
+    const prot = s0?.protocollo === 'fatto' ? numeroConfrontabile(s0.numeroProtocollo) : '';
+    const cig = new Set(r0.cig || []); const cup = new Set(r0.cup || []);
+    const out = [];
+    for (const r of this.rec.values()) {
+      const perche = [];
+      if (prot) { const s = this.stato(r); if (s?.protocollo === 'fatto' && numeroConfrontabile(s.numeroProtocollo) === prot) perche.push('protocollo'); }
+      if ((r.cig || []).some((x) => cig.has(x))) perche.push('CIG');
+      if ((r.cup || []).some((x) => cup.has(x))) perche.push('CUP');
+      if (perche.length || r.id === id) out.push({ ...this.#riga(r), perche, questo: r.id === id });
+    }
+    const d = (x) => x.data || isoDaMs(x.mtime);
+    out.sort((a, b) => d(a).localeCompare(d(b)) || coll.compare(a.nome, b.nome));
+    return { chiavi: { protocollo: s0?.protocollo === 'fatto' ? s0.numeroProtocollo : '', cig: [...cig], cup: [...cup] }, documenti: out.slice(0, 500) };
+  }
+
+  /** Scheda del fornitore (P.IVA): nome, DURC, dichiarazioni di tracciabilità, fatture non pagate. */
+  fornitore(piva) {
+    if (!piva) return null;
+    const ind = this.#indici();
+    const fatture = [];
+    for (const r of this.rec.values()) if (r.piva === piva && r.tipo === 'fattura') { const s = this.stato(r); if (s?.pagamento !== 'fatto') fatture.push(this.#riga(r)); }
+    fatture.sort((a, b) => (a.pagamento?.previsto || '').localeCompare(b.pagamento?.previsto || ''));
+    return { piva, nome: this.nomiPerPiva().get(piva) || '', durc: (ind.durc.get(piva) || []).slice(0, 5), tracciabilita: (ind.tracciabilita.get(piva) || []).slice(0, 5), fattureNonPagate: fatture.slice(0, 100), totaleNonPagate: fatture.length };
   }
 
   /** Fornitori raggruppati per P.IVA: «Delta Lab», «Delta Lab S.n.c.», «Spett.le Delta Lab» sono lo stesso. */
@@ -46,16 +90,16 @@ export class Motore {
   get size() { return this.rec.size; }
 
   metti(r) {
-    this.gruppi = null;
+    this.gruppi = null; this.indici = null;
     this.rec.set(r.id, r);
     this.norm.set(r.id, normalizza(r.testo || ''));
     this.meta.set(r.id, normalizza([r.nome, r.rel, r.fornitore, r.piva, r.cf, r.numero, r.segnatura?.numero, r.segnatura?.aoo, ...(r.cig || []), ...(r.cup || []), ...(r.firmatari || [])].join(' \u0001 ')));
   }
-  togli(id) { this.gruppi = null; this.rec.delete(id); this.norm.delete(id); this.meta.delete(id); }
+  togli(id) { this.gruppi = null; this.indici = null; this.rec.delete(id); this.norm.delete(id); this.meta.delete(id); }
   get(id) { return this.rec.get(id); }
   /** Stato d'ufficio più la segnatura di protocollo letta dal documento. */
   stato(r) { return conSegnatura(r?.impronta ? this.stati.get(r.impronta) : null, r?.segnatura); }
-  riga(id) { const r = this.rec.get(id); return r ? riga(r, this.stato(r), this.offline.has(r.cartella), this.nomeFornitore(r)) : null; }
+  riga(id) { const r = this.rec.get(id); return r ? this.#riga(r) : null; }
 
   /** Testo cercabile negli stati (note ed etichette). */
   #testoStato(r) {
@@ -94,6 +138,7 @@ export class Motore {
       }
       if (f.segnale && !segnale(r, f.segnale)) continue;
       if ((f.scadDal || f.scadAl) && (!r.scadenza || (f.scadDal && r.scadenza < f.scadDal) || (f.scadAl && r.scadenza > f.scadAl))) continue;
+      if (f.pronta) { const p = this.pagamento(r); if (!p || (f.pronta === 'da-controllare' ? !['rosso', 'giallo'].includes(p.esito) : p.esito !== f.pronta)) continue; }
       if (f.nonPagate) { const s = this.stato(r); if (s?.pagamento || s?.archiviato) continue; }
       if (f.aggiuntoDopo && !((r.aggiunto || 0) > f.aggiuntoDopo)) continue;
       let score = 0; let pos = -1;
@@ -124,7 +169,7 @@ export class Motore {
     const limite = Math.min(f.limite || 20000, 50000);
     return {
       totale: out.length,
-      righe: out.slice(0, limite).map(({ r, pos }) => ({ ...riga(r, this.stato(r), this.offline.has(r.cartella), this.nomeFornitore(r)), pagina: pos >= 0 ? paginaDi(r.testo || '', pos) : null })),
+      righe: out.slice(0, limite).map(({ r, pos }) => ({ ...this.#riga(r), pagina: pos >= 0 ? paginaDi(r.testo || '', pos) : null })),
       ms: Date.now() - t0,
     };
   }
