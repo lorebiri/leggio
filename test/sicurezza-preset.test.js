@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { PDFDocument, StandardFonts } from '@cantoo/pdf-lib';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { buildMatchers, findMatches } from '../src/renderer/features/sicurezza/logica/modelli.js';
-import { getPreset, preselect, emailIstituzionale, signatureCandidates, FIRMA } from '../src/renderer/features/sicurezza/logica/preset.js';
+import { getPreset, preselect, emailIstituzionale, signatureCandidates, FIRMA, datiEnte, isDatoEnte } from '../src/renderer/features/sicurezza/logica/preset.js';
 import { findSignatures } from '../src/renderer/features/sicurezza/logica/firme.js';
 
 const FONTS = fileURLToPath(new URL('../node_modules/pdfjs-dist/standard_fonts/', import.meta.url));
@@ -98,5 +98,35 @@ describe('firma autografa come immagine', () => {
     expect(r).toHaveLength(1);
     expect(r[0].map(Math.round)).toEqual([57, 137, 213, 188]);
     expect(FIRMA).toMatch(/Firma/);
+  });
+});
+
+describe('recapiti del Profilo dell\'ente: mai oscurati', () => {
+  const profilo = {
+    denominazione: 'CNR - Istituto di Chimica dei Composti Organometallici (ICCOM)', partitaIva: '02118311006', codiceFiscale: '80054330586',
+    pec: 'protocollo.iccom@pec.cnr.it', telefono: 'Segreteria 050 315 2443 / sede di Sesto +39 055 5225000',
+    ufficio: 'Ufficio amministrazione — segreteria.iccom@iccom.cnr.it',
+  };
+  const ente = datiEnte(profilo);
+  it('estrae telefoni ed email dal profilo (i codici fiscali e le P.IVA non sono telefoni)', () => {
+    expect([...ente.emails].sort()).toEqual(['protocollo.iccom@pec.cnr.it', 'segreteria.iccom@iccom.cnr.it']);
+    expect(ente.phones.has('0503152443')).toBe(true);
+    expect(ente.phones.has('0555225000')).toBe(true);
+  });
+  it('nel modello «Dati personali comuni» il telefono della segreteria resta, quello della persona no', () => {
+    const d = getPreset('dati');
+    const hits = findMatches(INCARICO, buildMatchers({ models: d.cerca })).filter((h) => !isDatoEnte(h, ente));
+    const oscura = hits.filter((h) => preselect(d, h)).map((h) => h.text);
+    expect(oscura).toEqual(expect.arrayContaining(['0586 123456', '+39 340 1122334', 'laura.bianchi90@gmail.com']));
+    expect(oscura).not.toContain('050 315 2443');
+    expect(oscura).not.toContain('protocollo.iccom@pec.cnr.it');
+    expect(oscura).not.toContain('segreteria.iccom@iccom.cnr.it');
+  });
+  it('formati diversi dello stesso numero e profilo vuoto', () => {
+    expect(isDatoEnte({ matcher: 'Numero di telefono', text: '+39 050-3152443' }, ente)).toBe(true);
+    expect(isDatoEnte({ matcher: 'Numero di telefono', text: '050 315 2444' }, ente)).toBe(false);
+    expect(isDatoEnte({ matcher: 'Indirizzo email', text: 'Protocollo.ICCOM@pec.cnr.it' }, ente)).toBe(true);
+    expect(isDatoEnte({ matcher: 'Numero di telefono', text: '050 315 2443' }, datiEnte({}))).toBe(false);
+    expect(isDatoEnte({ matcher: 'Numero di telefono', text: '050 315 2443' }, null)).toBe(false);
   });
 });

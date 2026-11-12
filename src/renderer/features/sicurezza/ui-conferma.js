@@ -3,9 +3,9 @@
 // In cima all'elenco c'è il menu «Modello pronto» (Dati personali comuni / Incarichi e assegni…).
 import { PDFJS_ASSETS } from '../../core/pdf.js';
 import { buildMatchers } from './logica/modelli.js';
-import { PRESET, getPreset, preselect, FIRMA } from './logica/preset.js';
+import { PRESET, getPreset, preselect, FIRMA, datiEnte, isDatoEnte } from './logica/preset.js';
 import { findInPdf, applyRedaction } from './redigi.js';
-import { boxAvviso } from './comune.js';
+import { boxAvviso, esclusioneEnte } from './comune.js';
 
 /** Tutti i dati cercati (superinsieme dei modelli pronti): il modello decide solo cosa è spuntato. */
 export const CERCATI = ['cf', 'iban', 'email', 'tel', 'piva', 'nascita', 'indirizzo'];
@@ -39,7 +39,7 @@ export async function oscuraDatiPersonali(app, bytes, { password, progress, pres
   const pdf = await task.promise;
   try {
     progress?.set?.(null, 'Ricerca dei dati personali…');
-    const found = await findInPdf(pdf, buildMatchers({ models: CERCATI }), { signal, OPS: pdfjs.OPS, signatures: true, onProgress: (f, t) => progress?.set?.(f * 0.3, t) });
+    const found = await findInPdf(pdf, buildMatchers({ models: CERCATI }), { signal, OPS: pdfjs.OPS, signatures: true, exclude: esclusioneEnte(app, datiEnte, isDatoEnte), onProgress: (f, t) => progress?.set?.(f * 0.3, t) });
     let current = getPreset(preset || app.settings.get('sic.preset', 'dati')) || PRESET[0];
     const checks = found.hits.map((hit) => ({ hit, on: preselect(current, hit) }));
     const listEl = h('div', { style: { maxHeight: '44vh', overflow: 'auto' } });

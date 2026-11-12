@@ -78,3 +78,29 @@ export function signatureCandidates(images, labels, pageW, pageH) {
 }
 
 export const FIRMA_ETICHETTE = /\b(firma|firmato|in\s+fede|il\s+dichiarante|la\s+dichiarante|l['’]\s*incaricat[oa]|il\s+contraente|per\s+accettazione|letto,?\s+confermato)\b/i;
+
+// ---- Dati dell'ente (Profilo dell'ente, area avanzati): telefoni ed email che non si oscurano mai ----
+const soloCifre = (s) => String(s).replace(/\D/g, '').replace(/^(00)?39(?=\d{9,})/, '');
+
+/** Dal profilo dell'ente (oggetto con testi qualsiasi) → { emails:Set, phones:Set } */
+export function datiEnte(profilo) {
+  const emails = new Set(); const phones = new Set();
+  for (const v of Object.values(profilo || {})) {
+    if (typeof v !== 'string') continue;
+    for (const m of v.matchAll(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g)) emails.add(m[0].toLowerCase());
+    for (const m of v.matchAll(/(?:\+|00)?[\d][\d\s./-]{5,}\d/g)) { const d = soloCifre(m[0]); if (d.length >= 6 && d.length <= 13) phones.add(d); }
+  }
+  return { emails, phones };
+}
+
+/** Il risultato è un telefono o un'email dell'ente? (non va mai oscurato) */
+export function isDatoEnte(hit, ente) {
+  if (!ente) return false;
+  const t = String(hit.text);
+  if (hit.matcher === label('email')) return ente.emails.has(t.toLowerCase());
+  if (hit.matcher === label('tel')) {
+    const d = soloCifre(t);
+    for (const p of ente.phones) if (p === d || (Math.min(p.length, d.length) >= 8 && (p.endsWith(d) || d.endsWith(p)))) return true;
+  }
+  return false;
+}

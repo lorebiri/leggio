@@ -95,3 +95,7 @@ chiave del lotto): la ripresa dopo un'interruzione la gestisce il motore delle a
   elenco dei dati da non pubblicare secondo le Linee guida del Garante 2014 e regole di Leggio su email
   istituzionali e indirizzi di sede — **da verificare** con il responsabile della trasparenza.
 Test: `test/sicurezza-preset.test.js` (contratto di lavoro autonomo e decreto di assegno realistici, firma in un PDF vero).
+
+**Recapiti dell'ente mai oscurati**: telefoni ed email presenti nel Profilo dell'ente (`app.services.profiloEnte()`,
+area avanzati: sede, segreteria, PEC) vengono esclusi dai risultati in «Cerca e oscura», nella conferma di
+«Pronto per la pubblicazione» e nelle Azioni guidate (stesso numero anche scritto in altro formato, es. +39 050-3152443).

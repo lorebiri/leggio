@@ -3,14 +3,14 @@
 // Un errore lanciato = file «non elaborato» e NON salvato (così un oscuramento non verificato non esce mai).
 import { PDFJS_ASSETS } from '../../core/pdf.js';
 import { buildMatchers, MODELLI } from './logica/modelli.js';
-import { PRESET, getPreset, preselect, FIRMA } from './logica/preset.js';
+import { PRESET, getPreset, preselect, FIRMA, datiEnte, isDatoEnte } from './logica/preset.js';
 import { VOCI, sanitize } from './logica/sanifica.js';
 import { LIVELLI } from './logica/comprimi.js';
 import { openDecrypted, PasswordError } from './logica/cifratura.js';
 import { compressBytes, compressUnder } from './ui-comprimi.js';
 import { protectBytes } from './ui-protezione.js';
 import { findInPdf, applyRedaction } from './redigi.js';
-import { signatureCount } from './comune.js';
+import { signatureCount, esclusioneEnte } from './comune.js';
 
 const MIN_LEGIBLE = 110;
 const fmt = (n) => (n < 1e6 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1048576).toFixed(1).replace('.', ',') + ' MB');
@@ -110,7 +110,7 @@ export function operazioniSicurezza(app) {
           const task = pdfjs.getDocument({ data: data.slice(), isEvalSupported: false, ...PDFJS_ASSETS });
           const pdf = await task.promise;
           try {
-            const found = await findInPdf(pdf, matchers, { signal: ctx.signal, OPS: pdfjs.OPS, signatures: !!preset?.firma });
+            const found = await findInPdf(pdf, matchers, { signal: ctx.signal, OPS: pdfjs.OPS, signatures: !!preset?.firma, exclude: esclusioneEnte(app, datiEnte, isDatoEnte) });
             // senza conferma: valgono le scelte del modello (P.IVA, email istituzionali… restano visibili)
             if (preset) { found.hits = found.hits.filter((h) => preselect(preset, h) || h.matcher.startsWith('«')); found.byPage = new Map(); for (const h of found.hits) { if (!found.byPage.has(h.page)) found.byPage.set(h.page, []); found.byPage.get(h.page).push(...h.rects); } }
             return { pdf, task, found };
