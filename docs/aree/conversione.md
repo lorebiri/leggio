@@ -16,6 +16,7 @@ OCR, esportazioni, PDF/A, confronto, lettura ad alta voce, accessibilità. Codic
 | `read-aloud` | Leggi ad alta voce (interattivo) | vista |
 | `accessibility-check` | Controllo accessibilità | vista |
 | `word-count` | Statistiche del documento | vista |
+| `ocr-folder` | Rendi ricercabile una cartella (OCR in blocco, con ripresa) — solo app desktop | converti |
 
 ## Servizi per le altre aree (`app.services`)
 
@@ -31,6 +32,34 @@ OCR, esportazioni, PDF/A, confronto, lettura ad alta voce, accessibilità. Codic
 | `pdfa(bytes, { part: 2|3, ocr, title, lang, password, progress })` → `{ bytes, azioni, avvisi, verifica }` | Conversione PDF/A con verifica |
 | `verificaPdfA(bytes, password)` | Preflight PDF/A di base |
 | `controllaAccessibilita(bytes, password)` | Elenco dei controlli |
+| `estraiTesto(bytes, opts)` → `{ pagine:[{ n, testo, caratteri, senzaTesto, scansione }], numPagine, info, scansione }` | Estrazione leggera per l'indicizzazione, in un Web Worker condiviso (vedi sotto). |
+| `creaEstrattoreTesto()` → `{ estrai(bytes, opts), termina() }` | Un estrattore proprio (un worker dedicato, richieste in coda). |
+| `ocrCartella({ cartella, destinazione?, langs, dpi, copiaGiaTesto, progress, onFile })` | OCR di una cartella con registro per la ripresa (solo app desktop). |
+
+### Estrazione del testo per l'archivio
+- `opts`: `{ password, maxPagine, controllaImmagini=false, signal }`. `senzaTesto` = meno di 20 caratteri visibili;
+  `scansione` = senza testo (e, con `controllaImmagini`, con almeno un'immagine: distingue le pagine bianche, costa di più).
+- Errori: eccezione con `codice` `'password'` o `'danneggiato'` e messaggio in italiano.
+- I byte vengono copiati e trasferiti al worker: chi chiama li conserva.
+- Dentro un proprio Web Worker si può usare direttamente la funzione pura:
+  `import { estraiTesto } from '../conversione/lib/estrai-testo.js'` con `import * as pdfjs from 'pdfjs-dist'` e
+  `globalThis.pdfjsWorker = await import('pdfjs-dist/build/pdf.worker.min.mjs')` (pdf.js gira nello stesso worker,
+  senza worker annidati: è ciò che fa `estrai-testo.worker.js`).
+- Misure (browser integrato): ~2 ms per un PDF di 2 pagine (200 file in 0,43 s), 300 pagine/1 milione di caratteri in 0,4 s.
+
+### Azioni guidate (area avanzati)
+Registrate con `batch:operations`: `conv-ocr` (Rendi ricercabile; i file che hanno già il testo restano com'erano, con nota),
+`conv-pdfa` (PDF/A-2b/3b, OCR facoltativo, esito della verifica nella nota), `conv-esporta-docx|txt|xlsx`
+(scrivono il file convertito nella cartella scelta nei parametri e lasciano il PDF invariato). I worker OCR sono
+condivisi tra un file e l'altro (`poolOcr`, chiusi dopo un minuto di inattività). Se le azioni guidate offriranno
+`ctx.scriviFile(nome, byte)` e `ctx.signal`, le esportazioni e l'OCR li useranno già.
+
+## OCR di cartelle intere
+Registro `.leggio-ocr.json` nella cartella di destinazione (`Ricercabili/` accanto agli originali, struttura delle
+sottocartelle conservata): un file è «finito» se il registro lo segna come fatto/già con testo e dimensione e data
+non sono cambiate; alla ripresa viene saltato. Scritture atomiche (file temporaneo + rinomina). Tre file in
+parallelo, ciascuno con un worker riusato (riciclato dopo 150 pagine). Un file danneggiato o protetto viene
+segnato «errore» e ritentato alla ripresa successiva.
 
 ## Scelte tecniche
 

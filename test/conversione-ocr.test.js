@@ -65,7 +65,8 @@ describe('utilità', () => {
   });
   it('stima del tempo leggibile', () => {
     expect(stimaTempo(10000, 1, 10)).toBe('circa 1 minuto'.replace('1 minuto', '2 minuti'));
-    expect(stimaTempo(1000, 1, 10)).toBe('circa 10 secondi');
+    expect(stimaTempo(2000, 1, 10)).toBe('circa 20 secondi');
     expect(stimaTempo(1000, 10, 10)).toBe('');
+    expect(stimaTempo(1000, 9, 10)).toBe('pochi secondi');
   });
 });
