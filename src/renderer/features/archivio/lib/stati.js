@@ -104,7 +104,7 @@ export function testoProtocollo(s) {
   if (s.dataProtocollo) t += ` del ${dataIt(s.dataProtocollo)}`;
   if (s.uorProtocollo) t += `, UOR ${s.uorProtocollo}`;
   if (s.origineProtocollo === 'documento') t += ' — letto dal documento';
-  else if (s.origineProtocollo === 'segnatura') t += ' — segnatura apposta su una copia';
+  else if (s.origineProtocollo === 'segnatura') t += ' — letto dalla segnatura di Titulus';
   return t;
 }
 

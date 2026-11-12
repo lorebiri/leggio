@@ -5,7 +5,7 @@ import './avanzati.css';
 import { openPane } from './pane.js';
 import { openSignedFile, signatureView, saveContent, saveReport, registerP7mPanel, SIGNED_EXT } from './ui/p7m.js';
 import { openFattura, registerFatturaPanel } from './ui/fattura.js';
-import { timbroProtocollo, KEY_MODELLI, cercaSegnatura } from './ui/protocollo.js';
+import { KEY_MODELLI, cercaSegnatura } from './ui/protocollo.js';
 import { preparaPerTitulus, KEY_SOGLIA_TITULUS } from './ui/titulus.js';
 import { leggiSegnaturaTitulus, KEY_MASCHERA_UOR } from './ui/segnatura-immagine.js';
 import { registerDatiTitulus } from './ui/datititulus.js';
@@ -75,10 +75,7 @@ export default function register(app) {
     description: 'Controlla i file prima del caricamento in Titulus: PDF/A, firme, password, dimensione, nome; rapporto e copie',
     keywords: 'titulus protocollo carica caricamento prepara controlla pdf/a firma protocollare conservazione',
     run: () => preparaPerTitulus(app, deps) });
-  app.registerTool({ id: 'protocol-stamp', name: 'Segnatura su copia di lavoro', category: 'avanzati', icon: 'stamp',
-    description: 'Riporta su una copia il numero e la data già assegnati da Titulus (non assegna numeri)',
-    keywords: 'segnatura protocollo titulus copia di lavoro numero data riporta',
-    run: () => timbroProtocollo(app, deps) });
+  // Nessuno strumento di segnatura: la stampigliatura di protocollo la mette solo Titulus.
 
   app.registerTool({ id: 'conformity-declaration', name: 'Dichiarazione di conformità all\'originale', category: 'avanzati', icon: 'signature',
     description: 'Aggiunge il testo di attestazione dell\'ufficio con nome, qualifica e data, pronto per la firma',

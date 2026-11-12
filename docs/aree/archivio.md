@@ -273,12 +273,12 @@ vere 1–2 MB). Documenti reali più pesanti e cartelle di rete aumenteranno i t
   numeroProtocollo, dataProtocollo, uorProtocollo? }, origine: 'segnatura'|'lettura', ricevuto: false }`, oppure in
   forma semplice `{ path, stato, numero, data, uor }`. Se il documento è nell'archivio (per percorso o impronta) o
   sta in una cartella collegata, l'archivio imposta `ricevuto = true` **in modo sincrono** e applica lo stato
-  (origine mostrata: «segnatura apposta su una copia» o «letto dal documento»); un file non ancora indicizzato viene
+  (origine mostrata: «letto dalla segnatura di Titulus» o «letto dal documento»); un file non ancora indicizzato viene
   indicizzato subito e lo stato si applica appena c'è. Altrimenti `ricevuto` resta `false` e Leggio dice di farlo
   a mano. Mappatura: `lib/stati.js › modificaDaEvento`.
 - **`app.services.statoArchivio(path)`** → `Promise<{ nome, path, impronta, tipo, stati, protocollato,
   daProtocollare, numero, data, uor, origine ('documento'|'segnatura'|'utente'), etichette, nota } | null>`:
-  per esempio la segnatura su copia può proporre il numero di protocollo già noto.
+  per esempio i pannelli Titulus possono mostrare il numero di protocollo già noto.
 - Servizi usati: `app.services.leggiSegnaturaTitulus(bytes)` (coda delle segnature), `app.services.segnaturaTitulus(testo)`
   (testo, durante l'indicizzazione), `app.services.fatturaPdf(bytes)` (fatture XML in PDF, stampa, azioni guidate),
   `app.printFiles`, `app.services.creaWorkerOcr` (solo ripiego).

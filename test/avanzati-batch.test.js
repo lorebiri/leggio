@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as PDFLib from '@cantoo/pdf-lib';
 import fs from 'node:fs';
 import { OPERAZIONI, tutteLeOperazioni, validaSequenza, eseguiSequenza, nomeUscita, SkipError, operazioneProteggi, destinazione } from '../src/renderer/features/avanzati/lib/batch-ops.js';
-import { applicaProtocollo, righeTimbro, normalizzaData, visivoAPagina, formattaNumero } from '../src/renderer/features/avanzati/lib/protocollo.js';
+import { normalizzaData, visivoAPagina } from '../src/renderer/features/avanzati/lib/protocollo.js';
 
 const fixture = new Uint8Array(fs.readFileSync(new URL('./fixtures/prova.pdf', import.meta.url)));
 const protectFinto = async (b, o) => { const d = await PDFLib.PDFDocument.load(b); d.encrypt({ userPassword: o.userPassword, ownerPassword: 'x' }); return d.save(); };
@@ -12,20 +12,12 @@ const env = (extra = {}) => ({
   savePdfLib: (d) => d.save({ useObjectStreams: true }),
 });
 
-describe('timbro di protocollo', () => {
-  it('compone le righe', () => {
-    const r = righeTimbro({ ente: 'ICCOM-CNR', numero: '42', data: '12/11/2026', direzione: 'entrata', classificazione: '3.2', cifre: 7 });
-    expect(r.map((x) => x.testo)).toEqual(['ICCOM-CNR', 'Prot. n. 0000042 del 12/11/2026', 'In entrata · Class. 3.2']);
-  });
+describe('date e coordinate (nessun timbro di protocollo: lo appone solo Titulus)', () => {
   it('accetta date in vari formati e rifiuta quelle impossibili', () => {
     expect(normalizzaData('12.11.26')).toBe('12/11/2026');
     expect(normalizzaData('2026-11-12')).toBe('12/11/2026');
     expect(normalizzaData('31/02/2026')).toBeNull();
     expect(normalizzaData('ieri')).toBeNull();
-  });
-  it('formatta il numero com\'è scritto (nessun contatore)', () => {
-    expect(formattaNumero('12', 5)).toBe('00012');
-    expect(formattaNumero('0012345', 0)).toBe('0012345');
   });
   it('converte le coordinate sulle pagine ruotate', async () => {
     const d = await PDFLib.PDFDocument.create();
@@ -34,14 +26,6 @@ describe('timbro di protocollo', () => {
     // in alto a destra della pagina "come appare" (larga 800, alta 600)
     const a = visivoAPagina(p, 780, 580);
     expect(a).toEqual({ x: 20, y: 780, rot: 90 });
-  });
-  it('disegna il timbro e il risultato si riapre', async () => {
-    const d = await PDFLib.PDFDocument.load(fixture);
-    const n = await applicaProtocollo(d, PDFLib, { ente: 'ICCOM-CNR · Sesto Fiorentino', numero: '7', data: '12/11/2026', pagine: 'tutte', direzione: 'uscita' });
-    expect(n).toBe(d.getPageCount());
-    const out = await d.save();
-    expect((await PDFLib.PDFDocument.load(out)).getPageCount()).toBe(n);
-    expect(Buffer.from(out).includes(Buffer.from('Helvetica-Bold'))).toBe(true);
   });
 });
 

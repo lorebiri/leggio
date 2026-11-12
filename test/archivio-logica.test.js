@@ -204,7 +204,7 @@ describe('protocollo (Titulus): Leggio non genera numeri, li legge o li riceve',
     expect(modificaDaEvento({ stato: 'inventato' })).toBe(null);
     expect(modificaDaEvento(null)).toBe(null);
     const s = applica({ protocollo: 'da', pagamento: 'da' }, m1, 5);
-    expect(testoProtocollo(s)).toBe('Protocollato (Titulus) n. 0123456 del 01/10/2026 — segnatura apposta su una copia');
+    expect(testoProtocollo(s)).toBe('Protocollato (Titulus) n. 0123456 del 01/10/2026 — letto dalla segnatura di Titulus');
     expect(s.pagamento).toBe('da');
     // un numero inserito poi a mano toglie l'origine
     expect(applica(s, { imposta: 'protocollato', numeroProtocollo: '9' }).origineProtocollo).toBeUndefined();

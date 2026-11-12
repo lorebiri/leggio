@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { segnaturaTitulus, segnatureTitulus, compilaModelli, valutaNome, nomePulito, dichiaraPdfA, valutaPerTitulus, trovaStrisce, ripulisciOcr, correggiSecondoMaschera } from '../src/renderer/features/avanzati/lib/titulus.js';
-import { righeTimbro } from '../src/renderer/features/avanzati/lib/protocollo.js';
+import * as LIBPROT from '../src/renderer/features/avanzati/lib/protocollo.js';
 import { OPERAZIONI } from '../src/renderer/features/avanzati/lib/batch-ops.js';
 import * as protocollo from '../src/renderer/features/avanzati/lib/protocollo.js';
 
@@ -86,15 +86,15 @@ describe('niente numerazione di protocollo in Leggio', () => {
     expect(protocollo.avanzaContatore).toBeUndefined();
     expect(OPERAZIONI.find((o) => o.id === 'protocollo')).toBeUndefined();
   });
-  it('la segnatura su copia riporta il numero com\'è e la dicitura di copia', () => {
-    expect(righeTimbro({ ente: 'ICCOM-CNR', numero: '0012345', data: '12/11/2026', copia: true }).map((r) => r.testo)).toEqual(['ICCOM-CNR', 'Prot. n. 0012345 del 12/11/2026', 'Copia di lavoro — originale in Titulus']);
+  it('Leggio non contiene funzioni che appongono segnature di protocollo', () => {
+    for (const nome of ['applicaProtocollo', 'applicaStriscia', 'righeTimbro', 'disegnaRiquadro', 'testoStriscia']) expect(LIBPROT[nome]).toBeUndefined();
   });
 });
 
-describe('segnatura su copia di lavoro «come Titulus»', async () => {
+describe('lettura di una segnatura sintetica «come Titulus» (fixture di test)', async () => {
   const PDFLib = await import('@cantoo/pdf-lib');
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-  const { applicaStriscia, testoStriscia } = await import('../src/renderer/features/avanzati/lib/protocollo.js');
+  const { applicaStrisciaFinta: applicaStriscia, testoStriscia } = await import('./helpers/segnatura-sintetica.mjs');
   it('scrive la striscia verticale e la segnatura si rilegge dal testo', async () => {
     expect(testoStriscia({ aoo: 'CNR', numero: '0123456', data: '01/10/2026', uor: 'XX000001' })).toBe('Prot. CNR n. 0123456 del 01/10/2026 - UOR: XX000001');
     const d = await PDFLib.PDFDocument.create(); d.addPage([595, 842]);

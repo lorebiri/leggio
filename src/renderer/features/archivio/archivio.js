@@ -65,7 +65,7 @@ export class Archivio {
     return this.cartelle.some((c) => { const r = idDa(c.percorso, this.ci).replace(/[\\/]+$/, ''); return k.startsWith(r + '/') || k.startsWith(r + '\\'); });
   }
   /**
-   * Evento dell'area avanzati (segnatura apposta su una copia, o letta aprendo un documento):
+   * Evento dell'area avanzati (segnatura di Titulus letta aprendo un documento):
    * { path (file ORIGINALE, anche .xml/.p7m), impronta?, modifica: { imposta, numeroProtocollo, dataProtocollo }, origine, ricevuto }
    * oppure in forma semplice { path, stato, numero, data, uor }. Si conferma in modo SINCRONO con ev.ricevuto = true
    * se il documento è nell'archivio (o in una cartella collegata: in quel caso lo stato si applica appena indicizzato).
