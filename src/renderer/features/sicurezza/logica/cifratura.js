@@ -23,7 +23,8 @@ export const ALGORITMI = [
 ];
 
 /** Permessi dell'interfaccia → oggetto permessi del fork. */
-export function toLibPermissions(p = {}) {
+export function toLibPermissions(perm = {}) {
+  const p = { ...TUTTI_PERMESSI, ...perm };
   return {
     printing: p.stampa === 'none' ? false : p.stampa === 'low' ? 'lowResolution' : 'highResolution',
     modifying: !!p.modifica,
@@ -45,7 +46,7 @@ export function fromPValue(P) {
 }
 
 export const TUTTI_PERMESSI = { stampa: 'high', modifica: true, copia: true, commenti: true, moduli: true, assemblaggio: true };
-export function hasRestrictions(p) { const t = TUTTI_PERMESSI; return Object.keys(t).some((k) => p[k] !== t[k]); }
+export function hasRestrictions(perm) { const t = TUTTI_PERMESSI; const p = { ...t, ...perm }; return Object.keys(t).some((k) => p[k] !== t[k]); }
 
 /** Descrizione leggibile dei permessi. */
 export function describePermissions(p) {

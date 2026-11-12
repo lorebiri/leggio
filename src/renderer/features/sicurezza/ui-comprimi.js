@@ -46,7 +46,7 @@ export async function compressTool(app) {
         { value: 'level', label: 'Scegli il livello di compressione' },
         { value: 'custom', label: 'Personalizzato' }] },
       { type: 'custom', name: 'limit', label: 'Dimensione massima', render(c) {
-        const i = h('input', { type: 'number', class: 'input', min: 0.1, step: 0.5, value: last.limit, style: { width: '110px' }, 'aria-label': 'Dimensione massima in MB' });
+        const i = h('input', { type: 'number', class: 'input', min: 0.1, step: 'any', value: last.limit, style: { width: '110px' }, 'aria-label': 'Dimensione massima in MB' });
         c.classList.add('lg-limit');
         c.append(h('div', { class: 'lg-row' }, i, h('span', {}, 'MB'),
           h('button', { type: 'button', class: 'btn small', onclick: preset(20), title: 'Molti gestori PEC accettano messaggi fino a 30 MB in totale: verifica il limite del tuo ufficio' }, 'Per PEC (20 MB)'),
@@ -76,7 +76,8 @@ export async function compressTool(app) {
   });
   if (!v) return;
   app.settings.set('sic.compress', { mode: v.mode, limit: v.limit, level: v.level, dpi: v.dpi, quality: v.quality, gray: v.gray, meta: v.meta });
-  const limitBytes = v.limit * MB;
+  // limite in megabyte decimali (1 MB = 1.000.000 byte): il file sta sotto il limite qualunque sia la definizione usata dal portale
+  const limitBytes = Math.floor(v.limit * 1e6);
   if (v.mode === 'limit' && bytes.length <= limitBytes && !v.gray && !v.meta) {
     app.ui.toast(`Il file è già sotto ${String(v.limit).replace('.', ',')} MB (${fmt(bytes.length)}): non serve ridurlo.`, { kind: 'success', timeout: 6000 });
     return;

@@ -87,7 +87,6 @@ export function analyze(pdfDoc, bytes) {
   if (cat.get(N('OpenAction'))) r.javascript++;
   const names = lookupDict(ctx, cat.get(N('Names')));
   if (names) {
-    r.javascript += nameTreeEntries(ctx, names.get(N('JavaScript'))).length;
     r.allegati += nameTreeEntries(ctx, names.get(N('EmbeddedFiles'))).length;
   }
   for (const p of pdfDoc.getPages()) for (const a of pageAnnots(ctx, p)) {

@@ -75,13 +75,14 @@ export function attachmentsPanel(app) {
       const list = h('ul', { class: 'lg-att' });
       const add = h('button', { class: 'btn small primary', onclick: () => addFiles().catch((e) => app.reportError(e, 'Aggiungi allegato')) }, 'Aggiungi file…');
       c.append(h('div', { class: 'pad', style: { display: 'flex', gap: '8px', alignItems: 'center' } }, add), list);
-      let alive = true;
+      let alive = true; let gen = 0;
       async function refresh() {
-        list.innerHTML = '';
+        const my = ++gen;
         let items = [];
         try { items = listAttachments(await openForEdit(await app.currentBytes(doc), doc)); }
-        catch (e) { list.append(h('li', { class: 'muted' }, 'Impossibile leggere gli allegati: ' + e.message)); return; }
-        if (!alive) return;
+        catch (e) { if (my === gen) { list.innerHTML = ''; list.append(h('li', { class: 'muted' }, 'Impossibile leggere gli allegati: ' + e.message)); } return; }
+        if (!alive || my !== gen) return; // è arrivata una richiesta più recente
+        list.innerHTML = '';
         if (!items.length) { list.append(h('li', { class: 'muted' }, 'Questo documento non contiene allegati. Puoi aggiungerne (es. l\'XML di una fattura o un documento di supporto).')); return; }
         for (const it of items) {
           const isPdf = /\.pdf$/i.test(it.fileName) || it.mime === 'application/pdf';

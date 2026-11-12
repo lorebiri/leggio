@@ -339,7 +339,7 @@ async function applyRedactions(app) {
       const words = pageWords(tc.items, tc.styles);
       const keep = wordsOutside(words, rects);
       for (const w of words) if (wordHit(w, rects)) removedTexts.add(w.text);
-      const img = await renderRedactedPage(pdfjs, doc.pdf, i, rects, { color: v.color, label: v.label.trim() });
+      const img = await renderRedactedPage(pdfjs, doc.pdf, i, rects, { color: v.color, label: v.label.trim(), dpi: pages.length > 60 ? 200 : 300, quality: pages.length > 60 ? 0.85 : 0.92 });
       const r = await redactPage(pdfDoc, i, { image: img, view: img.view, rects, keepWords: keep, font });
       annots += r.annots; fields += r.fields;
     }

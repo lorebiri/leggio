@@ -22,7 +22,13 @@ export const SCALA = [
   { dpi: 60, quality: 0.35 },
 ];
 
-const MAX_PIXELS = 60e6;
+const MAX_PIXELS = 40e6;
+
+/** Cede il controllo all'interfaccia senza i ritardi minimi di setTimeout (rallentati nelle finestre in secondo piano). */
+function yieldToUi() {
+  if (typeof MessageChannel === 'undefined') return new Promise((r) => setTimeout(r, 0));
+  return new Promise((r) => { const ch = new MessageChannel(); ch.port1.onmessage = () => { ch.port1.close(); r(); }; ch.port2.postMessage(0); });
+}
 
 /** Componenti dichiarati nel marcatore SOF di un JPEG (0 se non trovato). */
 export function jpegComponents(b) {
@@ -209,7 +215,7 @@ export async function compressImages(pdfDoc, { dpi = 150, quality = 0.72, gray =
     ctx.assign(ref, PDFRawStream.of(dict, out));
     stats.changed++; stats.savedBytes += oldSize - out.length;
     // lascia respirare l'interfaccia
-    if (k % 4 === 0) await new Promise((r) => setTimeout(r, 0));
+    if (k % 4 === 0) await yieldToUi();
   }
   return stats;
 }

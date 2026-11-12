@@ -65,6 +65,18 @@ async function askProtection(app, { title = 'Proteggi con password', preset = {}
       { type: 'select', name: 'algorithm', label: 'Compatibilità', value: 'AES-256', options: ALGORITMI },
       { type: 'info', text: 'Nota: le limitazioni di stampa e copia sono rispettate da Acrobat, Anteprima e dai lettori seri, ma alcuni programmi le ignorano. Per dati riservati usa sempre la password di apertura.' },
     ],
+    onOpen(form) {
+      const f = [...form.querySelectorAll('.dlg-body > .field')];
+      const [useOpen, pwBox, useRestr, permBox, ownerBox, algBox] = f;
+      const more = h('button', { type: 'button', class: 'btn small', style: { marginBottom: '10px' }, onclick: () => { algBox.hidden = !algBox.hidden; } }, 'Compatibilità con programmi molto vecchi…');
+      algBox.before(more);
+      const sync = () => {
+        pwBox.hidden = !useOpen.querySelector('input').checked;
+        permBox.hidden = ownerBox.hidden = !useRestr.querySelector('input').checked;
+      };
+      algBox.hidden = true;
+      useOpen.addEventListener('change', sync); useRestr.addEventListener('change', sync); sync();
+    },
     validate(x) {
       const pw = x['Password di apertura'];
       if (!x.useOpen && !x.useRestr) return 'Scegli almeno una protezione.';
