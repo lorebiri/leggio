@@ -186,9 +186,9 @@ export class App {
   }
 
   activate(doc) {
-    if (this.activeDoc === doc) return;
+    if (this.activeDoc === doc && (doc || this.viewer.doc == null)) return;
     this.tools.deactivate();
-    this.viewer.saveViewState();
+    if (this.activeDoc) this.viewer.saveViewState();
     this.activeDoc = doc;
     this.el.root.classList.toggle('has-doc', !!doc);
     this.viewer.setDocument(doc);

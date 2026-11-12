@@ -12,6 +12,7 @@
     "build:web": "vite build",
     "start": "electron .",
     "test": "vitest run",
+    "test:stress": "node test/stress/genera.mjs && node test/stress/misura.mjs",
     "dist:mac": "vite build && electron-builder --mac",
     "dist:win": "vite build && electron-builder --win",
     "preview": "bash scripts-preview.sh"

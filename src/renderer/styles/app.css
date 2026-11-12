@@ -148,7 +148,9 @@ kbd { font: 11.5px var(--mono); padding: 1px 6px; border: 1px solid var(--border
 /* ---------- miniature e segnalibri ---------- */
 .thumbs { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 8px 0 24px; }
 .thumb { position: relative; padding: 5px; border-radius: 8px; cursor: pointer; outline-offset: 0; }
-.thumb canvas { display: block; width: 150px; height: auto; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+.thumb-page { width: 150px; max-height: 1200px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.18); overflow: hidden; contain: layout paint; }
+.thumb-page canvas { display: block; width: 100%; height: auto; }
+.thumb-page.thumb-error { background: repeating-linear-gradient(45deg, #fff, #fff 6px, #f1e6e6 6px, #f1e6e6 12px); }
 .thumb:hover { background: var(--hover); }
 .thumb.current .thumb-num { color: var(--accent); font-weight: 700; }
 .thumb.selected { background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent); }
