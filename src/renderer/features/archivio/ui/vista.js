@@ -4,6 +4,7 @@ import { listaVirtuale } from './lista.js';
 import { disegnaOggi } from './oggi.js';
 import { apriDocumento, dialogoStato, dialogoEtichette, esportaRegistro, azioniGuidate, copieConNomeProposto, fattureInPdf, stampaSelezionati, firmaSelezionati } from './azioni.js';
 import { apriCartelle } from './cartelle.js';
+import { apriScheda, testoSemaforo } from './scheda.js';
 import { TIPI, TIPO_LABEL } from '../lib/estrai.js';
 import { VOCI_STATO } from '../lib/stati.js';
 import { ORDINAMENTI } from '../lib/motore.js';
@@ -19,6 +20,8 @@ const SEGNALI = [
   { value: 'protetto', label: 'Protetti da password' },
   { value: 'errore', label: 'Non letti (danneggiati o illeggibili)' },
   { value: 'senza-dati', label: 'Senza dati riconosciuti' },
+  { value: 'pagamento:da-controllare', label: 'Fatture da controllare prima di pagare' },
+  { value: 'pagamento:verde', label: 'Fatture pronte per il pagamento' },
   { value: 'segnatura-letta', label: 'Segnatura di protocollo letta dal documento' },
   { value: 'segnatura-da-leggere', label: 'Protocollo: segnatura da leggere' },
   { value: 'segnatura-non-letta', label: 'Protocollo: segnatura presente ma non letta' },
@@ -136,7 +139,7 @@ export function apriVista(app, A, opts = {}) {
     aggiornaAltri();
     // con una ricerca l'ordine predefinito diventa «Più pertinenti» (finché l'utente non sceglie)
     if (!st.ordineScelto) fOrdine.value = st.q ? 'pertinenza' : 'data-desc';
-    const f = { q: st.q, tipo: fTipo.value, fornitore: fForn.value.trim(), dal, al, cigcup: fCig.value.trim(), protocollo: fProt.value.trim(), uor: fUor.value.trim(), protDal, protAl, stato: fStato.value, cartella: fCartella.value, segnale: fSegnale.value, ordine: fOrdine.value, ...st.filtro };
+    const f = { q: st.q, tipo: fTipo.value, fornitore: fForn.value.trim(), dal, al, cigcup: fCig.value.trim(), protocollo: fProt.value.trim(), uor: fUor.value.trim(), protDal, protAl, stato: fStato.value, cartella: fCartella.value, segnale: fSegnale.value.startsWith('pagamento:') ? '' : fSegnale.value, pronta: fSegnale.value.startsWith('pagamento:') ? fSegnale.value.slice(10) : '', ordine: fOrdine.value, ...st.filtro };
     let r;
     try { r = await A.cerca(f); } catch (e) { conteggio.textContent = 'Ricerca non riuscita: ' + e.message; return; }
     if (seq !== st.seq) return;
@@ -171,6 +174,7 @@ export function apriVista(app, A, opts = {}) {
     const dati = [r.fornitore, r.numero && 'n. ' + r.numero, r.data && dataIt(r.data), r.importo != null && euro(r.importo), r.scadenza && 'scad. ' + dataIt(r.scadenza), r.pagine && `${r.pagine} pag.`].filter(Boolean).join(' · ');
     const chips = [
       ...(r.chips || []).map((c) => { const x = chip(c.testo, 'st-' + c.tipo); if (c.titolo) x.title = c.titolo; return x; }),
+      r.pagamento && r.pagamento.esito !== 'pagata' ? (() => { const x = chip(testoSemaforo(r.pagamento), 'pag-' + r.pagamento.esito); x.title = r.pagamento.motivi.map((m) => m.testo).join('\n'); return x; })() : null,
       r.segnaturaDaLeggere ? chip('Protocollo: da leggere', 'neutro') : null,
       r.segnaturaNonLetta ? chip('Segnatura non letta', 'warn') : null,
       r.scansione ? chip('Scansione: da OCR', 'warn') : null,
@@ -188,7 +192,9 @@ export function apriVista(app, A, opts = {}) {
         h('div', { class: 'ar-nome' }, h('strong', {}, r.nome), h('small', {}, r.rel && r.rel !== r.nome ? r.rel : '')),
         h('div', { class: 'ar-dati' }, dati || h('span', { class: 'muted' }, 'Nessun dato riconosciuto'), chips.length ? h('span', { class: 'ar-chips' }, chips) : null),
         snippet),
-      h('button', { class: 'btn ar-apri', onclick: (e) => { e.stopPropagation(); apri(r); } }, 'Apri'));
+      h('div', { class: 'ar-riga-az' },
+        h('button', { class: 'btn ar-apri', onclick: (e) => { e.stopPropagation(); apri(r); } }, 'Apri'),
+        h('button', { class: 'btn', title: 'Dati, protocollo, pagamento, fornitore e pratica collegata', onclick: (e) => { e.stopPropagation(); apriScheda(app, A, r, { q: st.q }); } }, 'Scheda')));
     riga.addEventListener('dblclick', () => apri(r));
     riga.addEventListener('click', (e) => { if (e.target.closest('button,input')) return; chk.click(); });
     riga.addEventListener('keydown', (e) => {
@@ -286,6 +292,9 @@ export function apriVista(app, A, opts = {}) {
     for (const x of [fTipo, fStato, fCartella, fSegnale]) x.value = '';
     st.filtro = {};
     if (f.tipo) fTipo.value = f.tipo;
+    if (f.fornitore) fForn.value = f.fornitore;
+    if (f.protocollo) fProt.value = f.protocollo;
+    if (f.pronta) fSegnale.value = 'pagamento:' + f.pronta;
     if (f.stato) fStato.value = f.stato;
     if (f.segnale) fSegnale.value = f.segnale;
     if (f.ordine) { fOrdine.value = f.ordine; st.ordineScelto = true; }
@@ -298,6 +307,7 @@ export function apriVista(app, A, opts = {}) {
   let ridisegno = 0;
   const off = A.on((tipo, dati) => {
     if (tipo === 'avanzamento' || tipo === 'segnature') disegnaProgresso(A.avanzamento);
+    if (tipo === 'vedi' && dati?.filtro) api.mostra({ filtro: dati.filtro });
     if (tipo === 'cambiato' || tipo === 'cartelle' || tipo === 'caricato') {
       clearTimeout(ridisegno);
       ridisegno = setTimeout(() => { aggiornaFiltri(); if (st.scheda === 'documenti') cerca({ mantieni: tipo === 'cambiato' }); else disegnaOggiOra(); }, tipo === 'cambiato' ? 400 : 0);

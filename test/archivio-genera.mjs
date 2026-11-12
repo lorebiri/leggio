@@ -39,10 +39,21 @@ function piva(base10) {
 }
 const NOMI = ['Alfa Strumenti', 'Beta Reagenti', 'Chimica Toscana', 'Delta Lab', 'Elettronica Pisana', 'Fluidi Tecnici', 'Gas Speciali Italia', 'HPLC Service', 'Infolab Sistemi', 'Laser Ottica', 'Microscopia Avanzata', 'Nord Vetreria', 'Officine Meccaniche Sestesi', 'Polimeri Fiorentini', 'Quarzo e Silice', 'Reagenti Puri', 'Spettro Analitica', 'Termostati Italiani', 'Ultravuoto', 'Vetro Scientifico', 'Zeta Informatica', 'Arno Pulizie', 'Biblioteca Servizi', 'Catering Toscano', 'Dispositivi Medici Centro', 'Edilizia Sesto', 'Ferramenta Industriale', 'Gestione Rifiuti Speciali', 'Hotel Convegni Pisa', 'Impianti Elettrici Rossi', 'Licenze Software', 'Manutenzioni Generali', 'Noleggi Veicoli', 'Ottica di Precisione', 'Pompe e Valvole', 'Quadri Elettrici', 'Ricambi Strumentali', 'Sicurezza Lavoro', 'Traslochi Firenze', 'Utensileria Tecnica'];
 const FORME = ['S.r.l.', 'S.p.A.', 'S.r.l.s.', 'S.n.c.'];
-const FORNITORI = NOMI.map((n, i) => ({ nome: `${n} ${FORME[i % 4]}`, piva: piva(1234560 + i * 7919), citta: pick(['Firenze', 'Pisa', 'Sesto Fiorentino', 'Prato', 'Livorno', 'Bologna', 'Milano']) }));
+/** IBAN italiano con cifre di controllo valide (mod 97); numeri inventati. */
+function ibanIt(k) {
+  const bban = 'X' + String(5428 + (k % 50)).padStart(5, '0') + String(11101 + k).padStart(5, '0') + String(100000 + k * 7919).padStart(12, '0');
+  const num = (bban + 'IT00').replace(/[A-Z]/g, (c) => String(c.charCodeAt(0) - 55));
+  let m = 0; for (const ch of num) m = (m * 10 + +ch) % 97;
+  return 'IT' + String(98 - m).padStart(2, '0') + bban;
+}
+const FORNITORI = NOMI.map((n, i) => ({ nome: `${n} ${FORME[i % 4]}`, piva: piva(1234560 + i * 7919), iban: ibanIt(i), citta: pick(['Firenze', 'Pisa', 'Sesto Fiorentino', 'Prato', 'Livorno', 'Bologna', 'Milano']) }));
 const CNR = 'Consiglio Nazionale delle Ricerche - Istituto di Chimica dei Composti OrganoMetallici (ICCOM), Via Madonna del Piano 10, 50019 Sesto Fiorentino (FI) - C.F. 80054330586 - P.IVA 02118311006';
 const PERSONE = ['Mario Rossi', 'Anna Bianchi', 'Luca Verdi', 'Giulia Neri', 'Paolo Gialli', 'Sara Conti', 'Marco Ferri', 'Elena Galli'];
 const LUOGHI = ['Roma', 'Milano', 'Bologna', 'Napoli', 'Torino', 'Bruxelles', 'Parigi', 'Monaco di Baviera'];
+// acquisti: stesso CIG su determina, ordine e fattura (pratica collegata)
+const ACQUISTI = [];
+// una pratica d'acquisto ha pochi documenti (determina, ordine o stipula MePA, una o due fatture)
+const acquisto = () => { const aperti = ACQUISTI.filter((a) => a.usi < 4); if (!aperti.length || rnd() < 0.4) { const a = { f: null, cig: null, usi: 1 }; ACQUISTI.push(a); return a; } const a = pick(aperti); a.usi++; return a; };
 const cig = () => pick(['Z', 'A', 'B', '9']) + Array.from({ length: 9 }, () => pick('0123456789ABCDEF'.split(''))).join('');
 const cup = () => `B${int(10, 99)}C${int(10, 99)}${String(int(0, 999999999)).padStart(9, '0')}`;
 const dataCasuale = () => giorni(OGGI, -int(0, 700));
@@ -94,10 +105,11 @@ function wrap(t, f, size, w) {
 // segnatura stampata dal protocollo informatico (Titulus) su una parte dei documenti ricevuti
 let progressivoTitulus = 4100;
 // numeri INVENTATI: due forme, come testo nell'intestazione o come striscia-immagine verticale sul margine sinistro
+const prossimoNumero = () => (rnd() < 0.02 && progressivoTitulus > 4100 ? progressivoTitulus : ++progressivoTitulus); // ~2%: stesso numero su due documenti (anomalia)
 const segnaturaTitulus = (d) => {
   const x = rnd();
-  if (x < 0.12) return [`CNR-ICCOM - ${String(++progressivoTitulus).padStart(7, '0')} - ${it(giorni(d, int(0, 5)))}`];
-  if (x < 0.30) prossimaStriscia = `Prot. CNR n. ${String(++progressivoTitulus).padStart(7, '0')} del ${it(giorni(d, int(0, 5)))} - UOR: SI${String(int(1, 99)).padStart(6, '0')}`;
+  if (x < 0.12) return [`CNR-ICCOM - ${String(prossimoNumero()).padStart(7, '0')} - ${it(giorni(d, int(0, 5)))}`];
+  if (x < 0.30) prossimaStriscia = `Prot. CNR n. ${String(prossimoNumero()).padStart(7, '0')} del ${it(giorni(d, int(0, 5)))} - UOR: SI${String(int(1, 99)).padStart(6, '0')}`;
   return [];
 };
 let prossimaStriscia = null;
@@ -112,19 +124,22 @@ function strisciaPng(testo) {
 function intestazione(f) { return [{ t: f.nome, b: true, s: 14 }, `Via dell'Industria ${int(1, 200)} - ${f.citta}`, `P.IVA ${f.piva} - C.F. ${f.piva}`, '']; }
 
 async function fattura(nota = false) {
-  const f = pick(FORNITORI); const d = dataCasuale(); const n = `${int(1, 999)}/${d.getUTCFullYear()}`;
+  const acq = !nota && rnd() < 0.6 ? acquisto() : null;
+  const f = acq?.f || pick(FORNITORI); const d = dataCasuale(); const n = `${int(1, 999)}/${d.getUTCFullYear()}`;
+  if (acq) { acq.f = f; acq.cig ??= cig(); }
   const righe = Array.from({ length: int(1, 6) }, () => ({ desc: pick(['Reagente analitico', 'Colonna cromatografica', 'Manutenzione strumento', 'Vetreria da laboratorio', 'Licenza software annuale', 'Servizio di pulizia', 'Gas tecnici in bombola', 'Materiale di consumo', 'Assistenza tecnica', 'Noleggio attrezzatura']), imp: int(20, 4000) + int(0, 99) / 100 }));
   const imponibile = righe.reduce((s, r) => s + r.imp, 0); const iva = Math.round(imponibile * 22) / 100;
   const scad = giorni(d, pick([30, 60, 90]));
   const conCig = rnd() < 0.85; const conCup = rnd() < 0.35;
-  const c = cig(); const u = cup();
+  const c = acq?.cig || cig(); const u = cup();
+  const ibanFattura = rnd() < 0.08 ? ibanIt(500 + int(0, 99)) : f.iban; // qualche IBAN diverso da quello dichiarato
   const testo = [...segnaturaTitulus(d), ...intestazione(f), { t: nota ? `NOTA DI CREDITO N. ${n} del ${it(d)}` : `FATTURA N. ${n} del ${it(d)}`, b: true, s: 13 },
     'Spett.le', CNR, '',
     conCig ? `CIG: ${c}` : 'Riferimento ordine: vedi allegato', conCup ? `CUP: ${u}` : '',
     ...righe.map((r) => `${r.desc} .......... € ${euro(r.imp)}`), '',
     `Imponibile € ${euro(imponibile)}`, `IVA 22% € ${euro(iva)} (scissione dei pagamenti art. 17-ter DPR 633/72)`,
     { t: `Totale documento € ${euro(imponibile + iva)}`, b: true },
-    `Modalità di pagamento: bonifico bancario. Scadenza pagamento: ${it(scad)}`, `IBAN IT60X0542811101000000${int(100000, 999999)}`];
+    `Modalità di pagamento: bonifico bancario. Scadenza pagamento: ${it(scad)}`, `IBAN ${ibanFattura}`];
   const striscia = prossimaStriscia; prossimaStriscia = null;
   const bytes = await pdf(testo, { pagine: rnd() < 0.2 ? int(2, 4) : 1, striscia });
   const sub = path.join(nota ? 'Note di credito' : 'Fatture', String(d.getUTCFullYear()), pad(d.getUTCMonth() + 1));
@@ -145,7 +160,7 @@ function xmlFattura() {
 <DatiOrdineAcquisto><IdDocumento>ORD${int(1, 500)}</IdDocumento><CodiceCUP>${cup()}</CodiceCUP><CodiceCIG>${cig()}</CodiceCIG></DatiOrdineAcquisto></DatiGenerali>
 <DatiBeniServizi><DettaglioLinee><NumeroLinea>1</NumeroLinea><Descrizione>Materiale di consumo per laboratorio</Descrizione><Quantita>1.00</Quantita><PrezzoUnitario>${imp.toFixed(2)}</PrezzoUnitario><PrezzoTotale>${imp.toFixed(2)}</PrezzoTotale><AliquotaIVA>22.00</AliquotaIVA></DettaglioLinee>
 <DatiRiepilogo><AliquotaIVA>22.00</AliquotaIVA><ImponibileImporto>${imp.toFixed(2)}</ImponibileImporto><Imposta>${iva.toFixed(2)}</Imposta><EsigibilitaIVA>S</EsigibilitaIVA></DatiRiepilogo></DatiBeniServizi>
-<DatiPagamento><CondizioniPagamento>TP02</CondizioniPagamento><DettaglioPagamento><ModalitaPagamento>MP05</ModalitaPagamento><DataScadenzaPagamento>${iso(scad)}</DataScadenzaPagamento><ImportoPagamento>${imp.toFixed(2)}</ImportoPagamento><IBAN>IT60X0542811101000000123456</IBAN></DettaglioPagamento></DatiPagamento></FatturaElettronicaBody>
+<DatiPagamento><CondizioniPagamento>TP02</CondizioniPagamento><DettaglioPagamento><ModalitaPagamento>MP05</ModalitaPagamento><DataScadenzaPagamento>${iso(scad)}</DataScadenzaPagamento><ImportoPagamento>${imp.toFixed(2)}</ImportoPagamento><IBAN>${f.iban}</IBAN></DettaglioPagamento></DatiPagamento></FatturaElettronicaBody>
 </p:FatturaElettronica>`;
   return { sub: path.join('Fatture elettroniche', String(d.getUTCFullYear())), nome: `IT${f.piva}_${n}.xml`, bytes: Buffer.from(xml) };
 }
@@ -182,16 +197,43 @@ async function durc(i) {
 }
 
 async function ordine() {
-  const f = pick(FORNITORI); const d = dataCasuale(); const det = rnd() < 0.5;
+  const acq = rnd() < 0.7 ? acquisto() : null;
+  const f = acq?.f || pick(FORNITORI); const d = dataCasuale(); const det = rnd() < 0.5;
+  if (acq) { acq.f = f; acq.cig ??= cig(); }
+  const cigOrdine = acq?.cig || cig();
   const n = `${int(1, 999)}/${d.getUTCFullYear()}`; const imp = int(500, 39000) + int(0, 99) / 100;
   const testo = det
     ? [{ t: 'CONSIGLIO NAZIONALE DELLE RICERCHE - ISTITUTO ICCOM', b: true }, { t: `DETERMINA A CONTRARRE N. ${n}`, b: true, s: 13 }, `Sesto Fiorentino, ${it(d)}`, '',
       'IL DIRETTORE', `VISTO il D.Lgs. 36/2023; CONSIDERATA la necessità di acquisire la fornitura di materiale di laboratorio per il progetto in corso;`,
-      `DETERMINA di affidare a ${f.nome} (P.IVA ${f.piva}) la fornitura per un importo complessivo di € ${euro(imp)} oltre IVA.`, `CIG ${cig()}`, rnd() < 0.5 ? `CUP ${cup()}` : '', 'Il Responsabile Unico del Progetto è nominato con il presente atto.']
+      `DETERMINA di affidare a ${f.nome} (P.IVA ${f.piva}) la fornitura per un importo complessivo di € ${euro(imp)} oltre IVA.`, `CIG ${cigOrdine}`, rnd() < 0.5 ? `CUP ${cup()}` : '', 'Il Responsabile Unico del Progetto è nominato con il presente atto.']
     : [...segnaturaTitulus(d), { t: 'CNR - ICCOM - Ufficio Acquisti', b: true }, { t: `ORDINE DI ACQUISTO N. ${n} del ${it(d)}`, b: true, s: 13 }, `Spett.le ${f.nome}`, `P.IVA ${f.piva}`, '',
-      `Si ordina la fornitura di quanto segue per un importo totale di € ${euro(imp)} IVA esclusa.`, `CIG: ${cig()}`, 'Consegna presso il magazzino dell\'Istituto entro 30 giorni.', 'Fatturazione elettronica: codice univoco ufficio ABC123.'];
+      `Si ordina la fornitura di quanto segue per un importo totale di € ${euro(imp)} IVA esclusa.`, `CIG: ${cigOrdine}`, 'Consegna presso il magazzino dell\'Istituto entro 30 giorni.', 'Fatturazione elettronica: codice univoco ufficio ABC123.'];
   const striscia = prossimaStriscia; prossimaStriscia = null;
   return { sub: path.join('Ordini e determine', String(d.getUTCFullYear())), nome: `${det ? 'Determina' : 'Ordine'}_${n.replace('/', '-')}.pdf`, bytes: await pdf(testo, { pagine: det ? int(1, 3) : 1, striscia }) };
+}
+
+async function tracciabilita(k) {
+  const f = FORNITORI[k % FORNITORI.length]; const d = giorni(OGGI, -int(30, 600));
+  const testo = [{ t: f.nome, b: true, s: 13 }, `P.IVA ${f.piva}`, '', { t: 'DICHIARAZIONE SOSTITUTIVA - COMUNICAZIONE DEL CONTO CORRENTE DEDICATO', b: true },
+    'ai sensi dell\'art. 3 della Legge 136/2010 sulla tracciabilità dei flussi finanziari', `Spett.le ${CNR}`, '',
+    `Il sottoscritto legale rappresentante di ${f.nome} comunica che il conto corrente dedicato, anche in via non esclusiva, alle commesse pubbliche è:`,
+    `IBAN ${f.iban}`, `presso Banca di prova, filiale di ${f.citta}`, `Data ${it(d)}`];
+  return { sub: path.join('Fornitori', f.nome.split(' ')[0]), nome: `Tracciabilita_${f.nome.split(' ')[0]}.pdf`, bytes: await pdf(testo) };
+}
+
+async function mepa() {
+  const acq = acquisto(); const f = acq?.f || pick(FORNITORI); const d = dataCasuale();
+  if (acq) { acq.f = f; acq.cig ??= cig(); }
+  const testo = [{ t: 'MERCATO ELETTRONICO DELLA PUBBLICA AMMINISTRAZIONE', b: true }, { t: `DOCUMENTO DI STIPULA - TRATTATIVA DIRETTA N. ${int(1000000, 9999999)}`, b: true, s: 12 },
+    `Stazione appaltante: ${CNR}`, `Fornitore: ${f.nome} - P.IVA ${f.piva}`, `CIG ${acq?.cig || cig()}`, `Importo contrattuale € ${euro(int(1000, 39000))} IVA esclusa`, `Data di stipula ${it(d)}`];
+  return { sub: path.join('MePA', String(d.getUTCFullYear())), nome: `MePA_TD_${f.nome.split(' ')[0]}_${iso(d)}.pdf`, bytes: await pdf(testo, { firma: 'Punto ordinante' }) };
+}
+
+async function incarico() {
+  const p = pick(PERSONE); const d = giorni(OGGI, -int(5, 200)); const fine = giorni(d, int(90, 700));
+  const testo = [{ t: 'CNR - Istituto ICCOM', b: true }, { t: pick(['CONTRATTO DI COLLABORAZIONE', 'CONFERIMENTO DI INCARICO DI COLLABORAZIONE', 'CONTRATTO DI RICERCA']), b: true, s: 13 },
+    `Con il presente atto si procede al conferimento dell'incarico a ${p}`, `Durata: dal ${it(d)} al ${it(fine)}`, `Compenso lordo € ${euro(int(5000, 30000))}`, `Data ${it(d)}`, rnd() < 0.5 ? `CUP ${cup()}` : ''];
+  return { sub: path.join('Incarichi', String(d.getUTCFullYear())), nome: `Incarico_${p.split(' ')[1]}_${iso(d)}.pdf`, bytes: await pdf(testo) };
 }
 
 async function missione() {
@@ -219,7 +261,7 @@ function pec() {
 const t0 = Date.now();
 fs.mkdirSync(dir, { recursive: true });
 const piano = [
-  ['fattura', 0.33], ['nota', 0.02], ['xml', 0.06], ['p7m', 0.015], ['durc', 0.10], ['ordine', 0.15], ['missione', 0.10], ['contratto', 0.05], ['pec', 0.05], ['scansione', 0.06], ['corrotto', 0.015], ['protetto', 0.012],
+  ['fattura', 0.33], ['nota', 0.02], ['xml', 0.06], ['p7m', 0.015], ['durc', 0.10], ['ordine', 0.15], ['missione', 0.10], ['contratto', 0.05], ['tracciabilita', 0.011], ['mepa', 0.02], ['incarico', 0.015], ['pec', 0.05], ['scansione', 0.06], ['corrotto', 0.015], ['protetto', 0.012],
 ];
 const conteggi = {};
 let i = 0; let byte = 0;
@@ -250,7 +292,10 @@ for (const [tipo, quota] of piano) {
       const ok = (await fattura()).bytes;
       const b = k % 3 === 0 ? ok.slice(0, Math.floor(ok.length * 0.4)) : k % 3 === 1 ? Buffer.from('%PDF-1.7\n' + 'spazzatura '.repeat(200)) : Buffer.from('<html>non sono un pdf</html>');
       await scrivi({ sub: 'Da sistemare', nome: `documento_rovinato_${k + 1}.pdf`, bytes: b });
-    } else if (tipo === 'protetto') {
+    } else if (tipo === 'tracciabilita') { await scrivi(await tracciabilita(k)); }
+    else if (tipo === 'mepa') { await scrivi(await mepa()); }
+    else if (tipo === 'incarico') { await scrivi(await incarico()); }
+    else if (tipo === 'protetto') {
       const f = pick(FORNITORI);
       await scrivi({ sub: 'Riservati', nome: `riservato_${k + 1}.pdf`, bytes: await pdf([{ t: 'DOCUMENTO RISERVATO', b: true }, `Contratto con ${f.nome}`], { password: 'segreta' }) });
     }

@@ -11,6 +11,7 @@ import { apriDocumento } from './ui/azioni.js';
 import { apriCartelle } from './ui/cartelle.js';
 import { IMPOSTAZIONI_PREDEFINITE } from './lib/scadenze.js';
 import { CODICI_ENTE_PREDEFINITI } from './lib/estrai.js';
+import { idDa } from './store.js';
 
 registerIcon('archive', '<rect x="3" y="4" width="18" height="5" rx="1.2"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/>');
 
@@ -104,6 +105,15 @@ export default function register(app) {
   app.services = app.services || {};
   /** app.services.statoArchivio(path) → Promise<{ protocollato, numero, data, uor, origine, stati, … } | null> */
   app.services.statoArchivio = (path) => A.statoArchivio(path);
+  /** app.services.apriArchivio({ q, filtro, scheda }): apre l'archivio con una ricerca già scritta. */
+  app.services.apriArchivio = ({ q, filtro, scheda } = {}) => apri({ q, filtro, scheda: scheda || (q || filtro ? 'documenti' : undefined) });
+  /** app.services.apriDocumentoArchivio(id | path, { pagina, q }): apre un documento dell'archivio, sempre in sola lettura. */
+  app.services.apriDocumentoArchivio = async (idOPath, { pagina, q } = {}) => {
+    const [r] = await A.righe([String(idOPath).startsWith('/') || /^[a-z]:/i.test(String(idOPath)) ? idDa(idOPath) : idOPath]);
+    if (!r) return false;
+    await apriDocumento(app, A, r, { pagina, q });
+    return true;
+  };
 
   // ---------- documenti nuovi arrivati nelle cartelle ----------
   A.on((tipo, d) => {
@@ -114,11 +124,14 @@ export default function register(app) {
   // ---------- impostazioni ----------
   app.bus.on('settings:fields', (arr) => {
     const s = app.settings;
-    arr.push({ key: 'archivio.durataDurc', field: { name: 'archivio.durataDurc', label: 'Archivio: validità del DURC in giorni (se nel documento non c\'è la scadenza)', type: 'number', min: 1, max: 999, value: s.get('archivio.durataDurc', IMPOSTAZIONI_PREDEFINITE.durataDurc), help: 'Oggi 120 giorni per il DURC online: verifica sulla normativa vigente.' } });
     arr.push({ key: 'archivio.preavvisoDurc', field: { name: 'archivio.preavvisoDurc', label: 'Archivio: avvisa dei DURC in scadenza con quanti giorni di anticipo', type: 'number', min: 0, max: 365, value: s.get('archivio.preavvisoDurc', IMPOSTAZIONI_PREDEFINITE.preavvisoDurc) } });
     arr.push({ key: 'archivio.preavvisoFatture', field: { name: 'archivio.preavvisoFatture', label: 'Archivio: proponi in «Oggi» le fatture che scadono entro quanti giorni', type: 'number', min: 0, max: 365, value: s.get('archivio.preavvisoFatture', IMPOSTAZIONI_PREDEFINITE.preavvisoFatture) } });
+    arr.push({ key: 'archivio.giorniNonProtocollati', field: { name: 'archivio.giorniNonProtocollati', label: 'Archivio: segnala in «Oggi» i documenti arrivati da più di quanti giorni e non ancora protocollati', type: 'number', min: 1, max: 60, value: s.get('archivio.giorniNonProtocollati', IMPOSTAZIONI_PREDEFINITE.giorniNonProtocollati) } });
     arr.push({ key: 'archivio.codiciEnte', field: { name: 'archivio.codiciEnte', label: 'Archivio: codice fiscale e P.IVA del tuo ente (non vengono presi per quelli del fornitore)', type: 'text', value: s.get('archivio.codiciEnte', CODICI_ENTE_PREDEFINITI.join(', ')) } });
   });
+
+  const CHIAVI_REGOLE = ['avanzati.regole', 'archivio.preavvisoDurc', 'archivio.preavvisoFatture', 'archivio.giorniNonProtocollati', 'archivio.codiciEnte'];
+  app.bus.on('settings:changed', (e) => { if (CHIAVI_REGOLE.includes(e?.key)) A.impostazioniCambiate().catch(() => {}); });
 
   // ---------- operazioni in blocco offerte da altre aree (OCR, compressione) ----------
   app.bus.on('batch:operations', (list) => {

@@ -276,7 +276,7 @@ export async function copieConNomeProposto(app, A, righe) {
 // ---------------- fatture elettroniche, stampa, firma ----------------
 
 /** Byte della fattura XML (anche dentro una busta .p7m) → { f (fattura letta), xml } */
-async function leggiFattura(A, r) {
+export async function leggiFattura(A, r) {
   let b = await A.leggiBytes(r.path);
   if (looksLikeP7m(b) || /\.p7m$/i.test(r.nome)) { const x = await openP7m(b, { verify: false }); if (!x.content) throw new Error('La busta firmata non contiene la fattura.'); b = x.content; }
   if (!isFattura(b)) throw new Error('Non è una fattura elettronica.');
@@ -350,25 +350,17 @@ export async function stampaSelezionati(app, A, righe) {
 }
 
 /**
- * Firma dei documenti selezionati. Lo strumento «Firma più file» dell'area moduli oggi sceglie i file
- * con la finestra del sistema e non riceve un elenco: si aprono le cartelle dei documenti e poi lo strumento.
+ * Firma dei documenti selezionati con «Firma più file» dell'area moduli (app.services.firmaFile): un solo
+ * certificato e PIN, finestra dei risultati solo se qualcosa non va. Per ogni file firmato l'area moduli emette
+ * «archivio:stato» (stato «Firmato» sull'originale); le copie _firmato, accanto agli originali, entrano
+ * nell'archivio con il prossimo aggiornamento e finiscono nella stessa pratica (stessi CIG, CUP, protocollo).
  */
 export async function firmaSelezionati(app, A, righe) {
   const docs = righe.filter((r) => !r.offline);
   if (!docs.length) return app.ui.toast('Seleziona prima uno o più documenti raggiungibili.', { kind: 'warning' });
-  const tool = app.tools.get('sign-batch');
-  if (typeof app.services?.firmaFile === 'function') return app.services.firmaFile(docs.map((r) => ({ path: r.path, name: r.nome })));
-  if (!tool || !isDesktop()) return app.ui.toast('La firma digitale di più file è disponibile nell\'app desktop.', { kind: 'warning' });
-  const cartelle = [...new Set(docs.map((r) => r.path.replace(/[\\/][^\\/]+$/, '')))];
-  const { h } = app.ui;
-  const v = await app.ui.choice({
-    title: `Firma di ${docs.length} ${docs.length === 1 ? 'documento' : 'documenti'}`,
-    message: '«Firma più file» ti chiederà il certificato e poi di scegliere i file nella finestra del sistema: lì seleziona questi documenti (le copie firmate vanno accanto agli originali, che non vengono toccati).',
-    body: h('ul', { class: 'ar-rapporto' }, docs.slice(0, 12).map((r) => h('li', {}, r.rel || r.nome)), docs.length > 12 ? h('li', {}, `… e altri ${docs.length - 12}`) : null),
-    buttons: [{ value: null, label: 'Lascia perdere', left: true }, { value: 'cartella', label: cartelle.length === 1 ? 'Mostra la cartella' : `Mostra le ${Math.min(cartelle.length, 5)} cartelle` }, { value: 'firma', label: 'Apri «Firma più file»', primary: true }],
-  });
-  if (v === 'cartella') { for (const r of docs.filter((x, i, a) => a.findIndex((y) => y.path.replace(/[\\/][^\\/]+$/, '') === x.path.replace(/[\\/][^\\/]+$/, '')) === i).slice(0, 5)) app.platform.showInFolder(r.path); }
-  if (v === 'firma' || v === 'cartella') app.tools.run('sign-batch');
+  if (typeof app.services?.firmaFile !== 'function' || !isDesktop()) return app.ui.toast('La firma digitale di più file è disponibile nell\'app desktop.', { kind: 'warning' });
+  try { await app.services.firmaFile(docs.map((r) => ({ path: r.path, name: r.nome }))); }
+  finally { A.aggiorna({ motivo: 'firma', silenzioso: true }).catch(() => {}); }
 }
 
 export { TIPO_LABEL };

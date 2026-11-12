@@ -125,3 +125,38 @@
 .ar-rapporto ul { max-height: 260px; overflow: auto; font-size: 13.5px; }
 .ar-side-oggi .ar-oggi-sec header { flex-wrap: wrap; }
 .ar-side-oggi .ar-oggi-sec h3 { flex: 1 1 100%; }
+/* Oggi: voce con azione accanto */
+.ar-oggi-li { display: flex; align-items: center; gap: 6px; }
+.ar-oggi-li > .ar-oggi-voce { flex: 1; }
+.ar-oggi-niente { color: var(--status-ink); font-size: 15px; padding: 12px 4px; }
+/* semaforo «pronta per il pagamento» */
+.ar-chip.pag-verde { background: #e7f6ec; border-color: #a9dcbb; color: #0b5a2b; }
+.ar-chip.pag-giallo { background: #fff4e5; border-color: #f2c98d; color: #7a4100; }
+.ar-chip.pag-rosso { background: var(--danger-soft); border-color: #f3b4ad; color: var(--danger); }
+.ar-riga-az { display: flex; flex-direction: column; gap: 4px; flex: 0 0 auto; }
+.ar-riga-az .btn { height: 30px; min-width: 72px; }
+/* scheda del documento (pannello a destra) */
+.ar-scheda-doc { font-size: 14px; display: flex; flex-direction: column; gap: 12px; padding: 4px 2px 20px; }
+.ar-sch-testa { display: flex; flex-direction: column; gap: 4px; }
+.ar-sch-testa small { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.ar-sch-sez { border-top: 1px solid var(--border); padding-top: 10px; }
+.ar-sch-sez h3 { margin: 0 0 6px; font-size: 14.5px; font-weight: 650; }
+.ar-sch-sez h4 { margin: 10px 0 4px; font-size: 13.5px; }
+.ar-sch-voce { display: grid; grid-template-columns: 130px 1fr; gap: 8px; padding: 2px 0; }
+.ar-sch-voce span { color: var(--status-ink); }
+.ar-sch-voce strong { font-weight: 500; overflow-wrap: anywhere; }
+.ar-semaforo { font-weight: 700; padding: 6px 10px; border-radius: 8px; margin: 0 0 6px; }
+.ar-semaforo.s-verde { background: #e7f6ec; color: #0b5a2b; }
+.ar-semaforo.s-giallo { background: #fff4e5; color: #7a4100; }
+.ar-semaforo.s-rosso { background: var(--danger-soft); color: var(--danger); }
+.ar-sch-motivi { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.ar-sch-motivi li.m-rosso { color: var(--danger); font-weight: 600; }
+.ar-sch-motivi li.m-giallo { color: #7a4100; }
+.ar-sch-motivi li .btn { margin-left: 6px; }
+.ar-pratica { list-style: none; margin: 6px 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ar-pratica-voce { width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 6px 8px; cursor: pointer; color: var(--ink); min-height: 44px; }
+.ar-pratica-voce:hover { border-color: var(--accent); }
+.ar-pratica li.questo .ar-pratica-voce { background: var(--accent-soft); }
+.ar-pratica-voce > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.ar-pratica-voce small { color: var(--status-ink); font-size: 12.5px; }
+.ar-pratica-voce .ar-tipo { width: 90px; font-size: 12px; }
