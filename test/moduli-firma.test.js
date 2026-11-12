@@ -1,7 +1,7 @@
 // Firma digitale lato main (electron/features/moduli.cjs): ID autofirmato, PAdES incrementale, CAdES .p7m, verifica.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createRequire } from 'node:module';
-import { readFileSync, mkdtempSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync, existsSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { PDFDocument, StandardFonts } from '@cantoo/pdf-lib';
@@ -56,7 +56,7 @@ describe('errori del .p12', () => {
   it('certificato scaduto rifiutato alla firma', async () => {
     const old = makeP12({ notBefore: new Date('2015-01-01'), notAfter: new Date('2016-01-01') });
     await expect(M.signPdf(fixture, old, PW)).rejects.toThrow(/scaduto il 01\/01\/2016/);
-    expect(() => M.signP7m(Buffer.from('x'), old, PW)).toThrow(/scaduto/);
+    await expect(M.signP7m(Buffer.from('x'), old, PW)).rejects.toThrow(/scaduto/);
   }, 20000);
 });
 
@@ -148,9 +148,9 @@ describe('firma PAdES incrementale', () => {
 });
 
 describe('CAdES .p7m', () => {
-  it('busta valida e contenuto estratto identico', () => {
+  it('busta valida e contenuto estratto identico', async () => {
     const data = Buffer.from('Determina n. 42 — contenuto di prova');
-    const { bytes } = M.signP7m(data, P12, PW);
+    const { bytes } = await M.signP7m(data, P12, PW);
     const v = M.verifyP7m(bytes);
     expect(v.layers[0]).toMatchObject({ integrity: true, signatureValid: true });
     expect(v.layers[0].signer.subject).toBe('Maria Rossì');
@@ -159,13 +159,13 @@ describe('CAdES .p7m', () => {
     const b64 = Buffer.from(Buffer.from(bytes).toString('base64'));
     expect(M.verifyP7m(b64).layers[0].signatureValid).toBe(true);
     // doppia busta (.p7m.p7m)
-    const twice = M.signP7m(bytes, P12, PW).bytes;
+    const twice = (await M.signP7m(bytes, P12, PW)).bytes;
     const v2 = M.verifyP7m(twice);
     expect(v2.layers).toHaveLength(2);
     expect(Buffer.from(v2.content).equals(data)).toBe(true);
   });
-  it('busta alterata → non valida; spazzatura → problema leggibile', () => {
-    const { bytes } = M.signP7m(Buffer.from('abcdefghij'.repeat(20)), P12, PW);
+  it('busta alterata → non valida; spazzatura → problema leggibile', async () => {
+    const { bytes } = await M.signP7m(Buffer.from('abcdefghij'.repeat(20)), P12, PW);
     const t = Buffer.from(bytes); const i = t.indexOf('abcdefghij'); t[i] = 0x5a;
     expect(M.verifyP7m(t).layers[0].integrity).toBe(false);
     const g = M.verifyP7m(Buffer.from([0x30, 0x03, 0x01, 0x02, 0x03]));
@@ -190,6 +190,7 @@ describe('firma in blocco', () => {
     expect(existsSync(p7[0].output)).toBe(true);
     expect(readdirSync(dir).some((f) => f.endsWith('.leggio-tmp'))).toBe(false);
     await expect(M.signFiles([a], P12, 'errata')).rejects.toThrow(/Password/);
+    rmSync(dir, { recursive: true, force: true });
   }, 60000);
 });
 

@@ -14,8 +14,6 @@ const fs = require('node:fs');
 const path = require('node:path');
 const forge = require('node-forge');
 const PDFLib = require('@cantoo/pdf-lib');
-const { SignPdf } = require('@signpdf/signpdf');
-const { Signer } = require('@signpdf/utils');
 
 const { asn1 } = forge;
 const MAX_PDF = 1536 * 1024 * 1024;      // 1,5 GB
@@ -211,43 +209,41 @@ function issuerAndSerial(certDer) {
   return { serial: tbs.value[i], issuer: tbs.value[i + 2] };
 }
 
-/**
- * Crea un SignedData CMS.
- * @param {{ hash?:Buffer, content?:Buffer, attached:boolean, id, cades:boolean, signingTime?:Date }} o
- */
-function buildCms(o) {
-  const { id } = o;
-  const digest = o.hash || crypto.createHash('sha256').update(o.content).digest();
+/** Attributi firmati (CAdES-BES): contentType, messageDigest, signingCertificateV2, signingTime facoltativo. */
+function signedAttrsFor(certDer, digest, { noSigningTime = false, signingTime } = {}) {
   const attrs = [
     A.seq([A.oid(OID.contentType), A.set([A.oid(OID.data)])]),
     A.seq([A.oid(OID.messageDigest), A.set([A.octet(A.bin(digest))])]),
     // ESS signing-certificate-v2: lega il certificato alla firma (richiesto da CAdES/PAdES)
-    A.seq([A.oid(OID.signingCertV2), A.set([A.seq([A.seq([A.seq([A.octet(A.bin(crypto.createHash('sha256').update(id.signerDer).digest()))])])])])]),
+    A.seq([A.oid(OID.signingCertV2), A.set([A.seq([A.seq([A.seq([A.octet(A.bin(crypto.createHash('sha256').update(certDer).digest()))])])])])]),
   ];
-  if (!o.noSigningTime) attrs.push(A.seq([A.oid(OID.signingTime), A.set([A.utc(o.signingTime || new Date())])]));
+  if (!noSigningTime) attrs.push(A.seq([A.oid(OID.signingTime), A.set([A.utc(signingTime || new Date())])]));
   // DER: gli elementi di un SET OF vanno ordinati per codifica
-  const encoded = attrs.map((a) => ({ a, d: A.der(a) })).sort((x, y) => Buffer.compare(x.d, y.d));
-  const signedAttrsSet = A.set(encoded.map((e) => e.a));
-  const toSign = A.der(signedAttrsSet); // con tag SET (0x31), come richiesto dalla RFC 5652
-  const signature = crypto.sign('sha256', toSign, id.keyType === 'ec' ? { key: id.privateKey, dsaEncoding: 'der' } : id.privateKey);
-  const signedAttrs = A.ctx(0, encoded.map((e) => e.a));
-  const { serial, issuer } = issuerAndSerial(id.signerDer);
-  const sigAlg = id.keyType === 'ec' ? A.seq([A.oid(OID.ecdsa256)]) : A.seq([A.oid(OID.rsa), A.nul()]);
-  const signerInfo = A.seq([A.int(1), A.seq([issuer, serial]), A.seq([A.oid(OID.sha256), A.nul()]), signedAttrs, sigAlg, A.octet(A.bin(signature))]);
-  const encap = o.attached ? A.seq([A.oid(OID.data), A.ctx(0, [A.octet(A.bin(o.content))])]) : A.seq([A.oid(OID.data)]);
-  const certs = [id.signerDer, ...id.chainDer].map((d) => A.fromDer(d));
+  const encoded = attrs.map((a) => ({ a, d: A.der(a) })).sort((x, y) => Buffer.compare(x.d, y.d)).map((e) => e.a);
+  return { nodes: encoded, toSign: A.der(A.set(encoded)) }; // con tag SET (0x31), come richiesto dalla RFC 5652
+}
+
+/** Assembla il SignedData con la firma già calcolata (da chiave locale, PowerShell o altro). */
+function assembleCms({ certDer, chainDer = [], keyType = 'rsa', attrNodes, signature, attached = false, content }) {
+  const { serial, issuer } = issuerAndSerial(certDer);
+  const sigAlg = keyType === 'ec' ? A.seq([A.oid(OID.ecdsa256)]) : A.seq([A.oid(OID.rsa), A.nul()]);
+  const signerInfo = A.seq([A.int(1), A.seq([issuer, serial]), A.seq([A.oid(OID.sha256), A.nul()]), A.ctx(0, attrNodes), sigAlg, A.octet(A.bin(signature))]);
+  const encap = attached ? A.seq([A.oid(OID.data), A.ctx(0, [A.octet(A.bin(content))])]) : A.seq([A.oid(OID.data)]);
+  const certs = [certDer, ...chainDer].map((d) => A.fromDer(d));
   const sd = A.seq([A.int(1), A.set([A.seq([A.oid(OID.sha256), A.nul()])]), encap, A.ctx(0, certs), A.set([signerInfo])]);
   return A.der(A.seq([A.oid(OID.signedData), A.ctx(0, [sd])]));
 }
 
-/** Signer per @signpdf/signpdf: CMS staccato sull'intervallo di byte. */
-class LeggioSigner extends Signer {
-  constructor(id, { cades }) { super(); this.id = id; this.cades = cades; }
-  async sign(pdfBuffer, signingTime) {
-    const hash = crypto.createHash('sha256').update(pdfBuffer).digest();
-    // PAdES (ETSI.CAdES.detached): l'ora di firma sta nel dizionario /M, non negli attributi firmati
-    return buildCms({ hash, attached: false, id: this.id, noSigningTime: this.cades, signingTime });
-  }
+/**
+ * Crea un SignedData CMS con un ID .p12 già aperto.
+ * @param {{ hash?:Buffer, content?:Buffer, attached:boolean, id, noSigningTime?:boolean, signingTime?:Date }} o
+ */
+function buildCms(o) {
+  const { id } = o;
+  const digest = o.hash || crypto.createHash('sha256').update(o.content).digest();
+  const { nodes, toSign } = signedAttrsFor(id.signerDer, digest, o);
+  const signature = crypto.sign('sha256', toSign, id.keyType === 'ec' ? { key: id.privateKey, dsaEncoding: 'der' } : id.privateKey);
+  return assembleCms({ certDer: id.signerDer, chainDer: id.chainDer, keyType: id.keyType, attrNodes: nodes, signature, attached: o.attached, content: o.content });
 }
 
 // ======================================================================================
@@ -477,16 +473,37 @@ async function addPlaceholderIncremental(original, opts) {
   return { bytes: Buffer.concat([base, ...chunks]), fieldName, normalized: base !== original };
 }
 
-/** Firma un PDF (PAdES). → { bytes, fieldName, signer: certInfo, verification } */
-async function signPdf(pdfBytes, p12Bytes, password, opts = {}) {
-  const pdf = toBuffer(pdfBytes, 'PDF', MAX_PDF);
-  if (pdf.subarray(0, 1024).indexOf('%PDF') < 0) throw new UserError('Il file non è un PDF.', 'pdf-non-valido');
-  const id = loadP12(p12Bytes, password);
-  const now = new Date();
-  const info = certInfo(id.signer, now);
+// ======================================================================================
+// Firmatari: ID .p12, archivio di sistema (portachiavi macOS / archivio Windows), smart card
+// ======================================================================================
+// Interfaccia comune:
+//   { info: certInfo, certDer, chainDer[], keyType: 'rsa'|'ec', kind: 'raw'|'cms', label,
+//     signRaw(list: Buffer[]) → Buffer[]   (firma «grezza» degli attributi firmati; un solo PIN per tutta la lista)
+//     cms(content: Buffer, { detached }) → Buffer   (il sistema crea da sé l'intera busta CMS) }
+
+function checkValidity(info) {
   if (info.expired) throw new UserError(`Il certificato di ${info.subject} è scaduto il ${fmtDate(info.notAfter)}: con un certificato scaduto la firma non sarebbe valida. Usa un certificato in corso di validità.`, 'certificato-scaduto');
   if (info.notYetValid) throw new UserError(`Il certificato di ${info.subject} sarà valido solo dal ${fmtDate(info.notBefore)}. Controlla la data del computer.`, 'certificato-non-ancora-valido');
-  const o = {
+}
+
+function p12Signer(p12Bytes, password) {
+  const id = loadP12(p12Bytes, password);
+  const info = certInfo(id.signer);
+  return {
+    info, certDer: id.signerDer, chainDer: id.chainDer, keyType: id.keyType, kind: 'raw', label: 'ID digitale (.p12)',
+    async signRaw(list) { return list.map((d) => crypto.sign('sha256', d, id.keyType === 'ec' ? { key: id.privateKey, dsaEncoding: 'der' } : id.privateKey)); },
+  };
+}
+
+/** Credenziale dalla richiesta: { type:'p12', p12, password } | { type:'system', id } (compatibile con { p12, password }). */
+async function resolveSigner(cred, deps = {}) {
+  obj(cred, 'credenziale');
+  if (cred.type === 'system') return systemSigner(str(cred.id, 'certificato', { max: 200, required: true }), deps);
+  return p12Signer(cred.p12, cred.password);
+}
+
+function normalizeOptions(opts, info) {
+  return {
     visible: !!opts.visible,
     pageIndex: num(opts.pageIndex, 'pagina', { min: 0, max: 1e6, def: 0 }),
     rect: opts.visible ? (Array.isArray(opts.rect) && opts.rect.length === 4 && opts.rect.every((v) => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 1e6) ? opts.rect : (() => { throw new UserError('Riquadro della firma non valido.', 'argomenti'); })()) : null,
@@ -497,36 +514,98 @@ async function signPdf(pdfBytes, p12Bytes, password, opts = {}) {
     subFilter: opts.subFilter === 'cades' ? 'cades' : 'pkcs7',
     imagePng: opts.imagePng ? toBuffer(opts.imagePng, 'immagine della firma', 8 * 1024 * 1024) : null,
     showText: opts.showText !== false,
-    signingTime: now,
   };
-  const { bytes: withPlaceholder, fieldName, normalized } = await addPlaceholderIncremental(pdf, o);
-  let signed;
-  try { signed = await new SignPdf().sign(withPlaceholder, new LeggioSigner(id, { cades: o.subFilter === 'cades' }), now); }
-  catch (e) {
-    if (/exceeds placeholder/i.test(e.message)) throw new UserError('La catena del certificato è troppo lunga per lo spazio riservato alla firma.', 'firma-troppo-grande');
-    throw e;
-  }
-  // controlli di sicurezza prima di proporre il risultato
-  if (!normalized && !signed.subarray(0, pdf.length).equals(pdf)) throw new Error('Controllo interno fallito: i byte originali sono cambiati. Firma annullata.');
+}
+
+/** Prepara il PDF: segnaposto incrementale, ByteRange definitivo, impronta da firmare. */
+async function preparePdf(pdf, signer, opts) {
+  if (pdf.subarray(0, 1024).indexOf('%PDF') < 0) throw new UserError('Il file non è un PDF.', 'pdf-non-valido');
+  const now = new Date();
+  const o = normalizeOptions(opts, signer.info);
+  o.signingTime = now;
+  // la busta creata dal sistema (macOS) non ha l'attributo ESS richiesto da ETSI.CAdES: si usa il formato Adobe
+  if (signer.kind === 'cms') o.subFilter = 'pkcs7';
+  const { bytes: withPh, fieldName, normalized } = await addPlaceholderIncremental(pdf, o);
+  const buf = Buffer.from(withPh);
+  const brAt = buf.lastIndexOf('/ByteRange');
+  const lb = buf.indexOf('[', brAt); const rb = buf.indexOf(']', lb);
+  const brStr = buf.subarray(brAt, rb + 1).toString('latin1');
+  if (brAt < 0 || !brStr.includes(BR_PLACEHOLDER)) throw new Error('Controllo interno fallito: segnaposto della firma non trovato.');
+  const cAt = buf.indexOf('/Contents', rb); const ph0 = buf.indexOf('<', cAt); const ph1 = buf.indexOf('>', ph0);
+  if (cAt < 0 || ph0 < 0 || ph1 < 0 || ph1 - ph0 - 1 !== SIG_BYTES * 2) throw new Error('Controllo interno fallito: spazio della firma non valido.');
+  const br = [0, ph0, ph1 + 1, buf.length - (ph1 + 1)];
+  let actual = `/ByteRange [${br.join(' ')}]`;
+  if (actual.length > brStr.length) throw new Error('Controllo interno fallito: intervallo dei byte troppo lungo.');
+  actual += ' '.repeat(brStr.length - actual.length);
+  buf.write(actual, brAt, 'latin1');
+  const digest = crypto.createHash('sha256').update(buf.subarray(0, ph0)).update(buf.subarray(ph1 + 1)).digest();
+  return { buf, ph0, ph1, digest, fieldName, normalized, subFilter: o.subFilter, signingTime: now, original: pdf };
+}
+
+function finishPdf(prep, cmsDer) {
+  const hex = Buffer.from(cmsDer).toString('hex');
+  if (hex.length > SIG_BYTES * 2) throw new UserError('La firma (con la catena dei certificati) è troppo grande per lo spazio riservato.', 'firma-troppo-grande');
+  const out = Buffer.from(prep.buf);
+  out.write(hex + '0'.repeat(SIG_BYTES * 2 - hex.length), prep.ph0 + 1, 'latin1');
+  return out;
+}
+
+/** Controlli prima di proporre il risultato: originale intatto, firma valida, file riapribile. */
+async function checkSigned(prep, signed) {
+  if (!prep.normalized && !signed.subarray(0, prep.original.length).equals(prep.original)) throw new Error('Controllo interno fallito: i byte originali sono cambiati. Firma annullata.');
   const report = await verifyPdf(signed);
-  const mine = report.signatures.find((s) => s.fieldName === fieldName) || report.signatures[report.signatures.length - 1];
+  const mine = report.signatures.find((s) => s.fieldName === prep.fieldName) || report.signatures[report.signatures.length - 1];
   if (!mine || !mine.integrity || !mine.signatureValid || !mine.coversWholeDocument) throw new Error('Controllo interno fallito: la firma appena creata non risulta valida. Il documento non è stato modificato.');
   try { await PDFDocument.load(signed, { updateMetadata: false, ignoreEncryption: true }); }
   catch { throw new Error('Controllo interno fallito: il PDF firmato non si riapre. Il documento non è stato modificato.'); }
-  return { bytes: new Uint8Array(signed.buffer, signed.byteOffset, signed.length), fieldName, signer: info, verification: mine, normalized };
+  return mine;
 }
 
-/** Firma CAdES: busta .p7m con il file dentro. */
-function signP7m(fileBytes, p12Bytes, password) {
+/** Crea le buste CMS per più impronte con una sola operazione del firmatario (un solo PIN). */
+async function cmsForDigests(signer, items) {
+  // items: [{ digest, cades, signingTime, content?, attached? }]
+  if (signer.kind === 'cms') {
+    const out = [];
+    for (const it of items) out.push(await signer.cms(it.content, { detached: !it.attached }));
+    return out;
+  }
+  const prepared = items.map((it) => signedAttrsFor(signer.certDer, it.digest, { noSigningTime: it.cades, signingTime: it.signingTime }));
+  const sigs = await signer.signRaw(prepared.map((p) => p.toSign));
+  if (!Array.isArray(sigs) || sigs.length !== items.length) throw new Error('Il firmatario ha restituito un numero di firme inatteso.');
+  return items.map((it, i) => assembleCms({ certDer: signer.certDer, chainDer: signer.chainDer, keyType: signer.keyType, attrNodes: prepared[i].nodes, signature: sigs[i], attached: it.attached, content: it.content }));
+}
+
+async function signPdfWith(pdfBytes, signer, opts = {}) {
+  const pdf = toBuffer(pdfBytes, 'PDF', MAX_PDF);
+  checkValidity(signer.info);
+  const prep = await preparePdf(pdf, signer, opts);
+  const content = signer.kind === 'cms' ? Buffer.concat([prep.buf.subarray(0, prep.ph0), prep.buf.subarray(prep.ph1 + 1)]) : null;
+  const [cms] = await cmsForDigests(signer, [{ digest: prep.digest, cades: prep.subFilter === 'cades', signingTime: prep.signingTime, content }]);
+  const signed = finishPdf(prep, cms);
+  const mine = await checkSigned(prep, signed);
+  return { bytes: new Uint8Array(signed.buffer, signed.byteOffset, signed.length), fieldName: prep.fieldName, signer: signer.info, verification: mine, normalized: prep.normalized };
+}
+
+/** Firma un PDF (PAdES) con un ID .p12. → { bytes, fieldName, signer: certInfo, verification } */
+async function signPdf(pdfBytes, p12Bytes, password, opts = {}) {
+  const pdf = toBuffer(pdfBytes, 'PDF', MAX_PDF);
+  if (pdf.subarray(0, 1024).indexOf('%PDF') < 0) throw new UserError('Il file non è un PDF.', 'pdf-non-valido');
+  return signPdfWith(pdf, p12Signer(p12Bytes, password), opts);
+}
+
+async function signP7mWith(fileBytes, signer) {
   const content = toBuffer(fileBytes, 'da firmare', 512 * 1024 * 1024);
-  const id = loadP12(p12Bytes, password);
-  const info = certInfo(id.signer);
-  if (info.expired) throw new UserError(`Il certificato di ${info.subject} è scaduto il ${fmtDate(info.notAfter)}.`, 'certificato-scaduto');
-  if (info.notYetValid) throw new UserError(`Il certificato di ${info.subject} non è ancora valido.`, 'certificato-non-ancora-valido');
-  const der = buildCms({ content, attached: true, id });
+  checkValidity(signer.info);
+  const [der] = await cmsForDigests(signer, [{ digest: crypto.createHash('sha256').update(content).digest(), cades: false, content, attached: true }]);
   const v = verifyCms(der, null);
-  if (!v.integrity || !v.signatureValid) throw new Error('Controllo interno fallito: la busta .p7m creata non risulta valida.');
-  return { bytes: new Uint8Array(der.buffer, der.byteOffset, der.length), signer: info };
+  if (!v.integrity || !v.signatureValid || !v.content || !v.content.equals(content)) throw new Error('Controllo interno fallito: la busta .p7m creata non risulta valida.');
+  return { bytes: new Uint8Array(der.buffer, der.byteOffset, der.length), signer: signer.info };
+}
+
+/** Firma CAdES: busta .p7m con il file dentro (ID .p12). */
+async function signP7m(fileBytes, p12Bytes, password) {
+  const content = toBuffer(fileBytes, 'da firmare', 512 * 1024 * 1024);
+  return signP7mWith(content, p12Signer(p12Bytes, password));
 }
 
 // ======================================================================================
@@ -806,39 +885,454 @@ function uniquePath(p) {
   for (let i = 2; i < 1000; i++) { const q = path.join(dir, `${base} (${i})${ext}`); if (!fs.existsSync(q)) return q; }
   throw new UserError('Troppi file con lo stesso nome nella cartella.', 'file');
 }
+function fileError(e) {
+  return e instanceof UserError ? e.message : e && e.code === 'ENOENT' ? 'Il file non esiste più (spostato o eliminato?).' : e && (e.code === 'EACCES' || e.code === 'EPERM') ? 'Permessi insufficienti per leggere il file o scrivere nella sua cartella.' : 'Errore imprevisto: ' + (e && e.message || e);
+}
+function writeAtomic(outPath, bytes) {
+  const tmp = outPath + '.leggio-tmp';
+  try { fs.writeFileSync(tmp, Buffer.from(bytes)); fs.renameSync(tmp, outPath); }
+  catch (e) { try { fs.unlinkSync(tmp); } catch {} throw e; }
+}
 
-/** Firma più file (percorsi scelti dal dialogo del processo principale). Non sovrascrive mai. */
-async function signFiles(paths, p12Bytes, password, opts = {}, onProgress = () => {}) {
-  const id = loadP12(p12Bytes, password); // password controllata una volta sola
-  void id;
-  const results = [];
+/**
+ * Firma più file con un solo firmatario. Non sovrascrive mai: copie «_firmato.pdf» o «.p7m» accanto agli originali.
+ * Con firmatari «grezzi» (ID .p12, archivio Windows, smart card) tutte le firme sono chieste in una volta sola,
+ * così il PIN viene chiesto una volta. I file preparati restano su disco (non in memoria) fino alla firma.
+ */
+async function signFilesWith(paths, signer, opts = {}, onProgress = () => {}) {
+  checkValidity(signer.info);
+  const results = paths.map((p) => ({ name: path.basename(p), ok: false, path: p }));
+  const jobs = [];
   for (let i = 0; i < paths.length; i++) {
     const p = paths[i];
-    onProgress({ index: i, total: paths.length, name: path.basename(p) });
+    onProgress({ index: i, total: paths.length, name: path.basename(p), phase: 'prepara' });
     try {
       const st = fs.statSync(p);
       if (!st.isFile()) throw new UserError('Non è un file.', 'file');
       if (st.size > MAX_PDF) throw new UserError('File troppo grande.', 'file');
       const data = fs.readFileSync(p);
-      let outPath; let out;
       const isPdf = data.subarray(0, 1024).indexOf('%PDF') >= 0;
       if (opts.format === 'p7m' || !isPdf) {
-        out = signP7m(data, p12Bytes, password).bytes;
-        outPath = uniquePath(p + '.p7m');
+        if (data.length > 512 * 1024 * 1024) throw new UserError('File troppo grande per una busta .p7m.', 'file');
+        jobs.push({ i, kind: 'p7m', out: uniquePath(p + '.p7m'), digest: crypto.createHash('sha256').update(data).digest(), src: p });
       } else {
-        out = (await signPdf(data, p12Bytes, password, { ...opts, visible: false })).bytes;
-        outPath = uniquePath(path.join(path.dirname(p), path.basename(p, path.extname(p)) + '_firmato.pdf'));
+        const prep = await preparePdf(data, signer, { ...opts, visible: false });
+        const tmp = uniquePath(path.join(path.dirname(p), path.basename(p, path.extname(p)) + '_firmato.pdf'));
+        const staged = tmp + '.leggio-prep';
+        fs.writeFileSync(staged, prep.buf);
+        jobs.push({ i, kind: 'pdf', out: tmp, staged, prep: { ...prep, buf: null, original: null }, srcSize: data.length, src: p });
       }
-      const tmp = outPath + '.leggio-tmp';
-      fs.writeFileSync(tmp, Buffer.from(out));
-      fs.renameSync(tmp, outPath);
-      results.push({ name: path.basename(p), ok: true, output: outPath });
-    } catch (e) {
-      const msg = e instanceof UserError ? e.message : e && e.code === 'ENOENT' ? 'Il file non esiste più (spostato o eliminato?).' : e && (e.code === 'EACCES' || e.code === 'EPERM') ? 'Permessi insufficienti per leggere il file o scrivere nella sua cartella.' : 'Errore imprevisto: ' + (e.message || e);
-      results.push({ name: path.basename(p), ok: false, error: msg });
-    }
+    } catch (e) { results[i].error = fileError(e); }
   }
-  return results;
+  const cleanup = () => { for (const j of jobs) if (j.staged) { try { fs.unlinkSync(j.staged); } catch {} } };
+  try {
+    if (!jobs.length) return results;
+    onProgress({ index: 0, total: jobs.length, name: '', phase: 'firma' });
+    // firme: in un solo passaggio per i firmatari «grezzi»; uno per file per le buste create dal sistema
+    let cmsList;
+    const items = () => jobs.map((j) => ({ digest: j.kind === 'p7m' ? j.digest : j.prep.digest, cades: j.kind === 'pdf' && j.prep.subFilter === 'cades', signingTime: j.prep?.signingTime, attached: j.kind === 'p7m' }));
+    if (signer.kind === 'raw') {
+      const prepared = items().map((it) => signedAttrsFor(signer.certDer, it.digest, { noSigningTime: it.cades, signingTime: it.signingTime }));
+      const sigs = await signer.signRaw(prepared.map((x) => x.toSign));
+      if (!Array.isArray(sigs) || sigs.length !== jobs.length) throw new Error('Il firmatario ha restituito un numero di firme inatteso.');
+      cmsList = jobs.map((j, k) => ({ nodes: prepared[k].nodes, signature: sigs[k] }));
+    }
+    for (let k = 0; k < jobs.length; k++) {
+      const j = jobs[k]; const r = results[j.i];
+      onProgress({ index: k, total: jobs.length, name: r.name, phase: 'scrive' });
+      try {
+        if (j.kind === 'p7m') {
+          const content = fs.readFileSync(j.src);
+          if (!crypto.createHash('sha256').update(content).digest().equals(j.digest)) throw new UserError('Il file è cambiato durante la firma: riprova.', 'file');
+          const der = signer.kind === 'raw'
+            ? assembleCms({ certDer: signer.certDer, chainDer: signer.chainDer, keyType: signer.keyType, attrNodes: cmsList[k].nodes, signature: cmsList[k].signature, attached: true, content })
+            : await signer.cms(content, { detached: false });
+          const v = verifyCms(der, null);
+          if (!v.integrity || !v.signatureValid) throw new Error('la busta creata non risulta valida');
+          writeAtomic(j.out, der);
+        } else {
+          const buf = fs.readFileSync(j.staged);
+          const prep = { ...j.prep, buf, original: fs.readFileSync(j.src) };
+          if (prep.original.length !== j.srcSize) throw new UserError('Il file è cambiato durante la firma: riprova.', 'file');
+          const der = signer.kind === 'raw'
+            ? assembleCms({ certDer: signer.certDer, chainDer: signer.chainDer, keyType: signer.keyType, attrNodes: cmsList[k].nodes, signature: cmsList[k].signature })
+            : await signer.cms(Buffer.concat([buf.subarray(0, prep.ph0), buf.subarray(prep.ph1 + 1)]), { detached: true });
+          const signed = finishPdf(prep, der);
+          await checkSigned(prep, signed);
+          writeAtomic(j.out, signed);
+        }
+        Object.assign(r, { ok: true, output: j.out });
+      } catch (e) { r.error = fileError(e); }
+    }
+    return results;
+  } finally { cleanup(); }
+}
+
+/** Compatibilità: firma in blocco con un ID .p12. */
+async function signFiles(paths, p12Bytes, password, opts = {}, onProgress = () => {}) {
+  return (await signFilesWith(paths, p12Signer(p12Bytes, password), opts, onProgress)).map(({ path: _p, ...r }) => r);
+}
+
+// ======================================================================================
+// Archivio dei certificati del sistema: elenco e firma senza esportare mai le chiavi
+// ======================================================================================
+const { execFile } = require('node:child_process');
+const os = require('node:os');
+
+/** Esegue un comando senza shell; stdin facoltativo; uscita come Buffer. Mai eccezioni non gestite. */
+function runCmd(cmd, args, { input, timeout = 120000, maxBuffer = 64 * 1024 * 1024 } = {}) {
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = execFile(cmd, args, { encoding: 'buffer', timeout, maxBuffer, windowsHide: true }, (err, stdout, stderr) => {
+        resolve({ code: err ? (typeof err.code === 'number' ? err.code : -1) : 0, stdout: stdout || Buffer.alloc(0), stderr: (stderr || Buffer.alloc(0)).toString('utf8'), error: err, killed: !!(err && err.killed) });
+      });
+    } catch (e) { resolve({ code: -1, stdout: Buffer.alloc(0), stderr: String(e.message || e), error: e }); return; }
+    child.on('error', () => {});
+    if (input != null) { child.stdin.on('error', () => {}); child.stdin.end(input); }
+  });
+}
+
+/** Estensioni utili di un certificato DER: uso della chiave, identificativo della chiave, dichiarazioni «qualificato». */
+function certExtensions(der) {
+  const out = { keyUsage: null, ski: null, qc: false, eku: null };
+  try {
+    const c = A.fromDer(der);
+    const tbs = c.value[0];
+    const extsWrap = tbs.value.find((n) => n.tagClass === asn1.Class.CONTEXT_SPECIFIC && n.type === 3);
+    if (!extsWrap) return out;
+    for (const ext of extsWrap.value[0].value) {
+      const oid = asn1.derToOid(ext.value[0].value);
+      const valNode = ext.value[ext.value.length - 1];
+      const inner = A.fromDer(Buffer.from(valNode.value, 'binary'), false);
+      if (oid === '2.5.29.15') {
+        const bits = Buffer.from(inner.value, 'binary');
+        const b0 = bits[1] || 0; const b1 = bits[2] || 0;
+        out.keyUsage = { digitalSignature: !!(b0 & 0x80), nonRepudiation: !!(b0 & 0x40), keyEncipherment: !!(b0 & 0x20), keyCertSign: !!(b0 & 0x04), raw: [b0, b1] };
+      } else if (oid === '2.5.29.14') out.ski = Buffer.from(inner.value, 'binary').toString('hex').toUpperCase();
+      else if (oid === '1.3.6.1.5.5.7.1.3') out.qc = true;
+      else if (oid === '2.5.29.37') out.eku = inner.value.map((n) => asn1.derToOid(n.value));
+    }
+  } catch { /* certificato insolito: si usano i valori predefiniti */ }
+  return out;
+}
+
+/** Scheda di un certificato del sistema, per l'elenco mostrato all'utente. */
+function systemCertEntry(id, der, extra = {}) {
+  const x = new crypto.X509Certificate(der);
+  const info = certInfo(x);
+  const ext = certExtensions(der);
+  const ku = ext.keyUsage;
+  // certificati per firmare programmi, siti o marche temporali (es. quelli degli sviluppatori Apple) non servono a firmare documenti
+  const NOT_DOCS = /^(1\.3\.6\.1\.5\.5\.7\.3\.(1|2|3|8|9)|1\.2\.840\.113635\..*|1\.3\.6\.1\.4\.1\.311\.20\.2\.2)$/; // server, client (autenticazione), codice, marche, OCSP, Apple, smart card logon
+  const docEku = !ext.eku || !ext.eku.length || ext.eku.some((o) => !NOT_DOCS.test(o));
+  // serve l'estensione «uso della chiave» con firma digitale o non ripudio (i certificati qualificati la hanno sempre)
+  const forSigning = !!ku && (ku.digitalSignature || ku.nonRepudiation) && (docEku || ku.nonRepudiation);
+  const ca = !!(ku && ku.keyCertSign);
+  return {
+    id, label: info.subject, subject: info.subject, organization: info.organization, fiscalCode: info.fiscalCode, email: info.email,
+    issuer: info.issuerOrg || info.issuer, notBefore: info.notBefore, notAfter: info.notAfter, expired: info.expired, notYetValid: info.notYetValid,
+    selfSigned: info.selfSigned, nonRepudiation: !!(ku && ku.nonRepudiation), qualified: ext.qc, ski: ext.ski,
+    forSigning: forSigning && !ca, source: extra.source || 'archivio', keyType: x.publicKey.asymmetricKeyType,
+  };
+}
+
+function sortIds(list) {
+  // prima i certificati di firma (non ripudio, qualificati), poi gli altri; scaduti in fondo
+  return list.sort((a, b) => (a.expired - b.expired) || (b.qualified - a.qualified) || (b.nonRepudiation - a.nonRepudiation) || a.label.localeCompare(b.label));
+}
+
+// ---------------- macOS: «security» (sola lettura per l'elenco; la firma usa la chiave senza esportarla) ----------------
+function parseFindIdentity(text) {
+  const out = new Map();
+  for (const line of String(text).split('\n')) {
+    const m = /^\s*\d+\)\s+([0-9A-F]{40})\s+"(.*)"(?:\s+\((.*)\))?\s*$/.exec(line);
+    if (m && !out.has(m[1])) out.set(m[1], { sha1: m[1], label: m[2], status: m[3] || '' });
+  }
+  return [...out.values()];
+}
+function parseFindCertificate(text) {
+  const out = new Map(); let cur = null;
+  const re = /SHA-1 hash: ([0-9A-F]{40})|-----BEGIN CERTIFICATE-----([\s\S]*?)-----END CERTIFICATE-----/g; let m;
+  while ((m = re.exec(String(text)))) {
+    if (m[1]) cur = m[1];
+    else if (cur && !out.has(cur)) { try { out.set(cur, Buffer.from(m[2].replace(/\s+/g, ''), 'base64')); } catch {} cur = null; }
+  }
+  return out;
+}
+
+async function macList({ keychain } = {}) {
+  const kc = keychain ? [keychain] : [];
+  const ids = await runCmd('/usr/bin/security', ['find-identity', ...kc], { timeout: 30000 });
+  if (ids.code !== 0 && !ids.stdout.length) throw new UserError('Non è stato possibile leggere il portachiavi di macOS.', 'sistema');
+  const idents = parseFindIdentity(ids.stdout.toString('utf8'));
+  if (!idents.length) return [];
+  const certs = parseFindCertificate((await runCmd('/usr/bin/security', ['find-certificate', '-a', '-Z', '-p', ...kc], { timeout: 30000 })).stdout.toString('utf8'));
+  // certificati delle smart card (CryptoTokenKit): non stanno nei file del portachiavi, si leggono dalla carta
+  if (!keychain && idents.some((i) => !certs.has(i.sha1))) {
+    try {
+      const sc = (await runCmd('/usr/bin/security', ['list-smartcards'], { timeout: 15000 })).stdout.toString('utf8');
+      for (const tokenId of sc.split('\n').map((s) => s.trim()).filter((s) => s && !/^No smartcards/i.test(s))) {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'leggio-sc-'));
+        try {
+          await runCmd('/usr/bin/security', ['export-smartcard', '-i', tokenId, '-e', dir], { timeout: 30000 });
+          for (const f of fs.readdirSync(dir)) {
+            try { const raw = fs.readFileSync(path.join(dir, f)); const der = /BEGIN CERT/.test(raw.toString('latin1', 0, 64)) ? Buffer.from(raw.toString('latin1').replace(/-----[^-]+-----|\s+/g, ''), 'base64') : raw; const sha1 = crypto.createHash('sha1').update(der).digest('hex').toUpperCase(); if (!certs.has(sha1)) certs.set(sha1, der); } catch {}
+          }
+        } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+      }
+    } catch {}
+  }
+  const list = [];
+  for (const i of idents) {
+    const der = certs.get(i.sha1);
+    if (!der) continue;
+    try { list.push({ ...systemCertEntry('mac:' + i.sha1, der, { source: /token|smart/i.test(i.status) ? 'smart card' : 'portachiavi' }), keychainLabel: i.label }); } catch {}
+  }
+  return list;
+}
+
+function macSigner(entry, der, { keychain } = {}) {
+  const kc = keychain ? ['-k', keychain] : [];
+  const sel = entry.ski ? ['-Z', entry.ski] : ['-N', entry.keychainLabel || entry.subject];
+  const info = certInfo(new crypto.X509Certificate(der));
+  return {
+    info, certDer: der, chainDer: [], keyType: entry.keyType === 'ec' ? 'ec' : 'rsa', kind: 'cms', label: entry.source,
+    async cms(content, { detached }) {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'leggio-firma-'));
+      try {
+        const inF = path.join(dir, 'dati'); const outF = path.join(dir, 'firma');
+        fs.writeFileSync(inF, content, { mode: 0o600 });
+        const r = await runCmd('/usr/bin/security', ['cms', '-S', ...kc, ...sel, '-H', 'SHA256', '-G', '-Y', 'NONE', ...(detached ? ['-T'] : []), '-i', inF, '-o', outF], { timeout: 300000 });
+        if (r.killed) throw new UserError('La firma ha impiegato troppo tempo (PIN non inserito?). Riprova.', 'sistema');
+        if (r.code !== 0 || !fs.existsSync(outF)) throw new UserError(macError(r.stderr), 'sistema');
+        return fs.readFileSync(outF);
+      } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+    },
+  };
+}
+function macError(stderr) {
+  const s = String(stderr || '');
+  if (/cancel/i.test(s)) return 'Firma annullata: non è stato concesso l\'uso della chiave (o del PIN).';
+  if (/not found|nickname|no such|could not find/i.test(s)) return 'Il certificato non è più disponibile: la smart card è inserita?';
+  if (/locked|interaction/i.test(s)) return 'Il portachiavi è bloccato: sbloccalo e riprova.';
+  return 'Il sistema non ha potuto firmare con questo certificato' + (s ? ` (${s.trim().split('\n').pop().slice(0, 200)})` : '') + '. Prova «Firma con il programma installato».';
+}
+
+// ---------------- Windows: archivio Cert:\CurrentUser\My con PowerShell e .NET ----------------
+const PS_LIST = `$ErrorActionPreference='Stop'
+$out = New-Object System.Collections.ArrayList
+foreach ($c in Get-ChildItem -Path Cert:\\CurrentUser\\My) {
+  if (-not $c.HasPrivateKey) { continue }
+  [void]$out.Add([pscustomobject]@{ thumb = $c.Thumbprint; der = [Convert]::ToBase64String($c.RawData) })
+}
+ConvertTo-Json -InputObject @($out.ToArray()) -Compress`;
+
+// firma grezza di più blocchi con la stessa chiave in UN solo processo: il middleware della carta chiede il PIN una volta
+const PS_SIGN = `$ErrorActionPreference='Stop'
+Add-Type -AssemblyName System.Security
+$req = [Console]::In.ReadToEnd() | ConvertFrom-Json
+$c = Get-Item -Path ('Cert:\\CurrentUser\\My\\' + $req.thumb)
+if (-not $c.HasPrivateKey) { throw 'NO_PRIVATE_KEY' }
+$h = [System.Security.Cryptography.HashAlgorithmName]::SHA256
+$res = New-Object System.Collections.ArrayList
+$rsa = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($c)
+if ($rsa -ne $null) {
+  foreach ($b in $req.items) { [void]$res.Add([Convert]::ToBase64String($rsa.SignData([Convert]::FromBase64String($b), $h, [System.Security.Cryptography.RSASignaturePadding]::Pkcs1))) }
+} else {
+  $ec = [System.Security.Cryptography.X509Certificates.ECDsaCertificateExtensions]::GetECDsaPrivateKey($c)
+  if ($ec -eq $null) { throw 'UNSUPPORTED_KEY' }
+  foreach ($b in $req.items) { [void]$res.Add([Convert]::ToBase64String($ec.SignData([Convert]::FromBase64String($b), $h))) }
+}
+ConvertTo-Json -InputObject @($res.ToArray()) -Compress`;
+
+function psArgs(script) { return ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')]; }
+async function defaultPowerShell(script, input) {
+  const exe = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  return runCmd(fs.existsSync(exe) ? exe : 'powershell.exe', psArgs(script), { input, timeout: 300000 });
+}
+function parseJsonArray(buf) {
+  const t = Buffer.from(buf).toString('utf8').replace(/^\uFEFF/, '').trim();
+  if (!t) return [];
+  const v = JSON.parse(t);
+  return Array.isArray(v) ? v : v == null ? [] : [v];
+}
+
+async function winList({ runPowerShell = defaultPowerShell } = {}) {
+  const r = await runPowerShell(PS_LIST);
+  if (r.code !== 0) throw new UserError('Non è stato possibile leggere l\'archivio dei certificati di Windows.', 'sistema');
+  let arr; try { arr = parseJsonArray(r.stdout); } catch { throw new UserError('Risposta inattesa dall\'archivio dei certificati di Windows.', 'sistema'); }
+  const list = [];
+  for (const e of arr) {
+    if (!e || !/^[0-9A-F]{40}$/i.test(e.thumb || '') || typeof e.der !== 'string') continue;
+    try { list.push(systemCertEntry('win:' + e.thumb.toUpperCase(), Buffer.from(e.der, 'base64'), { source: 'archivio di Windows' })); } catch {}
+  }
+  return list;
+}
+
+/** Firma ECDSA da formato IEEE P1363 (r||s, come la restituisce .NET) a DER. */
+function p1363ToDer(sig) {
+  const half = sig.length / 2;
+  const int = (b) => { let i = 0; while (i < b.length - 1 && b[i] === 0) i++; b = b.subarray(i); return b[0] & 0x80 ? Buffer.concat([Buffer.from([0]), b]) : b; };
+  const r = int(sig.subarray(0, half)); const s = int(sig.subarray(half));
+  const body = Buffer.concat([Buffer.from([0x02, r.length]), r, Buffer.from([0x02, s.length]), s]);
+  return Buffer.concat([Buffer.from([0x30, body.length]), body]);
+}
+
+function winSigner(entry, der, { runPowerShell = defaultPowerShell } = {}) {
+  const thumb = entry.id.slice(4);
+  const keyType = entry.keyType === 'ec' ? 'ec' : 'rsa';
+  return {
+    info: certInfo(new crypto.X509Certificate(der)), certDer: der, chainDer: [], keyType, kind: 'raw', label: entry.source,
+    async signRaw(list) {
+      const r = await runPowerShell(PS_SIGN, JSON.stringify({ thumb, items: list.map((b) => Buffer.from(b).toString('base64')) }));
+      if (r.killed) throw new UserError('La firma ha impiegato troppo tempo (PIN non inserito?). Riprova.', 'sistema');
+      if (r.code !== 0) throw new UserError(winError(r.stderr), 'sistema');
+      let sigs; try { sigs = parseJsonArray(r.stdout).map((s) => Buffer.from(String(s), 'base64')); } catch { throw new UserError('Risposta inattesa durante la firma.', 'sistema'); }
+      if (sigs.length !== list.length || sigs.some((s) => !s.length)) throw new UserError('La firma non è stata completata.', 'sistema');
+      return keyType === 'ec' ? sigs.map(p1363ToDer) : sigs;
+    },
+  };
+}
+function winError(stderr) {
+  const s = String(stderr || '');
+  if (/cancel|annullat/i.test(s)) return 'Firma annullata (PIN non inserito o operazione annullata).';
+  if (/keyset does not exist|set di chiavi non esiste|NO_PRIVATE_KEY|smart card|smartcard|scheda/i.test(s)) return 'La chiave del certificato non è raggiungibile: la smart card o il token sono inseriti? Il programma del fornitore (middleware) è installato?';
+  if (/PIN|password/i.test(s)) return 'PIN errato o carta bloccata. Controlla il PIN con il programma del fornitore.';
+  if (/UNSUPPORTED_KEY/.test(s)) return 'Tipo di chiave non supportato da questo certificato.';
+  return 'Windows non ha potuto firmare con questo certificato. Prova «Firma con il programma installato».';
+}
+
+/** Elenco dei certificati di firma disponibili nel sistema (con chiave privata). */
+async function listSystemIds(deps = {}) {
+  const platform = deps.platform || process.platform;
+  let list = [];
+  if (platform === 'darwin') list = await macList(deps);
+  else if (platform === 'win32') list = await winList(deps);
+  else return { supported: false, ids: [], note: 'Su questo sistema la firma con i certificati del sistema non è disponibile: usa un file .p12 o il programma di firma del tuo fornitore.' };
+  const all = sortIds(list);
+  const ids = all.filter((x) => x.forSigning);
+  return { supported: true, ids, hidden: all.length - ids.length, note: ids.length ? '' : 'Nessun certificato di firma trovato. Se usi una smart card o un token, inseriscilo e controlla che il programma del fornitore sia installato.' };
+}
+
+async function systemSigner(id, deps = {}) {
+  if (!/^(mac:[0-9A-F]{40}|win:[0-9A-F]{40})$/.test(id)) throw new UserError('Certificato non valido.', 'argomenti');
+  const platform = deps.platform || process.platform;
+  if ((id.startsWith('mac:') && platform !== 'darwin') || (id.startsWith('win:') && platform !== 'win32')) throw new UserError('Il certificato non appartiene a questo sistema.', 'argomenti');
+  const { ids } = await listSystemIds(deps);
+  const entry = ids.find((x) => x.id === id);
+  if (!entry) throw new UserError('Il certificato scelto non è più disponibile (smart card rimossa?). Aggiorna l\'elenco e riprova.', 'sistema');
+  if (id.startsWith('mac:')) {
+    const certs = deps.keychain ? parseFindCertificate((await runCmd('/usr/bin/security', ['find-certificate', '-a', '-Z', '-p', deps.keychain])).stdout.toString('utf8')) : null;
+    const der = certs?.get(id.slice(4)) || (await macCertDer(id.slice(4)));
+    return macSigner(entry, der, deps);
+  }
+  const r = await (deps.runPowerShell || defaultPowerShell)(PS_LIST);
+  const e = parseJsonArray(r.stdout).find((x) => x && String(x.thumb).toUpperCase() === id.slice(4));
+  if (!e) throw new UserError('Il certificato scelto non è più disponibile.', 'sistema');
+  return winSigner(entry, Buffer.from(e.der, 'base64'), deps);
+}
+async function macCertDer(sha1) {
+  const certs = parseFindCertificate((await runCmd('/usr/bin/security', ['find-certificate', '-a', '-Z', '-p'])).stdout.toString('utf8'));
+  const der = certs.get(sha1);
+  if (!der) throw new UserError('Certificato non trovato nel portachiavi.', 'sistema');
+  return der;
+}
+
+// ======================================================================================
+// Ripiego: firma con il programma installato (Dike, ArubaSign, FirmaOK…)
+// ======================================================================================
+const KNOWN_APPS = /^(dike|arubasign|aruba ?sign|firmaok|firma ?ok|firmacerta|firma ?certa|gosign|go ?sign|file ?protector|namirial|firma4ng|bit4id|infocert)/i;
+let customAppsFile = null;
+function readCustomApps() { try { return JSON.parse(fs.readFileSync(customAppsFile, 'utf8')).filter((a) => a && typeof a.path === 'string' && fs.existsSync(a.path)); } catch { return []; } }
+
+/** Programmi di firma trovati (cartelle standard) + quelli scelti dall'utente. */
+function detectSigningApps(platform = process.platform) {
+  const found = [];
+  const add = (p, name) => { if (!found.some((f) => f.path === p)) found.push({ id: crypto.createHash('sha1').update(p).digest('hex').slice(0, 16), name, path: p }); };
+  try {
+    if (platform === 'darwin') {
+      for (const dir of ['/Applications', path.join(os.homedir(), 'Applications')]) {
+        for (const f of fs.existsSync(dir) ? fs.readdirSync(dir) : []) if (f.endsWith('.app') && KNOWN_APPS.test(f)) add(path.join(dir, f), f.replace(/\.app$/, ''));
+      }
+    } else if (platform === 'win32') {
+      const roots = [process.env.ProgramFiles, process.env['ProgramFiles(x86)'], process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Programs')].filter(Boolean);
+      for (const root of roots) {
+        for (const d of fs.existsSync(root) ? fs.readdirSync(root) : []) {
+          if (!KNOWN_APPS.test(d)) continue;
+          const dir = path.join(root, d);
+          // cerca un eseguibile con un nome simile nella cartella (e in una sottocartella)
+          const cand = [];
+          for (const sub of ['', ...(() => { try { return fs.readdirSync(dir).filter((x) => fs.statSync(path.join(dir, x)).isDirectory()).slice(0, 10); } catch { return []; } })()]) {
+            try { for (const f of fs.readdirSync(path.join(dir, sub))) if (/\.exe$/i.test(f) && !/unins|setup|update/i.test(f)) cand.push(path.join(dir, sub, f)); } catch {}
+          }
+          const best = cand.find((c) => KNOWN_APPS.test(path.basename(c))) || cand[0];
+          if (best) add(best, d);
+        }
+      }
+    }
+  } catch {}
+  for (const a of readCustomApps()) add(a.path, a.name);
+  return found;
+}
+
+const watches = new Map();
+/**
+ * Apre il file nel programma di firma e osserva la cartella: quando compare il file firmato
+ * (nome.pdf.p7m, nome_firmato.pdf, nome-signed.pdf… o lo stesso PDF riscritto con una firma) lo segnala.
+ */
+function startExternalSigning({ filePath, app: prog, onResult, launcher, timeoutMs = 30 * 60 * 1000 }) {
+  const dir = path.dirname(filePath); const base = path.basename(filePath, path.extname(filePath));
+  const before = new Map();
+  for (const f of fs.readdirSync(dir)) { try { before.set(f, fs.statSync(path.join(dir, f)).mtimeMs); } catch {} }
+  const token = crypto.randomBytes(8).toString('hex');
+  const seen = new Map(); let done = false;
+  const looksSigned = (f) => {
+    const lower = f.toLowerCase(); const b = base.toLowerCase();
+    if (!lower.startsWith(b.slice(0, Math.max(3, Math.min(b.length, 40))))) return false;
+    if (/\.(p7m|p7s)$/i.test(f)) return true;
+    if (/\.pdf$/i.test(f)) return f === path.basename(filePath) || /(firm|sign|_fd|-fd|pades)/i.test(f.slice(base.length));
+    return false;
+  };
+  const check = () => {
+    if (done) return;
+    let files; try { files = fs.readdirSync(dir); } catch { return; }
+    for (const f of files) {
+      if (!looksSigned(f) || /\.leggio-/.test(f)) continue;
+      let st; try { st = fs.statSync(path.join(dir, f)); } catch { continue; }
+      if (!st.isFile() || st.size === 0) continue;
+      const prevM = before.get(f);
+      if (prevM !== undefined && st.mtimeMs <= prevM) continue; // né nuovo né modificato
+      const k = seen.get(f);
+      if (k && k.size === st.size && k.mtime === st.mtimeMs) {
+        // stabile da almeno un controllo: si legge e si segnala
+        if (f === path.basename(filePath)) { const data = fs.readFileSync(path.join(dir, f)); if (data.indexOf('/ByteRange') < 0) { before.set(f, st.mtimeMs); continue; } }
+        stop(); onResult({ token, path: path.join(dir, f), name: f });
+        return;
+      }
+      seen.set(f, { size: st.size, mtime: st.mtimeMs });
+    }
+  };
+  let watcher = null;
+  try { watcher = fs.watch(dir, () => setTimeout(check, 300)); watcher.on('error', () => {}); } catch {}
+  const iv = setInterval(check, 1500);
+  const to = setTimeout(() => { stop(); onResult({ token, timeout: true }); }, timeoutMs);
+  function stop() { done = true; clearInterval(iv); clearTimeout(to); try { watcher && watcher.close(); } catch {} watches.delete(token); }
+  watches.set(token, stop);
+  launcher(prog, filePath);
+  return token;
+}
+function stopExternalSigning(token) { const s = watches.get(token); if (s) s(); return !!s; }
+
+function launchProgram(prog, filePath) {
+  const { spawn } = require('node:child_process');
+  try {
+    const child = process.platform === 'darwin'
+      ? spawn('/usr/bin/open', ['-a', prog.path, filePath], { detached: true, stdio: 'ignore' })
+      : spawn(prog.path, [filePath], { detached: true, stdio: 'ignore', windowsHide: false });
+    child.on('error', () => {});
+    child.unref();
+  } catch (e) { throw new UserError('Non è stato possibile aprire il programma di firma: ' + (e.message || e), 'sistema'); }
 }
 
 // ======================================================================================
@@ -854,21 +1348,28 @@ function safe(fn) {
   };
 }
 function obj(v, what) { if (v == null || typeof v !== 'object' || Array.isArray(v)) throw new UserError(`Dati non validi: ${what}.`, 'argomenti'); return v; }
+/** Credenziale da una richiesta IPC: nuova forma { credential } o vecchia { p12, password }. */
+function credOf(a) { return a.credential ? obj(a.credential, 'credenziale') : { type: 'p12', p12: a.p12, password: a.password }; }
 
-function register({ ipcMain, dialog, getWindow }) {
+function register({ ipcMain, dialog, getWindow, app }) {
+  try { customAppsFile = path.join(app.getPath('userData'), 'moduli-programmi-firma.json'); } catch {}
+  const send = (ch, p) => { try { const w = getWindow && getWindow(); w && w.webContents.send(ch, p); } catch {} };
+
   ipcMain.handle('feat:moduli:sign', safe(async (a) => {
     obj(a, 'richiesta di firma');
-    const r = await signPdf(a.pdf, a.p12, a.password, obj(a.options || {}, 'opzioni'));
-    return r;
+    const signer = await resolveSigner(credOf(a));
+    return signPdfWith(a.pdf, signer, obj(a.options || {}, 'opzioni'));
   }));
-  ipcMain.handle('feat:moduli:describe-id', safe(async (a) => { obj(a, 'richiesta'); return describeP12(a.p12, a.password); }));
+  ipcMain.handle('feat:moduli:describe-id', safe(async (a) => { obj(a, 'richiesta'); return (await resolveSigner(credOf(a))).info; }));
+  ipcMain.handle('feat:moduli:list-system-ids', safe(async () => listSystemIds()));
   ipcMain.handle('feat:moduli:create-id', safe(async (a) => createSelfSignedId(obj(a, 'dati dell\'ID'))));
   ipcMain.handle('feat:moduli:verify', safe(async (a) => { obj(a, 'richiesta'); return verifyPdf(a.pdf); }));
   ipcMain.handle('feat:moduli:verify-p7m', safe(async (a) => { obj(a, 'richiesta'); return verifyP7m(a.data); }));
-  ipcMain.handle('feat:moduli:sign-p7m', safe(async (a) => { obj(a, 'richiesta'); return signP7m(a.data, a.p12, a.password); }));
+  ipcMain.handle('feat:moduli:sign-p7m', safe(async (a) => { obj(a, 'richiesta'); return signP7mWith(a.data, await resolveSigner(credOf(a))); }));
   ipcMain.handle('feat:moduli:sign-batch', safe(async (a) => {
     obj(a, 'richiesta');
-    loadP12(a.p12, a.password); // errori di password prima di scegliere i file
+    const signer = await resolveSigner(credOf(a)); // errori di password/certificato prima di scegliere i file
+    checkValidity(signer.info);
     const win = getWindow && getWindow();
     const res = await dialog.showOpenDialog(win, {
       title: 'Scegli i file da firmare', properties: ['openFile', 'multiSelections'],
@@ -877,14 +1378,59 @@ function register({ ipcMain, dialog, getWindow }) {
     if (res.canceled || !res.filePaths.length) return { cancelled: true, results: [] };
     if (res.filePaths.length > 500) throw new UserError('Scegli al massimo 500 file per volta.', 'argomenti');
     const opts = obj(a.options || {}, 'opzioni');
-    const results = await signFiles(res.filePaths, a.p12, a.password, { ...opts, format: a.format === 'p7m' ? 'p7m' : 'pdf' },
-      (p) => { try { win && win.webContents.send('feat:moduli:progress', p); } catch {} });
-    return { cancelled: false, results };
+    const results = await signFilesWith(res.filePaths, signer, { ...opts, format: a.format === 'p7m' ? 'p7m' : 'pdf' }, (p) => send('feat:moduli:progress', p));
+    return { cancelled: false, results: results.map(({ path: _p, ...r }) => r) };
   }));
+
+  // ---- ripiego: programma di firma installato
+  ipcMain.handle('feat:moduli:external-apps', safe(async () => detectSigningApps().map(({ id, name }) => ({ id, name }))));
+  ipcMain.handle('feat:moduli:external-choose', safe(async () => {
+    const win = getWindow && getWindow();
+    const res = await dialog.showOpenDialog(win, process.platform === 'darwin'
+      ? { title: 'Scegli il programma di firma', defaultPath: '/Applications', properties: ['openFile'], filters: [{ name: 'Applicazioni', extensions: ['app'] }] }
+      : { title: 'Scegli il programma di firma', properties: ['openFile'], filters: [{ name: 'Programmi', extensions: ['exe'] }] });
+    if (res.canceled || !res.filePaths[0]) return null;
+    const p = res.filePaths[0];
+    const list = readCustomApps().filter((x) => x.path !== p);
+    list.unshift({ path: p, name: path.basename(p).replace(/\.(app|exe)$/i, '') });
+    try { if (customAppsFile) fs.writeFileSync(customAppsFile, JSON.stringify(list.slice(0, 10))); } catch {}
+    const found = detectSigningApps().find((x) => x.path === p);
+    return found ? { id: found.id, name: found.name } : null;
+  }));
+  ipcMain.handle('feat:moduli:external-sign', safe(async (a) => {
+    obj(a, 'richiesta');
+    const prog = detectSigningApps().find((x) => x.id === a.appId);
+    if (!prog) throw new UserError('Programma di firma non trovato: sceglilo di nuovo.', 'argomenti');
+    let filePath = typeof a.path === 'string' && a.path ? a.path : null;
+    if (filePath && (!path.isAbsolute(filePath) || !fs.existsSync(filePath) || !/\.pdf$/i.test(filePath))) filePath = null;
+    if (!filePath || a.pdf) {
+      // copia di lavoro: il documento ha modifiche non salvate o non è ancora su disco
+      const pdf = toBuffer(a.pdf, 'PDF', MAX_PDF);
+      const dir = path.join(os.tmpdir(), 'Leggio-firma', crypto.randomBytes(4).toString('hex'));
+      fs.mkdirSync(dir, { recursive: true });
+      const name = (str(a.name, 'nome', { max: 200 }) || 'documento.pdf').replace(/[\\/:*?"<>|]/g, '_').replace(/(\.pdf)?$/i, '.pdf');
+      filePath = path.join(dir, name);
+      fs.writeFileSync(filePath, pdf);
+    }
+    const token = startExternalSigning({
+      filePath, app: prog, launcher: launchProgram,
+      onResult: (r) => {
+        if (r.timeout) return send('feat:moduli:external-result', { token: r.token, timeout: true });
+        try { const bytes = fs.readFileSync(r.path); send('feat:moduli:external-result', { token: r.token, name: r.name, path: r.path, bytes: new Uint8Array(bytes) }); }
+        catch (e) { send('feat:moduli:external-result', { token: r.token, error: fileError(e) }); }
+      },
+    });
+    return { token, folder: path.dirname(filePath), file: filePath };
+  }));
+  ipcMain.handle('feat:moduli:external-cancel', safe(async (a) => stopExternalSigning(obj(a, 'richiesta').token)));
 }
 
 module.exports = {
   register, UserError,
   loadP12, describeP12, createSelfSignedId, signPdf, signP7m, verifyPdf, verifyP7m, verifyCms, buildCms,
   addPlaceholderIncremental, signFiles, certInfo, verdict, lastStartXref, decodePdfString, parsePdfDate,
+  // firmatari
+  p12Signer, resolveSigner, signPdfWith, signP7mWith, signFilesWith, listSystemIds, systemSigner, certExtensions,
+  parseFindIdentity, parseFindCertificate, p1363ToDer, winList, winSigner, PS_LIST, PS_SIGN, psArgs,
+  detectSigningApps, startExternalSigning, stopExternalSigning, signedAttrsFor, assembleCms,
 };

@@ -112,3 +112,15 @@
 .mod-split > .btn:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .mod-split > .mod-split-arrow { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left-width: 0; padding: 0 7px; }
 .mod-split.primary > .mod-split-arrow { border-left: 1px solid color-mix(in srgb, var(--accent-ink) 35%, transparent); }
+/* scelta del certificato */
+.mod-certlist { display: grid; gap: 6px; max-height: 300px; overflow: auto; }
+.mod-cert { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; background: var(--surface); }
+.mod-cert:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.mod-cert.disabled { opacity: .55; cursor: not-allowed; }
+.mod-cert input { margin-top: 3px; }
+.mod-cert-txt { display: grid; gap: 2px; min-width: 0; }
+.mod-cert-txt small { color: var(--muted); }
+.mod-badge { margin-left: 8px; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--ink); }
+.mod-p12row { display: grid; gap: 6px; margin-top: 8px; padding: 8px 10px; border: 1px dashed var(--border-strong); border-radius: var(--radius); }
+.mod-p12row input[type=password] { height: 32px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); }
+.mod-idrow select { flex: 1; height: 32px; }
