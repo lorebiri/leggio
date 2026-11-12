@@ -23,6 +23,8 @@ export function storeDesktop(app) {
     aggiungiCartella: (percorso) => call(app, 'aggiungi-cartella', percorso ? { percorso } : {}),
     togliCartella: (id) => call(app, 'togli-cartella', { id }),
     scansiona: (id) => call(app, 'scansiona', { id }),
+    sorveglia: () => call(app, 'sorveglia'),
+    onCambiata: (fn) => app.platform.on('feat:archivio:cambiata', fn),
     leggi: (path, maxBytes) => call(app, 'leggi', { path, maxBytes }),
     manifesto: () => call(app, 'indice-manifesto'),
     blocco: (file) => call(app, 'indice-blocco', { file }),
@@ -80,6 +82,8 @@ export function storeWeb() {
       cartelle.push(c);
       return { cartella: { id: c.id, percorso: c.percorso, nome: c.nome } };
     },
+    sorveglia: async () => ({}),
+    onCambiata: () => () => {},
     async togliCartella(id) { const i = cartelle.findIndex((c) => c.id === id); if (i >= 0) cartelle.splice(i, 1); return true; },
     async scansiona(id) {
       const c = cartelle.find((x) => x.id === id);

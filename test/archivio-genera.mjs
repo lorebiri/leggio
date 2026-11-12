@@ -5,9 +5,13 @@
 // file protetti da password. I file vanno FUORI dal repository (sono migliaia): cancellarli dopo la prova.
 import fs from 'node:fs';
 import path from 'node:path';
-import { PDFDocument, StandardFonts, rgb, PDFName, PDFString } from '@cantoo/pdf-lib';
+import { PDFDocument, StandardFonts, rgb, degrees, PDFString } from '@cantoo/pdf-lib';
 import forge from 'node-forge';
 import zlib from 'node:zlib';
+import { createRequire } from 'node:module';
+// per disegnare la striscia di segnatura come immagine (come fa Titulus); se manca, segnatura come testo
+let Canvas = null;
+try { Canvas = createRequire(import.meta.url)('@napi-rs/canvas'); } catch { Canvas = null; }
 
 const args = process.argv.slice(2);
 const dir = path.resolve(args.find((a) => !a.startsWith('--')) || 'archivio-prova');
@@ -44,7 +48,8 @@ const cup = () => `B${int(10, 99)}C${int(10, 99)}${String(int(0, 999999999)).pad
 const dataCasuale = () => giorni(OGGI, -int(0, 700));
 
 let font, bold;
-async function pdf(righe, { pagine = 1, firma = null, scansione = false, password = null } = {}) {
+async function pdf(righe, opz = {}) {
+  const { pagine = 1, firma = null, scansione = false, password = null } = opz;
   const d = await PDFDocument.create();
   font = await d.embedFont(StandardFonts.Helvetica); bold = await d.embedFont(StandardFonts.HelveticaBold);
   for (let p = 0; p < pagine; p++) {
@@ -64,6 +69,11 @@ async function pdf(righe, { pagine = 1, firma = null, scansione = false, passwor
       y -= 2;
     }
   }
+  if (opz.striscia) {
+    const pg = d.getPages()[0];
+    if (Canvas) pg.drawImage(await d.embedPng(strisciaPng(opz.striscia)), { x: 0, y: 218, width: 17, height: 624 });
+    else pg.drawText(opz.striscia, { x: 10, y: 230, size: 7, font, color: rgb(0.75, 0, 0), rotate: degrees(90) });
+  }
   if (firma) {
     const sig = d.context.obj({ Type: 'Sig', Filter: 'Adobe.PPKLite', SubFilter: 'ETSI.CAdES.detached', ByteRange: [0, 0, 0, 0], Name: PDFString.of(firma), M: PDFString.of('D:20261001100000Z') });
     d.context.register(sig);
@@ -81,6 +91,24 @@ function wrap(t, f, size, w) {
   return out;
 }
 
+// segnatura stampata dal protocollo informatico (Titulus) su una parte dei documenti ricevuti
+let progressivoTitulus = 4100;
+// numeri INVENTATI: due forme, come testo nell'intestazione o come striscia-immagine verticale sul margine sinistro
+const segnaturaTitulus = (d) => {
+  const x = rnd();
+  if (x < 0.12) return [`CNR-ICCOM - ${String(++progressivoTitulus).padStart(7, '0')} - ${it(giorni(d, int(0, 5)))}`];
+  if (x < 0.30) prossimaStriscia = `Prot. CNR n. ${String(++progressivoTitulus).padStart(7, '0')} del ${it(giorni(d, int(0, 5)))} - UOR: SI${String(int(1, 99)).padStart(6, '0')}`;
+  return [];
+};
+let prossimaStriscia = null;
+/** PNG 69×2493 con la segnatura in rosso, scritta dall'alto verso il basso (come la striscia di Titulus). */
+function strisciaPng(testo) {
+  const c = Canvas.createCanvas(69, 2493); const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 69, 2493);
+  ctx.translate(20, 20); ctx.rotate(Math.PI / 2); // dall'alto in basso, come la striscia vista al CNR
+  ctx.fillStyle = '#c00000'; ctx.font = 'bold 44px sans-serif'; ctx.fillText(testo, 0, 0);
+  return c.toBuffer('image/png');
+}
 function intestazione(f) { return [{ t: f.nome, b: true, s: 14 }, `Via dell'Industria ${int(1, 200)} - ${f.citta}`, `P.IVA ${f.piva} - C.F. ${f.piva}`, '']; }
 
 async function fattura(nota = false) {
@@ -90,14 +118,15 @@ async function fattura(nota = false) {
   const scad = giorni(d, pick([30, 60, 90]));
   const conCig = rnd() < 0.85; const conCup = rnd() < 0.35;
   const c = cig(); const u = cup();
-  const testo = [...intestazione(f), { t: nota ? `NOTA DI CREDITO N. ${n} del ${it(d)}` : `FATTURA N. ${n} del ${it(d)}`, b: true, s: 13 },
+  const testo = [...segnaturaTitulus(d), ...intestazione(f), { t: nota ? `NOTA DI CREDITO N. ${n} del ${it(d)}` : `FATTURA N. ${n} del ${it(d)}`, b: true, s: 13 },
     'Spett.le', CNR, '',
     conCig ? `CIG: ${c}` : 'Riferimento ordine: vedi allegato', conCup ? `CUP: ${u}` : '',
     ...righe.map((r) => `${r.desc} .......... € ${euro(r.imp)}`), '',
     `Imponibile € ${euro(imponibile)}`, `IVA 22% € ${euro(iva)} (scissione dei pagamenti art. 17-ter DPR 633/72)`,
     { t: `Totale documento € ${euro(imponibile + iva)}`, b: true },
     `Modalità di pagamento: bonifico bancario. Scadenza pagamento: ${it(scad)}`, `IBAN IT60X0542811101000000${int(100000, 999999)}`];
-  const bytes = await pdf(testo, { pagine: rnd() < 0.2 ? int(2, 4) : 1 });
+  const striscia = prossimaStriscia; prossimaStriscia = null;
+  const bytes = await pdf(testo, { pagine: rnd() < 0.2 ? int(2, 4) : 1, striscia });
   const sub = path.join(nota ? 'Note di credito' : 'Fatture', String(d.getUTCFullYear()), pad(d.getUTCMonth() + 1));
   const nome = nota ? `NC_${f.nome.split(' ')[0]}_${n.replace('/', '-')}.pdf` : pick([`Fattura_${f.nome.split(' ')[0]}_${n.replace('/', '-')}.pdf`, `fatt ${n.replace('/', '_')} ${f.nome.split(' ')[0].toLowerCase()}.pdf`, `${iso(d)}_${f.piva}.pdf`, `scan${int(1000, 9999)}.pdf`]);
   return { sub, nome, bytes };
@@ -159,9 +188,10 @@ async function ordine() {
     ? [{ t: 'CONSIGLIO NAZIONALE DELLE RICERCHE - ISTITUTO ICCOM', b: true }, { t: `DETERMINA A CONTRARRE N. ${n}`, b: true, s: 13 }, `Sesto Fiorentino, ${it(d)}`, '',
       'IL DIRETTORE', `VISTO il D.Lgs. 36/2023; CONSIDERATA la necessità di acquisire la fornitura di materiale di laboratorio per il progetto in corso;`,
       `DETERMINA di affidare a ${f.nome} (P.IVA ${f.piva}) la fornitura per un importo complessivo di € ${euro(imp)} oltre IVA.`, `CIG ${cig()}`, rnd() < 0.5 ? `CUP ${cup()}` : '', 'Il Responsabile Unico del Progetto è nominato con il presente atto.']
-    : [{ t: 'CNR - ICCOM - Ufficio Acquisti', b: true }, { t: `ORDINE DI ACQUISTO N. ${n} del ${it(d)}`, b: true, s: 13 }, `Spett.le ${f.nome}`, `P.IVA ${f.piva}`, '',
+    : [...segnaturaTitulus(d), { t: 'CNR - ICCOM - Ufficio Acquisti', b: true }, { t: `ORDINE DI ACQUISTO N. ${n} del ${it(d)}`, b: true, s: 13 }, `Spett.le ${f.nome}`, `P.IVA ${f.piva}`, '',
       `Si ordina la fornitura di quanto segue per un importo totale di € ${euro(imp)} IVA esclusa.`, `CIG: ${cig()}`, 'Consegna presso il magazzino dell\'Istituto entro 30 giorni.', 'Fatturazione elettronica: codice univoco ufficio ABC123.'];
-  return { sub: path.join('Ordini e determine', String(d.getUTCFullYear())), nome: `${det ? 'Determina' : 'Ordine'}_${n.replace('/', '-')}.pdf`, bytes: await pdf(testo, { pagine: det ? int(1, 3) : 1 }) };
+  const striscia = prossimaStriscia; prossimaStriscia = null;
+  return { sub: path.join('Ordini e determine', String(d.getUTCFullYear())), nome: `${det ? 'Determina' : 'Ordine'}_${n.replace('/', '-')}.pdf`, bytes: await pdf(testo, { pagine: det ? int(1, 3) : 1, striscia }) };
 }
 
 async function missione() {

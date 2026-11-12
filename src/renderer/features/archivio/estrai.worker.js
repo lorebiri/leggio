@@ -9,6 +9,7 @@ import { openP7m, looksLikeP7m, innerName } from '../avanzati/lib/cades.js';
 import { parseFattura, isFattura } from '../avanzati/lib/fattura.js';
 import { parseMime, attachments, bodyText, summary, parseDaticert } from '../avanzati/lib/mime.js';
 import { datiDaTesto, datiDaFattura, testoFattura, eScansione, firmePdf, VERSIONE_ESTRAZIONE } from './lib/estrai.js';
+import { immaginiDisegnate, strisciaCandidata } from './lib/striscia.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(workerUrl, self.location.href).href;
 
@@ -31,10 +32,14 @@ async function testoPdf(bytes) {
     throw e;
   }
   try {
-    const n = pdf.numPages; const parti = []; const caratteri = []; let tot = 0; let parziale = false;
+    const n = pdf.numPages; const parti = []; const caratteri = []; let tot = 0; let parziale = false; let striscia = null;
     for (let i = 1; i <= n; i++) {
       if (i > MAX_PAGINE || tot > MAX_CARATTERI) { parziale = true; break; }
       const page = await pdf.getPage(i);
+      if (i === 1) {
+        // striscia di segnatura (immagine lungo un bordo): solo individuata, la lettura è in una coda a parte
+        try { const ol = await page.getOperatorList(); striscia = strisciaCandidata(immaginiDisegnate(ol.fnArray, ol.argsArray, pdfjs.OPS), page.view); } catch { striscia = null; }
+      }
       const tc = await page.getTextContent();
       const t = pageText(tc.items).replace(/\f/g, ' ');
       parti.push(t); caratteri.push(t.replace(/\s+/g, '').length); tot += t.length;
@@ -42,7 +47,7 @@ async function testoPdf(bytes) {
     }
     let testo = parti.join('\f');
     if (testo.length > MAX_CARATTERI) { testo = testo.slice(0, MAX_CARATTERI); parziale = true; }
-    return { pagine: n, testo, caratteri, parziale, protetto: false };
+    return { pagine: n, testo, caratteri, parziale, protetto: false, striscia };
   } finally { await task.destroy().catch(() => {}); }
 }
 
@@ -107,7 +112,7 @@ async function estrai({ bytes, nome, escludi }) {
   const dati = datiDaTesto(t.testo, { nome, escludi });
   return {
     ...out, contenuto: out.contenuto || 'pdf', testo: t.testo, pagine: t.pagine, protetto: t.protetto, parziale: !!t.parziale,
-    scansione: !t.protetto && eScansione(t.caratteri || []), ...dati,
+    scansione: !t.protetto && eScansione(t.caratteri || []), striscia: t.striscia || null, ...dati,
     tipo: dati.tipo === 'altro' && out.firme && out.contenuto ? 'p7m' : dati.tipo,
   };
 }

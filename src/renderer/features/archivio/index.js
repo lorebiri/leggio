@@ -24,12 +24,12 @@ export default function register(app) {
   app.registerTool({
     id: 'archivio', name: 'Archivio d\'ufficio', category: 'archivio', icon: 'archive', needsDoc: false,
     description: 'Trova subito fatture, DURC, ordini e PEC nelle cartelle dell\'ufficio; stati, scadenze e registro',
-    keywords: 'archivio indice cerca documenti cartelle ufficio fatture durc ordini determine missioni contratti pec p7m scadenzario scadenze protocollo stato pagato registro cig cup fornitore oggi',
+    keywords: 'archivio indice cerca documenti cartelle ufficio fatture durc ordini determine missioni contratti pec p7m scadenzario scadenze protocollo titulus segnatura numero di protocollo stato pagato registro cig cup fornitore oggi',
     run: () => apri({}),
   });
   app.registerTool({
     id: 'archivio-oggi', name: 'Oggi: scadenze e cose da fare', category: 'archivio', icon: 'archive', needsDoc: false,
-    description: 'DURC in scadenza, fatture da pagare, documenti da protocollare o da firmare, nuovi arrivi',
+    description: 'DURC in scadenza, fatture da pagare, documenti da protocollare in Titulus o da firmare, nuovi arrivi',
     keywords: 'oggi scadenzario scadenze durc scaduto fatture da pagare da protocollare da firmare nuovi documenti',
     run: () => apri({ scheda: 'oggi' }),
   });
@@ -57,12 +57,13 @@ export default function register(app) {
         const av = A.avanzamento;
         if (A.lavoro && av.fase === 'lettura') stato.replaceChildren(h('div', { class: 'ar-barra' }, h('div', { style: { width: Math.round((av.fatti / Math.max(1, av.totale)) * 100) + '%' } })), h('span', {}, `Indicizzazione: ${av.fatti} di ${av.totale}`), h('button', { class: 'btn small', onclick: () => A.interrompi() }, 'Interrompi'));
         else if (A.lavoro) stato.replaceChildren(h('span', {}, 'Controllo delle cartelle…'));
+        else if (A.codaSeg) stato.replaceChildren(h('span', {}, `Lettura delle segnature di protocollo: ${A.codaSeg.fatti} di ${A.codaSeg.totale}`), h('button', { class: 'btn small', onclick: () => A.interrompiSegnature() }, 'Interrompi'));
         else stato.replaceChildren(h('span', { class: 'av-note' }, A.attivo ? `${A.cartelle.length} ${A.cartelle.length === 1 ? 'cartella collegata' : 'cartelle collegate'}` : 'Nessuna cartella collegata. Collega le cartelle dell\'ufficio per trovare subito i documenti.'));
         if (A.attivo && A.caricato) await disegnaOggi(app, A, oggi, { compatto: true, apri: apriId, vedi: (filtro) => apri({ filtro }) });
         else oggi.replaceChildren();
       };
       let t = 0;
-      const off = A.on((tipo) => { if (tipo === 'avanzamento' && A.lavoro) { if (!t) t = setTimeout(() => { t = 0; aggiorna(); }, 500); } else if (tipo !== 'avanzamento' || !A.lavoro) { clearTimeout(t); t = setTimeout(() => { t = 0; aggiorna(); }, 200); } });
+      const off = A.on((tipo) => { if ((tipo === 'avanzamento' && A.lavoro) || (tipo === 'segnature' && A.codaSeg)) { if (!t) t = setTimeout(() => { t = 0; aggiorna(); }, 500); } else if (tipo !== 'avanzamento' || !A.lavoro) { clearTimeout(t); t = setTimeout(() => { t = 0; aggiorna(); }, 200); } });
       aggiorna();
       return () => { off(); clearTimeout(t); };
     },
@@ -97,12 +98,18 @@ export default function register(app) {
     tHome = setTimeout(() => { home.querySelector('.ar-home')?.remove(); inserisciOggi(); }, 800);
   });
 
+  // ---------- documenti nuovi arrivati nelle cartelle ----------
+  A.on((tipo, d) => {
+    if (tipo !== 'nuovi' || !d?.n) return;
+    app.ui.toast(d.n === 1 ? 'È arrivato un documento nuovo nell\'archivio.' : `Sono arrivati ${d.n} documenti nuovi nell'archivio.`, { kind: 'info', action: { label: 'Vedi', run: () => apri({ scheda: 'oggi' }) } });
+  });
+
   // ---------- impostazioni ----------
   app.bus.on('settings:fields', (arr) => {
     const s = app.settings;
     arr.push({ key: 'archivio.durataDurc', field: { name: 'archivio.durataDurc', label: 'Archivio: validità del DURC in giorni (se nel documento non c\'è la scadenza)', type: 'number', min: 1, max: 999, value: s.get('archivio.durataDurc', IMPOSTAZIONI_PREDEFINITE.durataDurc), help: 'Oggi 120 giorni per il DURC online: verifica sulla normativa vigente.' } });
     arr.push({ key: 'archivio.preavvisoDurc', field: { name: 'archivio.preavvisoDurc', label: 'Archivio: avvisa dei DURC in scadenza con quanti giorni di anticipo', type: 'number', min: 0, max: 365, value: s.get('archivio.preavvisoDurc', IMPOSTAZIONI_PREDEFINITE.preavvisoDurc) } });
-    arr.push({ key: 'archivio.preavvisoFatture', field: { name: 'archivio.preavvisoFatture', label: 'Archivio: evidenzia le fatture da pagare che scadono entro quanti giorni', type: 'number', min: 0, max: 365, value: s.get('archivio.preavvisoFatture', IMPOSTAZIONI_PREDEFINITE.preavvisoFatture) } });
+    arr.push({ key: 'archivio.preavvisoFatture', field: { name: 'archivio.preavvisoFatture', label: 'Archivio: proponi in «Oggi» le fatture che scadono entro quanti giorni', type: 'number', min: 0, max: 365, value: s.get('archivio.preavvisoFatture', IMPOSTAZIONI_PREDEFINITE.preavvisoFatture) } });
     arr.push({ key: 'archivio.codiciEnte', field: { name: 'archivio.codiciEnte', label: 'Archivio: codice fiscale e P.IVA del tuo ente (non vengono presi per quelli del fornitore)', type: 'text', value: s.get('archivio.codiciEnte', CODICI_ENTE_PREDEFINITI.join(', ')) } });
   });
 

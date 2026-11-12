@@ -3,10 +3,13 @@
 // Gli originali non vengono mai modificati: i risultati sono sempre copie.
 import { tutteLeOperazioni, validaSequenza, eseguiSequenza, nomeUscita, SkipError } from '../../avanzati/lib/batch-ops.js';
 import { proponiNome, REGOLA_PREDEFINITA } from '../../avanzati/lib/rinomina.js';
-import { VOCI_STATO } from '../lib/stati.js';
+import { VOCI_STATO, leggiElencoProtocolli } from '../lib/stati.js';
+import { dataDaTesto } from '../lib/testo.js';
 import { registroCsv, registroXlsx } from '../lib/esporta.js';
 import { TIPO_LABEL } from '../lib/estrai.js';
 import { isDesktop } from '../store.js';
+import { openP7m, looksLikeP7m } from '../../avanzati/lib/cades.js';
+import { parseFattura, fatturaDocument, nomeProposto as nomeFatturaPdf, isFattura } from '../../avanzati/lib/fattura.js';
 
 const MAX_ELABORA = 300 * 1024 * 1024;
 
@@ -31,22 +34,72 @@ export async function dialogoStato(app, A, righe) {
   if (!n) return app.ui.toast('Seleziona prima uno o più documenti.', { kind: 'warning' });
   const v = await app.ui.dialog({
     title: n === 1 ? `Stato di «${righe[0].nome}»` : `Stato di ${n} documenti`,
-    message: 'Lo stato si salva nell\'archivio di Leggio, non nel file: i documenti firmati restano intatti.',
+    message: 'Puoi spuntare più stati insieme. Lo stato si salva nell\'archivio di Leggio, non nel file: i documenti firmati restano intatti. Il protocollo si fa in Titulus: qui si annota soltanto.',
     fields: [
-      { name: 'azione', label: 'Che cosa vuoi fare', type: 'radio', value: 'imposta', options: [{ value: 'imposta', label: 'Imposta uno stato' }, { value: 'togli', label: 'Togli uno stato' }] },
-      { name: 'stato', label: 'Stato', type: 'select', value: 'da-protocollare', options: VOCI_STATO.map((s) => ({ value: s.id, label: s.label })) },
-      { name: 'numero', label: 'Numero di protocollo (solo per «Protocollato»)', type: 'text', value: '', placeholder: n > 1 ? 'Il primo numero: ai documenti successivi il numero seguente' : 'es. 1234' },
+      { name: 'azione', label: 'Che cosa vuoi fare', type: 'radio', value: 'imposta', options: [{ value: 'imposta', label: 'Imposta gli stati spuntati' }, { value: 'togli', label: 'Togli gli stati spuntati' }] },
+      ...VOCI_STATO.map((s) => ({ name: 's_' + s.id, label: s.label, type: 'checkbox', value: false })),
     ],
     okLabel: n === 1 ? 'Applica' : `Applica a ${n} documenti`,
+    validate: (x) => (VOCI_STATO.some((s) => x['s_' + s.id]) ? null : 'Spunta almeno uno stato.'),
   });
   if (!v) return;
-  if (v.azione === 'togli') { await A.cambiaStato(righe.map((r) => r.id), { togli: v.stato }); app.ui.toast(`Stato tolto da ${n === 1 ? '1 documento' : n + ' documenti'}.`, { kind: 'success' }); return; }
-  if (v.stato === 'protocollato' && v.numero.trim()) {
-    const base = parseInt(v.numero.replace(/\D/g, ''), 10);
-    const voci = righe.map((r, i) => ({ id: r.id, modifica: { imposta: 'protocollato', numeroProtocollo: n > 1 && Number.isFinite(base) ? String(base + i).padStart(v.numero.trim().length, '0') : v.numero.trim() } }));
-    await A.cambiaStati(voci);
-  } else await A.cambiaStato(righe.map((r) => r.id), { imposta: v.stato });
-  app.ui.toast(`«${VOCI_STATO.find((s) => s.id === v.stato)?.label}» applicato a ${n === 1 ? '1 documento' : n + ' documenti'}.`, { kind: 'success' });
+  let scelti = VOCI_STATO.filter((s) => v['s_' + s.id]).map((s) => s.id);
+  // stati opposti dello stesso tipo: vale il secondo («fatto»)
+  for (const [a, b] of [['da-protocollare', 'protocollato'], ['da-firmare', 'firmato'], ['da-pagare', 'pagato']]) if (scelti.includes(a) && scelti.includes(b) && v.azione === 'imposta') scelti = scelti.filter((x) => x !== a);
+  const ids = righe.map((r) => r.id);
+  for (const id of scelti) {
+    if (v.azione === 'imposta' && id === 'protocollato') continue;
+    await A.cambiaStato(ids, v.azione === 'togli' ? { togli: id } : { imposta: id });
+  }
+  const etichette = scelti.map((id) => VOCI_STATO.find((s) => s.id === id)?.label).join(', ');
+  if (v.azione === 'imposta' && scelti.includes('protocollato')) return dialogoProtocollato(app, A, righe);
+  app.ui.toast(`${v.azione === 'togli' ? 'Tolto' : 'Applicato'} «${etichette}» ${v.azione === 'togli' ? 'da' : 'a'} ${n === 1 ? '1 documento' : n + ' documenti'}.`, { kind: 'success' });
+}
+
+/**
+ * «Protocollato (Titulus)»: il numero viene SEMPRE da Titulus. Leggio non genera numeri:
+ * per un documento lo si scrive (o incolla); per più documenti si incolla un elenco «file → numero».
+ */
+async function dialogoProtocollato(app, A, righe) {
+  const n = righe.length;
+  if (n === 1) {
+    const r = righe[0];
+    const v = await app.ui.dialog({
+      title: `Protocollato (Titulus): «${r.nome}»`,
+      message: 'Scrivi o incolla il numero e la data di protocollo che ti ha dato Titulus.',
+      fields: [
+        { name: 'numero', label: 'N. protocollo (da Titulus)', type: 'text', value: r.stato?.origineProtocollo ? '' : r.stato?.numeroProtocollo || '', placeholder: 'es. 0012345' },
+        { name: 'data', label: 'Data di protocollo (gg/mm/aaaa)', type: 'text', value: '', placeholder: 'es. 12/11/2026' },
+      ],
+      okLabel: 'Salva',
+      validate: (x) => (x.data.trim() && !dataDaTesto(x.data) ? 'La data non è valida: scrivila come gg/mm/aaaa.' : null),
+    });
+    if (!v) return;
+    await A.cambiaStati([{ id: r.id, modifica: { imposta: 'protocollato', numeroProtocollo: v.numero.trim() || undefined, dataProtocollo: dataDaTesto(v.data) || undefined } }]);
+    app.ui.toast('Salvato nell\'archivio.', { kind: 'success' });
+    return;
+  }
+  const { h } = app.ui;
+  const elenco = righe.map((r) => `${r.nome}\t`).join('\n');
+  const v = await app.ui.dialog({
+    title: `Protocollato (Titulus): ${n} documenti`,
+    message: 'Ogni documento ha il SUO numero, quello dato da Titulus: Leggio non ne inventa. Accanto a ogni nome scrivi o incolla il numero (e, se vuoi, la data), separati da una tabulazione, «;» o «→». Puoi anche incollare due colonne copiate da Excel. I documenti senza numero restano «Protocollato» senza numero.',
+    fields: [{ name: 'elenco', label: 'Nome del file → numero di protocollo [→ data]', type: 'textarea', rows: Math.min(14, n + 2), value: elenco }],
+    body: h('p', { class: 'av-note' }, 'Esempio: «Fattura_Alfa_12.pdf → 0012345 → 12/11/2026». Se nel PDF c\'è la segnatura stampata da Titulus, Leggio la legge da solo durante l\'indicizzazione.'),
+    okLabel: 'Salva', width: 720,
+  });
+  if (!v) return;
+  const letti = leggiElencoProtocolli(v.elenco);
+  const perNome = new Map(letti.map((x) => [x.nome.toLowerCase(), x]));
+  let conNumero = 0;
+  const voci = righe.map((r) => {
+    const x = perNome.get(r.nome.toLowerCase()) || perNome.get((r.rel || '').toLowerCase());
+    if (x) conNumero++;
+    return { id: r.id, modifica: { imposta: 'protocollato', numeroProtocollo: x?.numero, dataProtocollo: x?.data || undefined } };
+  });
+  const ignoti = letti.filter((x) => !righe.some((r) => r.nome.toLowerCase() === x.nome.toLowerCase() || (r.rel || '').toLowerCase() === x.nome.toLowerCase()));
+  await A.cambiaStati(voci);
+  app.ui.toast(`${n} documenti segnati «Protocollato (Titulus)», ${conNumero} con il numero.${ignoti.length ? ` ${ignoti.length} righe dell'elenco non corrispondono ai documenti scelti.` : ''}`, { kind: ignoti.length ? 'warning' : 'success', timeout: 8000 });
 }
 
 /** Etichette libere e nota. */
@@ -92,11 +145,14 @@ function operazioni(app) {
 
 /** Le stesse operazioni e sequenze salvate delle «Azioni guidate», applicate ai documenti scelti. */
 export async function azioniGuidate(app, A, righe) {
-  const pdf = righe.filter((r) => r.ext === 'pdf' && !r.offline);
+  // PDF e fatture elettroniche (XML, anche firmate .p7m): le fatture diventano prima PDF impaginati
+  const pdf = righe.filter((r) => (r.ext === 'pdf' || (r.contenuto === 'fattura' && isDesktop())) && !r.offline);
   const altri = righe.length - pdf.length;
-  if (!pdf.length) return app.ui.toast('Le azioni guidate lavorano sui PDF: tra i documenti scelti non ce ne sono (o la cartella non è raggiungibile).', { kind: 'warning', timeout: 7000 });
-  const ops = operazioni(app);
-  const sequenze = app.settings.get('avanzati.sequenze', null) || [];
+  if (!pdf.length) return app.ui.toast('Le azioni guidate lavorano sui PDF e sulle fatture elettroniche: tra i documenti scelti non ce ne sono (o la cartella non è raggiungibile).', { kind: 'warning', timeout: 7000 });
+  // il timbro di protocollo numera i file in automatico: all'ICCOM il protocollo lo fa Titulus,
+  // Leggio non deve generare numeri. Dall'archivio quindi non si offre (né nelle sequenze).
+  const ops = operazioni(app).filter((o) => o.id !== 'protocollo');
+  const sequenze = (app.settings.get('avanzati.sequenze', null) || []).filter((s) => !(s.passi || []).some((p) => p.op === 'protocollo'));
   const scelte = [
     ...sequenze.map((s, i) => ({ value: 'seq:' + i, label: 'Sequenza salvata: ' + s.nome })),
     ...ops.map((o) => ({ value: 'op:' + o.id, label: o.label })),
@@ -108,7 +164,6 @@ export async function azioniGuidate(app, A, righe) {
       { name: 'cosa', label: 'Operazione o sequenza', type: 'select', value: scelte[0]?.value, options: scelte },
       { name: 'dove', label: 'Dove salvare le copie', type: 'radio', value: 'elaborati', options: [{ value: 'elaborati', label: 'Nella sottocartella «Elaborati» accanto agli originali' }, { value: 'altra', label: 'In un\'altra cartella…' }] },
       { name: 'nome', label: 'Nome delle copie', type: 'select', value: 'stesso', options: [{ value: 'stesso', label: 'Stesso nome dell\'originale' }, { value: 'suffisso', label: 'Nome con «_elaborato»' }, { value: 'contenuto', label: 'Nome proposto dal contenuto' }] },
-      { name: 'segna', label: 'Con il timbro di protocollo, segna gli originali come «Protocollato n. …»', type: 'checkbox', value: true },
     ],
     okLabel: 'Avanti',
   });
@@ -119,13 +174,6 @@ export async function azioniGuidate(app, A, righe) {
     const o = ops.find((x) => x.id === v.cosa.slice(3));
     if (!o) return;
     const fields = (o.fields || []).map((f) => ({ ...f }));
-    if (o.id === 'protocollo') {
-      const pref = app.settings.get('avanzati.protocollo', {}) || {};
-      for (const f of fields) if (pref[f.name] != null && f.name !== 'numero') f.value = pref[f.name];
-      const cont = app.settings.get('avanzati.protocollo.contatore', null);
-      const f = fields.find((x) => x.name === 'numero');
-      if (f && cont?.anno === new Date().getFullYear() && cont.prossimo) f.value = String(cont.prossimo);
-    }
     let params = {};
     if (fields.some((f) => f.type !== 'info')) {
       params = await app.ui.dialog({ title: o.label, message: o.description, fields, okLabel: 'Conferma', validate: (x) => o.validate?.(x) || null });
@@ -144,7 +192,7 @@ export async function azioniGuidate(app, A, righe) {
   let cartella = null;
   if (v.dove === 'altra') { cartella = await A.store.scegliDestinazione('Dove salvare le copie elaborate'); if (!cartella) return; }
 
-  const esiti = []; const protocolli = [];
+  const esiti = [];
   const t0 = Date.now();
   await app.ui.withProgress('Azioni guidate sull\'archivio', async (p) => {
     for (let i = 0; i < pdf.length; i++) {
@@ -155,13 +203,11 @@ export async function azioniGuidate(app, A, righe) {
       try {
         if (r.size > MAX_ELABORA) throw new SkipError('Il file è troppo grande (oltre 300 MB).');
         if (r.protetto) throw new SkipError('Il file è protetto da password.');
-        const bytes = await A.leggiBytes(r.path);
+        const bytes = r.ext === 'pdf' ? await A.leggiBytes(r.path) : (await fatturaInPdf(app, A, r)).bytes;
         const out = await eseguiSequenza(bytes, passi, { PDFLib: app.lib.PDFLib, openPdfLib: (b) => app.lib.openPdfLib(b), savePdfLib: (d) => app.lib.savePdfLib(d), ops, ctx, signal: p.signal });
-        const nome = v.nome === 'contenuto' ? nomeProposto(r) : nomeUscita(r.nome, { modo: v.nome });
+        const nome = v.nome === 'contenuto' ? nomeProposto(r) : nomeUscita(r.nome.replace(/(\.xml)(\.p7m)*$/i, '.pdf'), { modo: v.nome });
         const dove = await A.store.scriviCopia({ origine: r.path, cartella: cartella && cartella !== '__download__' ? cartella : null, sotto: 'Elaborati', nome, bytes: out });
         esiti.push({ r, ok: true, dove, note: ctx.note || '' });
-        const m = String(ctx.note || '').match(/Prot\. n\. (\S+)/);
-        if (m) protocolli.push({ id: r.id, modifica: { imposta: 'protocollato', numeroProtocollo: m[1], dataProtocollo: new Date().toISOString().slice(0, 10) } });
       } catch (e) {
         if (e?.name === 'AbortError') break;
         esiti.push({ r, ok: false, skip: e instanceof SkipError, motivo: e?.message || String(e) });
@@ -169,17 +215,10 @@ export async function azioniGuidate(app, A, righe) {
       await new Promise((res) => setTimeout(res, 0));
     }
   });
-  // contatore di protocollo condiviso con l'area avanzati
-  const prot = passi.find((s) => s.op === 'protocollo');
-  if (prot && protocolli.length) {
-    const base = parseInt(String(prot.params.numero).replace(/\D/g, ''), 10);
-    if (Number.isFinite(base)) app.settings.set('avanzati.protocollo.contatore', { anno: new Date().getFullYear(), prossimo: base + pdf.length });
-  }
-  if (v.segna && protocolli.length) await A.cambiaStati(protocolli);
   const ok = esiti.filter((e) => e.ok).length; const ko = esiti.length - ok;
   // le copie nelle cartelle collegate entrano nell'archivio alla prossima scansione
   if (ok && !cartella) A.aggiorna({ motivo: 'azioni', silenzioso: true }).catch(() => {});
-  await rapporto(app, `${ok} copie create${ko ? `, ${ko} documenti non elaborati` : ''} in ${Math.max(1, Math.round((Date.now() - t0) / 1000))} s.${protocolli.length && v.segna ? ` ${protocolli.length} originali segnati come protocollati.` : ''}`, esiti);
+  await rapporto(app, `${ok} copie create${ko ? `, ${ko} documenti non elaborati` : ''} in ${Math.max(1, Math.round((Date.now() - t0) / 1000))} s.`, esiti);
 }
 
 async function rapporto(app, titolo, esiti) {
@@ -234,6 +273,104 @@ export async function copieConNomeProposto(app, A, righe) {
   const ok = esiti.filter((e) => e.ok).length;
   if (ok && !cartella) A.aggiorna({ motivo: 'copie', silenzioso: true }).catch(() => {});
   await rapporto(app, `${ok} copie create${esiti.length - ok ? `, ${esiti.length - ok} non riuscite` : ''}.`, esiti);
+}
+
+// ---------------- fatture elettroniche, stampa, firma ----------------
+
+/** Byte della fattura XML (anche dentro una busta .p7m) → { f (fattura letta), xml } */
+async function leggiFattura(A, r) {
+  let b = await A.leggiBytes(r.path);
+  if (looksLikeP7m(b) || /\.p7m$/i.test(r.nome)) { const x = await openP7m(b, { verify: false }); if (!x.content) throw new Error('La busta firmata non contiene la fattura.'); b = x.content; }
+  if (!isFattura(b)) throw new Error('Non è una fattura elettronica.');
+  return { f: parseFattura(b), xml: b };
+}
+
+/**
+ * Fattura elettronica → PDF impaginato (stessa impaginazione dell'area avanzati: fatturaDocument +
+ * printToPDF del suo canale «html-to-pdf»). Se l'area avanzati offre app.services.fatturaPdf si usa quello.
+ * → { bytes, nome }
+ */
+export async function fatturaInPdf(app, A, r) {
+  const { f, xml } = await leggiFattura(A, r);
+  if (typeof app.services?.fatturaPdf === 'function') {
+    const out = await app.services.fatturaPdf(xml, { nome: r.nome });
+    const bytes = out?.bytes || out;
+    if (bytes instanceof Uint8Array) return { bytes, nome: out?.nome || nomeFatturaPdf(f) };
+  }
+  if (!isDesktop()) throw new Error('La conversione delle fatture in PDF funziona nell\'app desktop.');
+  const res = await app.platform.invokeFeature('avanzati:html-to-pdf', { html: fatturaDocument(f, { nomeFile: r.nome }), pageSize: 'A4', margins: 0 });
+  if (!res?.ok) throw new Error(res?.error || 'Impaginazione della fattura non riuscita.');
+  return { bytes: res.value instanceof Uint8Array ? res.value : new Uint8Array(res.value), nome: nomeFatturaPdf(f) };
+}
+
+/** «Fatture in PDF»: una copia PDF impaginata per ogni fattura elettronica selezionata, in «Elaborati». */
+export async function fattureInPdf(app, A, righe) {
+  const xml = righe.filter((r) => r.contenuto === 'fattura' && !r.offline);
+  if (!xml.length) return app.ui.toast('Tra i documenti scelti non ci sono fatture elettroniche (XML).', { kind: 'warning' });
+  if (!isDesktop()) return app.ui.toast('La conversione delle fatture in PDF funziona nell\'app desktop.', { kind: 'warning' });
+  const esiti = []; const t0 = Date.now();
+  await app.ui.withProgress('Fatture elettroniche in PDF', async (p) => {
+    for (let i = 0; i < xml.length; i++) {
+      if (p.cancelled) break;
+      const r = xml[i];
+      p.set(i / xml.length, `${i + 1} di ${xml.length}: ${r.nome}`);
+      try {
+        const { bytes, nome } = await fatturaInPdf(app, A, r);
+        const dove = await A.store.scriviCopia({ origine: r.path, sotto: 'Elaborati', nome, bytes });
+        esiti.push({ r, ok: true, dove });
+      } catch (e) { esiti.push({ r, ok: false, motivo: e.message }); }
+    }
+  });
+  const ok = esiti.filter((e) => e.ok).length;
+  if (ok) A.aggiorna({ motivo: 'azioni', silenzioso: true }).catch(() => {});
+  await rapporto(app, `${ok} fatture salvate in PDF nella sottocartella «Elaborati»${esiti.length - ok ? `, ${esiti.length - ok} non riuscite` : ''} (${Math.max(1, Math.round((Date.now() - t0) / 1000))} s). Gli XML originali non sono stati toccati.`, esiti);
+}
+
+/** Stampa dei documenti selezionati (PDF, fatture elettroniche impaginate, PDF dentro i .p7m). */
+export async function stampaSelezionati(app, A, righe) {
+  const docs = righe.filter((r) => !r.offline);
+  if (!docs.length) return app.ui.toast('Seleziona prima uno o più documenti raggiungibili.', { kind: 'warning' });
+  if (docs.length > 200) return app.ui.toast('Troppi documenti in una volta: selezionane al massimo 200.', { kind: 'warning' });
+  const sources = []; const saltati = [];
+  await app.ui.withProgress('Preparazione della stampa', async (p) => {
+    for (let i = 0; i < docs.length; i++) {
+      if (p.cancelled) return;
+      const r = docs[i];
+      p.set(i / docs.length, `${i + 1} di ${docs.length}: ${r.nome}`);
+      try {
+        if (r.contenuto === 'fattura') { const x = await fatturaInPdf(app, A, r); sources.push({ name: x.nome, bytes: x.bytes }); continue; }
+        let b = await A.leggiBytes(r.path);
+        if (r.ext === 'p7m') { const x = await openP7m(b, { verify: false }); b = x.content; }
+        if (!b || !new TextDecoder('latin1').decode(b.subarray(0, 1024)).includes('%PDF')) { saltati.push(`${r.nome} (non è un PDF)`); continue; }
+        if (r.protetto) { saltati.push(`${r.nome} (protetto da password)`); continue; }
+        sources.push({ name: r.nome.replace(/\.p7m$/i, ''), bytes: b });
+      } catch (e) { saltati.push(`${r.nome} (${e.message})`); }
+    }
+  });
+  if (saltati.length) app.ui.toast(`Non stampati: ${saltati.slice(0, 5).join('; ')}${saltati.length > 5 ? ` e altri ${saltati.length - 5}` : ''}.`, { kind: 'warning', timeout: 10000 });
+  if (sources.length) await app.printFiles(sources);
+}
+
+/**
+ * Firma dei documenti selezionati. Lo strumento «Firma più file» dell'area moduli oggi sceglie i file
+ * con la finestra del sistema e non riceve un elenco: si aprono le cartelle dei documenti e poi lo strumento.
+ */
+export async function firmaSelezionati(app, A, righe) {
+  const docs = righe.filter((r) => !r.offline);
+  if (!docs.length) return app.ui.toast('Seleziona prima uno o più documenti raggiungibili.', { kind: 'warning' });
+  const tool = app.tools.get('sign-batch');
+  if (typeof app.services?.firmaFile === 'function') return app.services.firmaFile(docs.map((r) => ({ path: r.path, name: r.nome })));
+  if (!tool || !isDesktop()) return app.ui.toast('La firma digitale di più file è disponibile nell\'app desktop.', { kind: 'warning' });
+  const cartelle = [...new Set(docs.map((r) => r.path.replace(/[\\/][^\\/]+$/, '')))];
+  const { h } = app.ui;
+  const v = await app.ui.choice({
+    title: `Firma di ${docs.length} ${docs.length === 1 ? 'documento' : 'documenti'}`,
+    message: '«Firma più file» ti chiederà il certificato e poi di scegliere i file nella finestra del sistema: lì seleziona questi documenti (le copie firmate vanno accanto agli originali, che non vengono toccati).',
+    body: h('ul', { class: 'ar-rapporto' }, docs.slice(0, 12).map((r) => h('li', {}, r.rel || r.nome)), docs.length > 12 ? h('li', {}, `… e altri ${docs.length - 12}`) : null),
+    buttons: [{ value: null, label: 'Lascia perdere', left: true }, { value: 'cartella', label: cartelle.length === 1 ? 'Mostra la cartella' : `Mostra le ${Math.min(cartelle.length, 5)} cartelle` }, { value: 'firma', label: 'Apri «Firma più file»', primary: true }],
+  });
+  if (v === 'cartella') { for (const r of docs.filter((x, i, a) => a.findIndex((y) => y.path.replace(/[\\/][^\\/]+$/, '') === x.path.replace(/[\\/][^\\/]+$/, '')) === i).slice(0, 5)) app.platform.showInFolder(r.path); }
+  if (v === 'firma' || v === 'cartella') app.tools.run('sign-batch');
 }
 
 export { TIPO_LABEL };

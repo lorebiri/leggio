@@ -5,7 +5,7 @@ import { analizza, trovaDate } from '../../avanzati/lib/rinomina.js';
 import { numeroIt } from './testo.js';
 
 /** Versione delle regole di estrazione: se cambia, i documenti vengono riletti alla prossima scansione. */
-export const VERSIONE_ESTRAZIONE = 3;
+export const VERSIONE_ESTRAZIONE = 5; // 4: segnatura di protocollo (Titulus) nel testo; 5: striscia-immagine
 
 export const TIPI = [
   { id: 'fattura', label: 'Fattura' },

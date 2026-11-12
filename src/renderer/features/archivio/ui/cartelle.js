@@ -11,7 +11,7 @@ export async function apriCartelle(app, A) {
     try { conteggi = await A.conteggi(); } catch { /* */ }
     lista.replaceChildren(...(A.cartelle.length ? A.cartelle.map((c) => h('li', {},
       h('div', { class: 'ar-cart-t' }, h('strong', {}, c.nome), h('small', {}, c.percorso),
-        h('small', { class: A.offline.has(c.id) ? 'err' : '' }, A.offline.has(c.id) ? A.offline.get(c.id) : `${(conteggi?.cartelle[c.id] || 0).toLocaleString('it-IT')} documenti indicizzati${A.offline.has(c.id + ':parziale') ? ' · ' + A.offline.get(c.id + ':parziale') : ''}`)),
+        h('small', { class: A.offline.has(c.id) ? 'err' : '' }, A.offline.has(c.id) ? A.offline.get(c.id) : `${(conteggi?.cartelle[c.id] || 0).toLocaleString('it-IT')} documenti indicizzati · ${A.sorvegliate?.[c.id] ? 'i file nuovi si vedono in pochi secondi' : 'controllo dei file nuovi ogni 90 secondi (cartella di rete)'}${A.offline.has(c.id + ':parziale') ? ' · ' + A.offline.get(c.id + ':parziale') : ''}`)),
       h('button', { class: 'btn', onclick: async () => { await A.aggiorna({ cartelle: [c.id], motivo: 'manuale' }); disegna(); } }, 'Aggiorna'),
       h('button', { class: 'btn', onclick: async () => {
         if (!(await app.ui.confirm(`Scollegare «${c.nome}» dall'archivio? I file nella cartella non vengono toccati; spariscono solo dall'indice. Gli stati d'ufficio restano salvati e tornano se ricolleghi la cartella.`, { title: 'Scollega cartella', okLabel: 'Scollega' }))) return;
@@ -29,7 +29,7 @@ export async function apriCartelle(app, A) {
       h('button', { class: 'btn primary', onclick: async () => { try { await A.aggiungiCartella(); disegna(); } catch (e) { app.reportError(e, 'Cartella non collegata'); } } }, 'Collega una cartella…'),
       h('button', { class: 'btn', onclick: async () => { await A.aggiorna({ motivo: 'manuale' }); disegna(); } }, 'Aggiorna tutte')),
     h('h3', {}, 'Stati d\'ufficio: copia di sicurezza'),
-    h('p', { class: 'av-note' }, 'Gli stati («da protocollare», «pagato»…), le etichette e le note si salvano solo in Leggio. Puoi esportarli per una copia di sicurezza o per passarli a una collega che usa le stesse cartelle: vengono riconosciuti dall\'impronta del file, anche se è stato rinominato.'),
+    h('p', { class: 'av-note' }, 'Gli stati («da protocollare in Titulus», «pagato»…), i numeri di protocollo inseriti a mano, le etichette e le note si salvano solo in Leggio. Puoi esportarli per una copia di sicurezza o per passarli a una collega che usa le stesse cartelle: vengono riconosciuti dall\'impronta del file, anche se è stato rinominato.'),
     h('div', { class: 'av-row' },
       h('button', { class: 'btn', onclick: () => esporta('json') }, 'Esporta stati (JSON)…'),
       h('button', { class: 'btn', onclick: () => esporta('csv') }, 'Esporta stati (CSV per Excel)…'),

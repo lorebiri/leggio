@@ -2,7 +2,7 @@
 // lista virtualizzata, selezione multipla e azioni).
 import { listaVirtuale } from './lista.js';
 import { disegnaOggi } from './oggi.js';
-import { apriDocumento, dialogoStato, dialogoEtichette, esportaRegistro, azioniGuidate, copieConNomeProposto } from './azioni.js';
+import { apriDocumento, dialogoStato, dialogoEtichette, esportaRegistro, azioniGuidate, copieConNomeProposto, fattureInPdf, stampaSelezionati, firmaSelezionati } from './azioni.js';
 import { apriCartelle } from './cartelle.js';
 import { TIPI, TIPO_LABEL } from '../lib/estrai.js';
 import { VOCI_STATO } from '../lib/stati.js';
@@ -19,6 +19,9 @@ const SEGNALI = [
   { value: 'protetto', label: 'Protetti da password' },
   { value: 'errore', label: 'Non letti (danneggiati o illeggibili)' },
   { value: 'senza-dati', label: 'Senza dati riconosciuti' },
+  { value: 'segnatura-letta', label: 'Segnatura di protocollo letta dal documento' },
+  { value: 'segnatura-da-leggere', label: 'Protocollo: segnatura da leggere' },
+  { value: 'segnatura-non-letta', label: 'Protocollo: segnatura presente ma non letta' },
 ];
 
 /** Apre (o porta in primo piano) la vista. opts: { scheda: 'oggi'|'documenti', filtro, q } */
@@ -53,7 +56,7 @@ export function apriVista(app, A, opts = {}) {
   const schedaOggi = h('div', { class: 'ar-scheda ar-scheda-oggi' }, vuoto, oggiBox);
 
   // ---------- scheda Documenti ----------
-  const q = h('input', { type: 'search', class: 'ar-q', placeholder: 'Cerca nei documenti: parole, numero di fattura, CIG, nome del fornitore…', 'aria-label': 'Cerca nei documenti' });
+  const q = h('input', { type: 'search', class: 'ar-q', placeholder: 'Cerca nei documenti: parole, n. di protocollo o di fattura, CIG, fornitore…', 'aria-label': 'Cerca nei documenti' });
   const sel = (label, opts, extra = {}) => { const s = h('select', { 'aria-label': label, ...extra }, opts.map((o) => h('option', { value: o.value }, o.label))); return s; };
   const fTipo = sel('Tipo di documento', [{ value: '', label: 'Tutti i tipi' }, ...TIPI.map((t) => ({ value: t.id, label: t.label }))]);
   const fForn = h('input', { type: 'text', placeholder: 'Fornitore o P.IVA', 'aria-label': 'Fornitore o partita IVA', list: 'ar-fornitori' });
@@ -61,22 +64,26 @@ export function apriVista(app, A, opts = {}) {
   const fDal = h('input', { type: 'text', placeholder: 'dal gg/mm/aaaa', 'aria-label': 'Dalla data', inputmode: 'numeric', size: 11 });
   const fAl = h('input', { type: 'text', placeholder: 'al gg/mm/aaaa', 'aria-label': 'Alla data', inputmode: 'numeric', size: 11 });
   const fCig = h('input', { type: 'text', placeholder: 'CIG o CUP', 'aria-label': 'CIG o CUP', size: 14 });
+  const fUor = h('input', { type: 'text', placeholder: 'es. SI000099', 'aria-label': 'UOR', size: 11 });
+  const fPDal = h('input', { type: 'text', placeholder: 'dal gg/mm/aaaa', 'aria-label': 'Protocollo dalla data', inputmode: 'numeric', size: 11 });
+  const fPAl = h('input', { type: 'text', placeholder: 'al gg/mm/aaaa', 'aria-label': 'Protocollo alla data', inputmode: 'numeric', size: 11 });
+  const fProt = h('input', { type: 'text', placeholder: 'es. 12345', 'aria-label': 'Numero di protocollo (Titulus)', size: 12, inputmode: 'numeric' });
   const fStato = sel('Stato', [{ value: '', label: 'Qualsiasi stato' }, ...VOCI_STATO.map((v) => ({ value: v.id, label: v.label })), { value: 'senza-stato', label: 'Senza stato' }]);
   const fCartella = sel('Cartella', [{ value: '', label: 'Tutte le cartelle' }]);
   const fSegnale = sel('Segnalazioni', SEGNALI);
   const fOrdine = sel('Ordina', ORDINAMENTI.map((o) => ({ value: o.id, label: o.label })));
   fOrdine.value = 'data-desc';
-  const azzera = h('button', { class: 'btn', onclick: () => { for (const x of [q, fForn, fDal, fAl, fCig]) x.value = ''; for (const x of [fTipo, fStato, fCartella, fSegnale]) x.value = ''; st.filtro = {}; st.ordineScelto = false; fOrdine.value = 'data-desc'; cerca(); } }, 'Azzera filtri');
+  const azzera = h('button', { class: 'btn', onclick: () => { for (const x of [q, fForn, fDal, fAl, fCig, fProt, fUor, fPDal, fPAl]) x.value = ''; for (const x of [fTipo, fStato, fCartella, fSegnale]) x.value = ''; st.filtro = {}; st.ordineScelto = false; fOrdine.value = 'data-desc'; cerca(); } }, 'Azzera filtri');
   const campo = (label, input) => h('label', { class: 'ar-campo' }, h('span', {}, label), input);
   // i filtri meno usati stanno in «Altri filtri»: con i caratteri grandi la lista deve restare visibile
   const altri = h('div', { class: 'ar-filtri ar-filtri-altri', hidden: !app.settings.get('archivio.altriFiltri', false) },
-    campo('Fornitore', fForn), campo('Data dal', fDal), campo('al', fAl), campo('CIG / CUP', fCig), campo('Cartella', fCartella), campo('Mostra', fSegnale), dlForn);
+    campo('Protocollo dal', fPDal), campo('al', fPAl), campo('UOR', fUor), campo('Fornitore', fForn), campo('Data dal', fDal), campo('al', fAl), campo('CIG / CUP', fCig), campo('Cartella', fCartella), campo('Mostra', fSegnale), dlForn);
   const altriBtn = h('button', { class: 'btn', 'aria-expanded': String(!altri.hidden), onclick: () => { altri.hidden = !altri.hidden; altriBtn.setAttribute('aria-expanded', String(!altri.hidden)); app.settings.set('archivio.altriFiltri', !altri.hidden); aggiornaAltri(); } });
   const aggiornaAltri = () => {
-    const n = [fForn.value.trim(), fDal.value.trim(), fAl.value.trim(), fCig.value.trim(), fCartella.value, fSegnale.value].filter(Boolean).length;
+    const n = [fPDal.value.trim(), fPAl.value.trim(), fUor.value.trim(), fForn.value.trim(), fDal.value.trim(), fAl.value.trim(), fCig.value.trim(), fCartella.value, fSegnale.value].filter(Boolean).length;
     altriBtn.textContent = (altri.hidden ? 'Altri filtri' : 'Meno filtri') + (n ? ` (${n} attiv${n === 1 ? 'o' : 'i'})` : '');
   };
-  const filtri = h('div', {}, h('div', { class: 'ar-filtri' }, campo('Tipo', fTipo), campo('Stato', fStato), campo('Ordina per', fOrdine), altriBtn, azzera), altri);
+  const filtri = h('div', {}, h('div', { class: 'ar-filtri' }, campo('N. protocollo', fProt), campo('Tipo', fTipo), campo('Stato', fStato), campo('Ordina per', fOrdine), altriBtn, azzera), altri);
   const conteggio = h('div', { class: 'ar-conteggio', role: 'status', 'aria-live': 'polite' });
   const selInfo = h('span', { class: 'ar-selinfo' });
   const tuttiChk = h('input', { type: 'checkbox', 'aria-label': 'Seleziona tutti i risultati', onchange: () => { if (tuttiChk.checked) st.righe.forEach((r) => st.sel.add(r.id)); else st.sel.clear(); aggiornaSel(); lista.ridisegna(); } });
@@ -86,13 +93,23 @@ export function apriVista(app, A, opts = {}) {
     h('label', { class: 'ar-tutti' }, tuttiChk, h('span', {}, 'Tutti')), selInfo,
     bottone('Cambia stato…', () => dialogoStato(app, A, selezionate())),
     bottone('Etichette e nota…', () => dialogoEtichette(app, A, selezionate())),
-    bottone('Azioni guidate…', () => azioniGuidate(app, A, selezionate())),
-    bottone('Copie con nome proposto…', () => copieConNomeProposto(app, A, selezionate())),
-    bottone('Esporta registro…', async () => {
-      const righe = st.sel.size ? selezionate() : st.righe;
-      const f = await app.ui.choice({ title: 'Esporta registro', message: `${righe.length} documenti (${st.sel.size ? 'quelli selezionati' : 'tutti i risultati della ricerca'}) con tipo, data, numero, fornitore, P.IVA, importo, CIG, CUP, scadenza e stato.`, buttons: [{ value: null, label: 'Lascia perdere', left: true }, { value: 'csv', label: 'CSV' }, { value: 'xlsx', label: 'Excel (.xlsx)', primary: true }] });
-      if (f) await esportaRegistro(app, righe, f);
-    }));
+    bottone('Stampa…', () => stampaSelezionati(app, A, selezionate())),
+    bottone('Firma…', () => firmaSelezionati(app, A, selezionate())),
+    h('button', { class: 'btn', 'aria-haspopup': 'menu', onclick: (e) => {
+      const r = e.currentTarget.getBoundingClientRect();
+      const run = (fn) => async () => { try { await fn(); } catch (err) { app.reportError(err, 'Operazione non riuscita'); } };
+      app.ui.contextMenu(r.left, r.bottom + 4, [
+        { label: 'Azioni guidate…', icon: 'layers', run: run(() => azioniGuidate(app, A, selezionate())) },
+        { label: 'Fatture elettroniche in PDF', icon: 'file', run: run(() => fattureInPdf(app, A, selezionate())) },
+        { label: 'Copie con nome proposto…', icon: 'file', run: run(() => copieConNomeProposto(app, A, selezionate())) },
+        '-',
+        { label: 'Esporta registro (Excel o CSV)…', icon: 'export', run: run(async () => {
+          const righe = st.sel.size ? selezionate() : st.righe;
+          const f = await app.ui.choice({ title: 'Esporta registro', message: `${righe.length} documenti (${st.sel.size ? 'quelli selezionati' : 'tutti i risultati della ricerca'}) con tipo, n. protocollo, data e UOR, data, numero, fornitore, P.IVA, importo, CIG, CUP, scadenza e stato.`, buttons: [{ value: null, label: 'Lascia perdere', left: true }, { value: 'csv', label: 'CSV' }, { value: 'xlsx', label: 'Excel (.xlsx)', primary: true }] });
+          if (f) await esportaRegistro(app, righe, f);
+        }) },
+      ]);
+    } }, 'Altre azioni ▾'));
   const lista = listaVirtuale({ h, render: renderRiga, onVisibili: chiediEstratti, etichetta: 'Documenti trovati' });
   const schedaDoc = h('div', { class: 'ar-scheda ar-scheda-doc' }, h('div', { class: 'ar-cerca' }, q), filtri, h('div', { class: 'ar-riga-info' }, conteggio, barraSel), lista.el);
 
@@ -106,18 +123,20 @@ export function apriVista(app, A, opts = {}) {
   q.addEventListener('input', ricercaDifferita);
   q.addEventListener('keydown', (e) => { if (e.key === 'Enter') { clearTimeout(timer); cerca(); } if (e.key === 'ArrowDown') { e.preventDefault(); lista.el.querySelector('.ar-riga')?.focus(); } });
   for (const x of [fTipo, fStato, fCartella, fSegnale, fOrdine]) x.addEventListener('change', () => cerca());
-  for (const x of [fForn, fCig]) x.addEventListener('input', ricercaDifferita);
-  for (const x of [fDal, fAl]) x.addEventListener('change', () => cerca());
+  for (const x of [fForn, fCig, fProt, fUor]) x.addEventListener('input', ricercaDifferita);
+  for (const x of [fDal, fAl, fPDal, fPAl]) x.addEventListener('change', () => cerca());
 
-  async function cerca() {
+  async function cerca({ mantieni = false } = {}) {
     const seq = ++st.seq;
     const dal = dataDaTesto(fDal.value); const al = dataDaTesto(fAl.value);
+    const protDal = dataDaTesto(fPDal.value); const protAl = dataDaTesto(fPAl.value);
+    fPDal.classList.toggle('errato', !!fPDal.value.trim() && !protDal); fPAl.classList.toggle('errato', !!fPAl.value.trim() && !protAl);
     fDal.classList.toggle('errato', !!fDal.value.trim() && !dal); fAl.classList.toggle('errato', !!fAl.value.trim() && !al);
     st.q = q.value.trim();
     aggiornaAltri();
     // con una ricerca l'ordine predefinito diventa «Più pertinenti» (finché l'utente non sceglie)
     if (!st.ordineScelto) fOrdine.value = st.q ? 'pertinenza' : 'data-desc';
-    const f = { q: st.q, tipo: fTipo.value, fornitore: fForn.value.trim(), dal, al, cigcup: fCig.value.trim(), stato: fStato.value, cartella: fCartella.value, segnale: fSegnale.value, ordine: fOrdine.value, ...st.filtro };
+    const f = { q: st.q, tipo: fTipo.value, fornitore: fForn.value.trim(), dal, al, cigcup: fCig.value.trim(), protocollo: fProt.value.trim(), uor: fUor.value.trim(), protDal, protAl, stato: fStato.value, cartella: fCartella.value, segnale: fSegnale.value, ordine: fOrdine.value, ...st.filtro };
     let r;
     try { r = await A.cerca(f); } catch (e) { conteggio.textContent = 'Ricerca non riuscita: ' + e.message; return; }
     if (seq !== st.seq) return;
@@ -126,7 +145,11 @@ export function apriVista(app, A, opts = {}) {
     for (const id of [...st.sel]) if (!ids.has(id)) st.sel.delete(id);
     st.ultimaMs = r.ms;
     conteggio.textContent = `${r.totale.toLocaleString('it-IT')} ${r.totale === 1 ? 'documento' : 'documenti'}${r.totale > r.righe.length ? ` (mostrati i primi ${r.righe.length.toLocaleString('it-IT')})` : ''} · ricerca in ${r.ms} ms`;
-    lista.imposta(st.righe);
+    lista.imposta(st.righe, { inCima: !mantieni });
+    if (Object.keys(st.filtro).length) {
+      const testo = st.filtro.scadAl ? 'solo fatture in scadenza non ancora segnate' : st.filtro.aggiuntoDopo ? 'solo documenti arrivati dall\'ultima apertura' : 'filtro da «Oggi»';
+      conteggio.append(' · ', h('button', { class: 'btn small', title: 'Togli questo filtro', onclick: () => { st.filtro = {}; cerca(); } }, `${testo} ✕`));
+    }
     aggiornaSel();
     if (!r.totale) lista.el.querySelector('.ar-vl-strato').replaceChildren(h('p', { class: 'ar-nessuno' }, A.size === 0 ? 'L\'archivio è ancora vuoto.' : st.q ? `Nessun documento contiene «${st.q}». Le scansioni senza testo non sono ricercabili finché non passano dall'OCR (filtro «Mostra»).` : 'Nessun documento con questi filtri.'));
   }
@@ -147,7 +170,9 @@ export function apriVista(app, A, opts = {}) {
     const chk = h('input', { type: 'checkbox', checked: scelto, 'aria-label': 'Seleziona ' + r.nome, onclick: (e) => { e.stopPropagation(); if (e.target.checked) st.sel.add(r.id); else st.sel.delete(r.id); aggiornaSel(); riga.classList.toggle('scelta', e.target.checked); } });
     const dati = [r.fornitore, r.numero && 'n. ' + r.numero, r.data && dataIt(r.data), r.importo != null && euro(r.importo), r.scadenza && 'scad. ' + dataIt(r.scadenza), r.pagine && `${r.pagine} pag.`].filter(Boolean).join(' · ');
     const chips = [
-      ...(r.chips || []).map((c) => chip(c.testo, 'st-' + c.tipo)),
+      ...(r.chips || []).map((c) => { const x = chip(c.testo, 'st-' + c.tipo); if (c.titolo) x.title = c.titolo; return x; }),
+      r.segnaturaDaLeggere ? chip('Protocollo: da leggere', 'neutro') : null,
+      r.segnaturaNonLetta ? chip('Segnatura non letta', 'warn') : null,
       r.scansione ? chip('Scansione: da OCR', 'warn') : null,
       r.firme ? chip(r.firme === 1 ? 'Firmato digitalmente' : `${r.firme} firme`, 'firma') : null,
       r.protetto ? chip('Protetto da password', 'warn') : null,
@@ -209,7 +234,7 @@ export function apriVista(app, A, opts = {}) {
     const c = await A.conteggi().catch(() => null);
     if (!c) return;
     A.size = c.totale;
-    dlForn.replaceChildren(...c.fornitori.map((f) => h('option', { value: f.nome })));
+    dlForn.replaceChildren(...c.fornitori.map((f) => h('option', { value: f.piva || f.nome, label: `${f.nome}${f.piva ? ' — P.IVA ' + f.piva : ''} (${f.n})` })));
     const v = fCartella.value;
     fCartella.replaceChildren(h('option', { value: '' }, 'Tutte le cartelle'), ...A.cartelle.map((x) => h('option', { value: x.id }, `${x.nome} (${(c.cartelle[x.id] || 0).toLocaleString('it-IT')})`)));
     fCartella.value = v;
@@ -227,6 +252,13 @@ export function apriVista(app, A, opts = {}) {
   }
 
   function disegnaProgresso(av) {
+    if (!A.lavoro && A.codaSeg) {
+      const c = A.codaSeg;
+      progresso.hidden = false;
+      progresso.querySelector('.ar-barra > div').style.width = Math.round((c.fatti / Math.max(1, c.totale)) * 100) + '%';
+      progresso.querySelector('.ar-prog-t').textContent = `Lettura delle segnature di protocollo (Titulus): ${c.fatti} di ${c.totale}, ${c.lette} lette — in sottofondo, puoi continuare a lavorare`;
+      return;
+    }
     const attivo = av && ['scansione', 'lettura', 'interruzione'].includes(av.fase) && A.lavoro;
     progresso.hidden = !attivo;
     if (!attivo) return;
@@ -250,7 +282,7 @@ export function apriVista(app, A, opts = {}) {
     A.segnaVisto();
   }
   function applicaFiltro(f = {}) {
-    for (const x of [q, fForn, fDal, fAl, fCig]) x.value = '';
+    for (const x of [q, fForn, fDal, fAl, fCig, fProt, fUor, fPDal, fPAl]) x.value = '';
     for (const x of [fTipo, fStato, fCartella, fSegnale]) x.value = '';
     st.filtro = {};
     if (f.tipo) fTipo.value = f.tipo;
@@ -258,16 +290,17 @@ export function apriVista(app, A, opts = {}) {
     if (f.segnale) fSegnale.value = f.segnale;
     if (f.ordine) { fOrdine.value = f.ordine; st.ordineScelto = true; }
     if (f.dalVisto) st.filtro.aggiuntoDopo = A.soglia;
+    if (f.scadenzaProssima) { const imp = A.impostazioni(); const oggi = new Date(); const g = (n) => { const d = new Date(oggi.getTime() + n * 86400000); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }; Object.assign(st.filtro, { scadDal: g(-imp.scaduteDaProporre), scadAl: g(imp.preavvisoFatture), nonPagate: true }); }
     if (f.q != null) q.value = f.q;
   }
 
   // ---------- aggiornamenti dall'archivio ----------
   let ridisegno = 0;
   const off = A.on((tipo, dati) => {
-    if (tipo === 'avanzamento') disegnaProgresso(dati);
+    if (tipo === 'avanzamento' || tipo === 'segnature') disegnaProgresso(A.avanzamento);
     if (tipo === 'cambiato' || tipo === 'cartelle' || tipo === 'caricato') {
       clearTimeout(ridisegno);
-      ridisegno = setTimeout(() => { aggiornaFiltri(); if (st.scheda === 'documenti') cerca(); else disegnaOggiOra(); }, tipo === 'cambiato' ? 400 : 0);
+      ridisegno = setTimeout(() => { aggiornaFiltri(); if (st.scheda === 'documenti') cerca({ mantieni: tipo === 'cambiato' }); else disegnaOggiOra(); }, tipo === 'cambiato' ? 400 : 0);
     }
   });
   const offDoc = [app.bus.on('document:loaded', () => api.chiudi()), app.bus.on('document:activated', ({ doc }) => { if (doc) api.chiudi(); })];

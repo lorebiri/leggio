@@ -270,6 +270,37 @@ async function dimensioneDati() {
   return tot;
 }
 
+// ---------------- sorveglianza delle cartelle ----------------
+// fs.watch (ricorsivo su macOS e Windows) segnala in pochi secondi i file nuovi nelle cartelle LOCALI
+// (comprese quelle sincronizzate da OneDrive). Sulle cartelle di rete non è affidabile: lì vale solo il
+// controllo periodico leggero fatto dal renderer. Gli eventi sono solo un campanello: il renderer poi
+// rifà la scansione incrementale della cartella (dimensione e data), che è la fonte di verità.
+const sorveglianti = new Map(); // id → watcher
+function cartellaDiRete(p) {
+  // Windows: i percorsi \\server\condivisione; una lettera di unità mappata non si distingue senza moduli
+  // nativi: si prova a sorvegliarla e, se non funziona, resta il controllo periodico
+  if (process.platform === 'win32') return /^\\\\/.test(p);
+  if (process.platform === 'darwin') return /^\/Volumes\//.test(p);
+  return /^\/(mnt|media|net)\//.test(p);
+}
+function sorveglia(c, notifica) {
+  smetti(c.id);
+  if (cartellaDiRete(c.percorso) || !['darwin', 'win32'].includes(process.platform)) return false;
+  try {
+    let t = null;
+    const w = fs.watch(c.percorso, { recursive: true, persistent: false }, (_ev, nome) => {
+      const n = String(nome || '');
+      if (n && (path.basename(n).startsWith('.') || n.endsWith('.leggio-tmp'))) return;
+      clearTimeout(t);
+      t = setTimeout(() => notifica(c.id), 2500); // si aspetta che la copia dei file finisca
+    });
+    w.on('error', () => smetti(c.id));
+    sorveglianti.set(c.id, w);
+    return true;
+  } catch { return false; }
+}
+function smetti(id) { try { sorveglianti.get(id)?.close(); } catch { /* */ } sorveglianti.delete(id); }
+
 // ---------------- copie ----------------
 async function percorsoLibero(dir, name) {
   const ext = path.extname(name); const base = name.slice(0, name.length - ext.length);
@@ -339,10 +370,18 @@ function register({ ipcMain, app, dialog, getWindow }) {
   h('togli-cartella', async ({ id }) => {
     const n = S.config.cartelle.length;
     S.config.cartelle = S.config.cartelle.filter((c) => c.id !== id);
+    smetti(id);
     if (S.config.cartelle.length !== n) await salvaConfig();
     return true;
   });
   h('scansiona', scansiona);
+  const notifica = (id) => { const w = getWindow(); if (w && !w.isDestroyed()) w.webContents.send('feat:archivio:cambiata', { id }); };
+  h('sorveglia', async () => {
+    const out = {};
+    for (const id of [...sorveglianti.keys()]) if (!S.config.cartelle.some((c) => c.id === id)) smetti(id);
+    for (const c of S.config.cartelle) out[c.id] = sorveglianti.has(c.id) || sorveglia(c, notifica);
+    return out;
+  });
   h('leggi', leggi);
   h('indice-manifesto', indiceManifesto);
   h('indice-blocco', indiceBlocco);
@@ -372,5 +411,5 @@ function senderOk(e) {
 
 module.exports = {
   register,
-  _test: { S, aggiungiCartella, scansiona, leggi, indiceManifesto, indiceBlocco, indiceScrivi, statiLeggi, statiScrivi, cancellaIndice, scriviCopia, copiaFile, leggiConfig, dentro, safeName, UserError, init(dir) { S.dir = dir; S.config = { versione: 1, cartelle: [] }; S.destinazioni.clear(); } },
+  _test: { S, cartellaDiRete, aggiungiCartella, scansiona, leggi, indiceManifesto, indiceBlocco, indiceScrivi, statiLeggi, statiScrivi, cancellaIndice, scriviCopia, copiaFile, leggiConfig, dentro, safeName, UserError, init(dir) { S.dir = dir; S.config = { versione: 1, cartelle: [] }; S.destinazioni.clear(); } },
 };

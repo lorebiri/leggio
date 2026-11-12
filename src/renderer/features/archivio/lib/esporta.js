@@ -7,6 +7,10 @@ import { descrivi } from './stati.js';
 /** Colonne del registro (utile per controlli e rendicontazione). */
 export const COLONNE_REGISTRO = [
   { id: 'tipo', titolo: 'Tipo', val: (r) => TIPO_LABEL[r.tipo] || r.tipo || '' },
+  { id: 'protocollo', titolo: 'N. protocollo', val: (r) => (r.stato?.protocollo === 'fatto' ? r.stato.numeroProtocollo || '' : '') },
+  { id: 'data_protocollo', titolo: 'Data protocollo', tipo: 'data', val: (r) => (r.stato?.protocollo === 'fatto' ? r.stato.dataProtocollo || '' : '') },
+  { id: 'uor', titolo: 'UOR', val: (r) => (r.stato?.protocollo === 'fatto' ? r.stato.uorProtocollo || '' : '') },
+  { id: 'origine_protocollo', titolo: 'Origine protocollo', val: (r) => (r.stato?.protocollo !== 'fatto' ? '' : r.stato.origineProtocollo === 'documento' ? 'letto dal documento' : 'inserito a mano') },
   { id: 'data', titolo: 'Data', tipo: 'data', val: (r) => r.data || '' },
   { id: 'numero', titolo: 'Numero', val: (r) => r.numero || '' },
   { id: 'fornitore', titolo: 'Fornitore', val: (r) => r.fornitore || '' },
@@ -69,7 +73,7 @@ function foglio(righe, colonne) {
     }).join('');
     rows.push(`<row r="${n}">${cells}</row>`);
   });
-  const larghezze = colonne.map((c, i) => `<col min="${i + 1}" max="${i + 1}" width="${c.tipo === 'data' ? 12 : c.tipo === 'euro' ? 14 : ['fornitore', 'nome', 'percorso', 'nota'].includes(c.id) ? 36 : c.id === 'impronta' ? 30 : 16}" customWidth="1"/>`).join('');
+  const larghezze = colonne.map((c, i) => `<col min="${i + 1}" max="${i + 1}" width="${c.tipo === 'data' ? 12 : c.tipo === 'euro' ? 14 : ['fornitore', 'nome', 'percorso', 'nota'].includes(c.id) ? 36 : c.id === 'origine_protocollo' ? 20 : c.id === 'impronta' ? 30 : 16}" customWidth="1"/>`).join('');
   const ultima = `${colonna(colonne.length - 1)}${righe.length + 1}`;
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${larghezze}</cols><sheetData>${rows.join('')}</sheetData><autoFilter ref="A1:${ultima}"/></worksheet>`;
 }

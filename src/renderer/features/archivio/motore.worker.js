@@ -87,11 +87,12 @@ const H = {
   },
   /** Confronta l'elenco di una cartella con l'indice. → { daLeggere: [[rel,size,mtime]], spariti: [id] } */
   confronta({ cartella, base, file, sep, protetti = [], parziale = false }) {
-    const visti = new Set(); const daLeggere = [];
+    const visti = new Set(); const daLeggere = []; let nuovi = 0;
     for (const f of file) {
       const id = chiaveId(base + sep + f[0]);
       visti.add(id);
       const r = M.get(id);
+      if (!r) nuovi++;
       if (!r || r.size !== f[1] || r.mtime !== f[2] || (r.v || 0) < VERSIONE_ESTRAZIONE || r.erroreTemporaneo) daLeggere.push(f);
     }
     const spariti = [];
@@ -100,7 +101,7 @@ const H = {
     if (!parziale && !protetti.includes('.')) {
       for (const r of M.rec.values()) if (r.cartella === cartella && !visti.has(r.id) && !pref.some((p) => r.rel.startsWith(p))) spariti.push(r.id);
     }
-    return { daLeggere, spariti };
+    return { daLeggere, spariti, nuovi };
   },
   /** Un file letto ha un'impronta già nota (spostato, rinominato, copiato)? Allora si riusa l'estrazione. */
   riusa({ doc }) {
@@ -134,7 +135,7 @@ const H = {
     }
     return { n, json: statiJson() };
   },
-  /** Stato diverso per ogni documento (es. numero di protocollo per file). voci: [{ id, modifica }] */
+  /** Stato diverso per ogni documento (es. numero di protocollo di Titulus per file). voci: [{ id, modifica }] */
   'cambia-stati'({ voci, ora }) {
     let n = 0;
     for (const v of voci) {
@@ -176,6 +177,17 @@ const H = {
   'da-scrivere'() { return B.daScrivere; },
   /** Documenti con un errore temporaneo (es. cartella non raggiungibile durante la lettura). */
   'ids-cartella'({ cartella }) { return [...M.rec.values()].filter((r) => r.cartella === cartella).map((r) => r.id); },
+  /** Documenti con una striscia di segnatura non ancora letta (i più recenti prima). */
+  'segnature-da-leggere'({ versione }) {
+    return [...M.rec.values()].filter((r) => r.striscia && !r.segnatura?.numero && !((r.segnaturaOcr?.v || 0) >= versione && r.segnaturaOcr?.esito !== 'errore'))
+      .sort((a, b) => (b.aggiunto || 0) - (a.aggiunto || 0)).map((r) => r.id);
+  },
+  'imposta-segnatura'({ id, segnatura, ocr }) {
+    const r = M.get(id);
+    if (!r) return false;
+    metti({ ...r, segnatura: segnatura || r.segnatura || null, segnaturaOcr: ocr });
+    return true;
+  },
   info() { return { documenti: M.size, stati: M.stati.size, impronte: perImpronta.size }; },
 };
 

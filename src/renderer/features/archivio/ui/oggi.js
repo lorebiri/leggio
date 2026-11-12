@@ -15,12 +15,13 @@ export async function disegnaOggi(app, A, box, { compatto = false, apri, vedi } 
   const max = compatto ? 4 : 50;
   const voce = (x, testo, sotto, classe = '') => h('li', {}, h('button', { class: 'ar-oggi-voce ' + classe, onclick: () => apri(x.id), title: 'Apri ' + x.nome },
     h('span', { class: 'ar-oggi-t' }, testo), sotto ? h('span', { class: 'ar-oggi-s' }, sotto) : null));
-  const sezione = (titolo, n, lista, render, filtro, vuota) => {
+  const sezione = (titolo, n, lista, render, filtro, vuota, nota) => {
     const sec = h('section', { class: 'ar-oggi-sec' + (n ? '' : ' vuota') },
       h('header', {}, h('h3', {}, titolo, h('span', { class: 'ar-num' + (n ? ' attivo' : '') }, String(n))),
         n > max && vedi && filtro ? h('button', { class: 'btn small', onclick: () => vedi(filtro) }, 'Vedi tutti') : null));
     if (!n) sec.append(h('p', { class: 'av-note' }, vuota));
     else sec.append(h('ul', { class: 'ar-oggi-lista' }, lista.slice(0, max).map(render)));
+    if (nota && n && !compatto) sec.append(h('p', { class: 'av-note ar-oggi-nota' }, nota));
     return sec;
   };
   const c = o.conteggi;
@@ -29,12 +30,17 @@ export async function disegnaOggi(app, A, box, { compatto = false, apri, vedi } 
     sezione('DURC scaduti o in scadenza', o.durc.length, o.durc,
       (d) => voce(d, `${d.fornitore || d.nome}`, `${testoGiorni(d.giorni)} (${dataIt(d.scadenza)}${d.calcolata ? `, calcolata: ${imp.durataDurc} giorni dalla data del documento` : ''})`, d.scaduto ? 'scaduto' : 'vicino'),
       { tipo: 'durc', ordine: 'scadenza' }, `Nessun DURC scaduto o in scadenza nei prossimi ${imp.preavvisoDurc} giorni.`),
+    sezione('Fatture in scadenza (dai dati della fattura)', c.inScadenza, o.inScadenza,
+      (f) => voce(f, `${f.fornitore || f.nome}${f.importo != null ? ' — ' + euro(f.importo) : ''}`, `${testoGiorni(f.giorni, { maschile: false })} (${dataIt(f.scadenza)}) · non ancora segnata`, f.scaduto ? 'scaduto' : 'vicino'),
+      { tipo: 'fattura', scadenzaProssima: true, ordine: 'scadenza' }, `Nessuna fattura con scadenza nei prossimi ${imp.preavvisoFatture} giorni che non sia già segnata «Da pagare» o «Pagato».`,
+      'Le scadenze vengono dalle fatture elettroniche (DataScadenzaPagamento) o sono riconosciute nei PDF. Seleziona le fatture in «Documenti» e usa «Cambia stato…» per segnarle «Da pagare» o «Pagato».'),
     sezione('Fatture da pagare', c.fatture, o.fatture,
       (f) => voce(f, `${f.fornitore || f.nome}${f.importo != null ? ' — ' + euro(f.importo) : ''}`, f.scadenza ? `${testoGiorni(f.giorni, { maschile: false })} (${dataIt(f.scadenza)})` : 'senza scadenza indicata', f.scaduto ? 'scaduto' : f.vicina ? 'vicino' : ''),
       { stato: 'da-pagare', ordine: 'scadenza' }, 'Nessuna fattura segnata «Da pagare».'),
-    sezione('Da protocollare', c.daProtocollare, o.daProtocollare,
+    sezione('Da protocollare in Titulus', c.daProtocollare, o.daProtocollare,
       (d) => voce(d, d.nome, [d.fornitore, d.data && dataIt(d.data)].filter(Boolean).join(' · ')),
-      { stato: 'da-protocollare' }, 'Nessun documento segnato «Da protocollare».'),
+      { stato: 'da-protocollare' }, 'Nessun documento segnato «Da protocollare (in Titulus)».',
+      'Promemoria: il protocollo si fa in Titulus. Quando il documento torna con la segnatura stampata, Leggio lo riconosce da solo; altrimenti segna «Protocollato (Titulus)» con il numero.'),
     sezione('Da firmare', c.daFirmare, o.daFirmare,
       (d) => voce(d, d.nome, [d.fornitore, d.data && dataIt(d.data)].filter(Boolean).join(' · ')),
       { stato: 'da-firmare' }, 'Nessun documento segnato «Da firmare».'),

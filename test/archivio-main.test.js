@@ -118,6 +118,11 @@ describe('modulo main «archivio»', () => {
     await expect(m.scriviCopia({ cartella: os.tmpdir(), nome: 'x.pdf', bytes: new Uint8Array([1]) })).rejects.toThrow(/Scegli di nuovo/);
   });
 
+  it('le cartelle di rete non si sorvegliano con fs.watch (solo controllo periodico)', () => {
+    if (process.platform === 'darwin') { expect(m.cartellaDiRete('/Volumes/Server/Fatture')).toBe(true); expect(m.cartellaDiRete('/Users/x/OneDrive - CNR/Fatture')).toBe(false); }
+    if (process.platform === 'win32') { expect(m.cartellaDiRete('\\\\server\\fatture')).toBe(true); expect(m.cartellaDiRete('C:\\Fatture')).toBe(false); }
+  });
+
   it('cancella l\'indice (e, se richiesto, anche stati e cartelle)', async () => {
     await m.aggiungiCartella(docs);
     await m.indiceScrivi({ scrivi: [{ file: 'b-k1-1.ndjson', testo: '{"id":"a"}\n' }], manifesto: { formato: 'leggio-archivio-indice', blocchi: [] }, elimina: [] });

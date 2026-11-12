@@ -7,11 +7,18 @@ import { isDesktop, storeDesktop, storeWeb, idDa, sepPercorso, percorsiSenzaMaiu
 import { datiDaTesto, VERSIONE_ESTRAZIONE, CODICI_ENTE_PREDEFINITI } from './lib/estrai.js';
 import { IMPOSTAZIONI_PREDEFINITE } from './lib/scadenze.js';
 import { oggiIso } from './lib/testo.js';
+import { segnaturaGenerica, normalizzaSegnatura } from './lib/segnatura.js';
+import { LettoreSegnature } from './segnatura-ocr.js';
+
+/** Versione della lettura delle strisce di segnatura: se cambia, le strisce non lette si riprovano. */
+export const VERSIONE_SEGNATURE = 1;
 
 const MAX_LETTURA = 200 * 1024 * 1024;
 const TEMPO_FILE = 60000;
 const OGNI_QUANTO_SCRIVERE = 4000; // ms durante l'indicizzazione
-const AGGIORNA_OGNI = 15 * 60 * 1000;
+// controllo leggero (solo dimensione e data dei file) per accorgersi dei documenti nuovi; sulle cartelle
+// locali avvisa prima fs.watch (vedi electron/features/archivio.cjs)
+const AGGIORNA_OGNI = 90 * 1000;
 
 const estensione = (n) => (String(n).match(/\.([^.\\/]+)$/)?.[1] || '').toLowerCase();
 const nomeDi = (p) => String(p).split(/[\\/]/).pop();
@@ -50,6 +57,7 @@ export class Archivio {
       durataDurc: +s.get('archivio.durataDurc', IMPOSTAZIONI_PREDEFINITE.durataDurc) || IMPOSTAZIONI_PREDEFINITE.durataDurc,
       preavvisoDurc: +s.get('archivio.preavvisoDurc', IMPOSTAZIONI_PREDEFINITE.preavvisoDurc) || 0,
       preavvisoFatture: +s.get('archivio.preavvisoFatture', IMPOSTAZIONI_PREDEFINITE.preavvisoFatture) || 0,
+      scaduteDaProporre: IMPOSTAZIONI_PREDEFINITE.scaduteDaProporre,
     };
   }
   codiciEnte() {
@@ -66,8 +74,15 @@ export class Archivio {
     if (!this.attivo && !(await this.#haIndice())) { this.caricato = true; this.emit('caricato'); return; }
     await this.carica();
     if (this.attivo) setTimeout(() => this.aggiorna({ motivo: 'avvio' }).catch((e) => this.app.log?.('warn', 'archivio: aggiornamento non riuscito', { e: e.message })), 2500);
+    this.#avviaSorveglianza();
+  }
+
+  /** Cartelle locali sorvegliate con fs.watch; tutte controllate ogni 90 s (solo dimensione e data). */
+  #avviaSorveglianza() {
     clearInterval(this.timerAgg);
-    this.timerAgg = setInterval(() => { if (this.attivo && !this.lavoro) this.aggiorna({ motivo: 'periodico', silenzioso: true }).catch(() => {}); }, AGGIORNA_OGNI);
+    this.timerAgg = setInterval(() => { if (this.attivo && !this.lavoro && !document.hidden) this.aggiorna({ motivo: 'periodico', silenzioso: true }).catch(() => {}); }, AGGIORNA_OGNI);
+    if (!this.offCambiata) this.offCambiata = this.store.onCambiata(({ id } = {}) => { if (id && this.cartelle.some((c) => c.id === id)) this.aggiorna({ cartelle: [id], motivo: 'sorveglianza', silenzioso: true }).catch(() => {}); });
+    this.store.sorveglia().then((r) => { this.sorvegliate = r || {}; this.emit('cartelle'); }).catch(() => {});
   }
   async #haIndice() { try { const m = await this.store.manifesto(); return !!m?.manifesto?.blocchi?.length; } catch { return false; } }
 
@@ -103,7 +118,7 @@ export class Archivio {
     const prima = this.attivo;
     this.cartelle = (await this.store.cartelle()).cartelle;
     if (!prima && !this.caricato) await this.carica();
-    if (!this.timerAgg) this.timerAgg = setInterval(() => { if (this.attivo && !this.lavoro) this.aggiorna({ motivo: 'periodico', silenzioso: true }).catch(() => {}); }, AGGIORNA_OGNI);
+    this.#avviaSorveglianza();
     this.emit('cartelle');
     if (r.avviso) this.app.ui.toast(r.avviso, { kind: 'info', timeout: 7000 });
     this.aggiorna({ cartelle: [r.cartella.id], motivo: 'nuova' }).catch((e) => this.app.reportError(e, 'Indicizzazione non riuscita'));
@@ -117,6 +132,7 @@ export class Archivio {
     await this.motore.call('togli-cartella', { cartella: id });
     this.cartelle = this.cartelle.filter((c) => c.id !== id);
     this.offline.delete(id);
+    this.store.sorveglia().catch(() => {});
     await this.#aggiornaOffline();
     await this.scriviOra();
     this.emit('cartelle');
@@ -142,6 +158,7 @@ export class Archivio {
   }
 
   interrompi() {
+    this.interrompiSegnature();
     if (!this.lavoro) return;
     this.lavoro.annullato = true;
     this.avanzamento = { ...this.avanzamento, fase: 'interruzione' };
@@ -186,6 +203,7 @@ export class Archivio {
       // i documenti spariti si tolgono DOPO la lettura: se sono stati solo spostati o rinominati,
       // la loro impronta permette di riusare l'estrazione già fatta
       spariti.push(...conf.spariti);
+      av.nuovi = (av.nuovi || 0) + (conf.nuovi || 0);
       for (const f of conf.daLeggere) daFare.push({ c, rel: f[0], size: f[1], mtime: f[2], sep });
     }
     await this.#aggiornaOffline();
@@ -221,9 +239,76 @@ export class Archivio {
     if (this.pool && !lavoro.annullato) { this.pool.terminate(); this.pool = null; }
     else if (this.pool && lavoro.annullato) { this.pool.terminate(); this.pool = null; }
     this.emit('avanzamento', av);
-    this.#cambiato();
+    if (av.fatti || av.rimossi) this.#cambiato();
+    // prima indicizzazione: da qui in poi i file che arrivano sono «nuovi dall'ultima apertura»
+    if (!this.soglia && !lavoro.annullato) { this.soglia = Date.now(); this.app.settings.set('archivio.vistoFino', this.soglia); }
+    else if (av.nuovi && ['periodico', 'sorveglianza'].includes(lavoro.motivo)) this.emit('nuovi', { n: av.nuovi });
+    if (!lavoro.annullato) setTimeout(() => this.leggiSegnature().catch((e) => this.app.log?.('warn', 'archivio: coda segnature', { e: e.message })), 1500);
     return av;
   }
+
+  // ---------------- coda delle segnature (striscia-immagine di Titulus) ----------------
+  /**
+   * Legge con l'OCR mirato le strisce di segnatura dei documenti indicizzati. Coda a parte, a bassa
+   * priorità: un documento alla volta, con pause, si ferma se riparte l'indicizzazione; annullabile;
+   * ripresa al riavvio (i documenti non ancora letti restano «da leggere: protocollo» nell'indice).
+   */
+  leggiSegnature() {
+    if (this.codaSeg || !this.attivo) return this.codaSeg?.promise;
+    const lett = new LettoreSegnature(this.app);
+    if (!lett.disponibile) return Promise.resolve(null);
+    const coda = { annullata: false, fatti: 0, lette: 0, totale: 0 };
+    this.codaSeg = coda;
+    coda.promise = (async () => {
+      const ids = await this.motore.call('segnature-da-leggere', { versione: VERSIONE_SEGNATURE });
+      coda.totale = ids.length;
+      this.emit('segnature', coda);
+      const t0 = performance.now(); let ultimaScrittura = performance.now();
+      try {
+        for (const id of ids) {
+          if (coda.annullata) break;
+          while (this.lavoro && !coda.annullata) await new Promise((r) => setTimeout(r, 1000)); // l'indicizzazione ha la precedenza
+          await new Promise((r) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(r, { timeout: 1000 }) : setTimeout(r, 50)));
+          const [riga] = await this.motore.call('righe', { ids: [id] });
+          if (!riga?.striscia || riga.offline) continue;
+          let seg = null; let esito = 'non-letta';
+          try {
+            const l = await this.store.leggi(riga.path, MAX_LETTURA);
+            if (l.bytes && l.impronta === riga.impronta) { seg = await lett.leggi(l.bytes, riga.striscia); esito = seg ? 'letta' : 'non-letta'; }
+            else esito = 'cambiato';
+          } catch (e) { esito = 'errore'; }
+          if (esito === 'cambiato') continue; // il file è cambiato: lo rilegge la prossima indicizzazione
+          await this.motore.call('imposta-segnatura', { id, segnatura: seg, ocr: { v: VERSIONE_SEGNATURE, esito, quando: Date.now() } });
+          coda.fatti++; if (seg) coda.lette++;
+          this.emit('segnature', coda);
+          if (performance.now() - ultimaScrittura > OGNI_QUANTO_SCRIVERE) { ultimaScrittura = performance.now(); this.scriviOra().catch(() => {}); this.#cambiato(); }
+        }
+      } finally {
+        await lett.chiudi();
+        coda.ms = Math.round(performance.now() - t0);
+        this.misure.segnature = { fatti: coda.fatti, lette: coda.lette, totale: coda.totale, ms: coda.ms, annullata: coda.annullata };
+        this.codaSeg = null;
+        await this.scriviOra();
+        this.emit('segnature', { ...coda, finita: true });
+        this.#cambiato();
+      }
+      return coda;
+    })();
+    return coda.promise;
+  }
+  /** Diagnostica (collaudo): estrazione e lettura della segnatura su byte qualsiasi, senza toccare l'indice. */
+  async provaSegnatura(bytes, nome = 'prova.pdf') {
+    const pool = this.#pool();
+    const r = await pool.esegui('estrai', { bytes: bytes.slice(), nome, escludi: this.codiciEnte() }, [], TEMPO_FILE);
+    const daTesto = await this.segnatura(r.testo);
+    let daStriscia = null; const t0 = performance.now();
+    let testoOcr = '';
+    if (!daTesto && r.striscia) { const l = new LettoreSegnature(this.app); try { daStriscia = await l.leggi(bytes, r.striscia); testoOcr = l.ultimoTesto || ''; this._immaginiProva = l.ultimeImmagini; } finally { await l.chiudi(); } }
+    if (!this.lavoro) { this.pool?.terminate(); this.pool = null; }
+    return { striscia: r.striscia, daTesto, daStriscia, testoOcr, msStriscia: Math.round(performance.now() - t0) };
+  }
+
+  interrompiSegnature() { if (this.codaSeg) this.codaSeg.annullata = true; }
 
   async #indicizzaUno({ c, rel, size, mtime, sep }, pool, av) {
     const path = c.percorso + sep + rel;
@@ -257,9 +342,31 @@ export class Archivio {
       if (e.dettaglio) this.app.log?.('warn', 'archivio: estrazione non riuscita', { rel, e: e.message, stack: e.dettaglio });
       r = { ...datiDaTesto('', { nome }), testo: '', errore: e.message || 'Non leggibile' };
     }
+    r.segnatura = await this.segnatura(r.testo);
+    r.segnaturaOcr = null; // striscia eventuale: da leggere nella coda delle segnature
     if (r.errore || r.protetto) av.saltati.push({ rel, motivo: r.protetto ? 'protetto da password' : r.errore });
     const res = await this.motore.call('metti', { doc: { ...doc, ...r, v: VERSIONE_ESTRAZIONE } });
     if (res?.statiCambiati) await this.#salvaStati();
+  }
+
+  /**
+   * Segnatura di protocollo (Titulus) stampata sul documento: numero, data, sigla AOO.
+   * Si usa il modello configurabile dell'area avanzati se c'è, altrimenti il ripiego generico.
+   * Leggio non genera mai numeri di protocollo: li legge soltanto.
+   */
+  async segnatura(testo) {
+    if (!testo) return null;
+    const pagine = String(testo).split('\f');
+    const inizio = pagine.slice(0, 2).join('\n').slice(0, 8000);
+    const fine = pagine.length > 2 ? pagine[pagine.length - 1].slice(0, 4000) : '';
+    for (const t of [inizio, fine].filter(Boolean)) {
+      let s = null;
+      try { if (typeof this.app.services?.segnaturaTitulus === 'function') s = normalizzaSegnatura(await this.app.services.segnaturaTitulus(t)); } catch { s = null; }
+      if (s?.numero) return { ...s, fonte: 'testo (modello)' };
+      s = segnaturaGenerica(t);
+      if (s?.numero) return { ...s, fonte: 'testo' };
+    }
+    return null;
   }
 
   /** Scrive su disco i blocchi cambiati (una scrittura alla volta, atomica). */

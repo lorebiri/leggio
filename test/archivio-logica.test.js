@@ -5,7 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { normalizza, interpretaRicerca, paginaDi, estratto, numeroIt, dataDaTesto, giorniTra, aggiungiGiorni } from '../src/renderer/features/archivio/lib/testo.js';
 import { riconosciTipo, pivaValida, cfValido, trovaCigCup, trovaCodici, trovaImporto, datiDaTesto, datiDaFattura, eScansione, firmePdf, pulisciFornitore } from '../src/renderer/features/archivio/lib/estrai.js';
-import { applica, haStato, descrivi, esportaJson, esportaCsv, importa, unisci, leggiCsv } from '../src/renderer/features/archivio/lib/stati.js';
+import { applica, haStato, descrivi, esportaJson, esportaCsv, importa, unisci, leggiCsv, conSegnatura, leggiElencoProtocolli, testoProtocollo } from '../src/renderer/features/archivio/lib/stati.js';
+import { segnaturaGenerica, normalizzaSegnatura, numeroConfrontabile } from '../src/renderer/features/archivio/lib/segnatura.js';
+import { immaginiDisegnate, strisciaCandidata } from '../src/renderer/features/archivio/lib/striscia.js';
 import { riepilogoOggi, scadenzaDurc, testoGiorni } from '../src/renderer/features/archivio/lib/scadenze.js';
 import { Motore } from '../src/renderer/features/archivio/lib/motore.js';
 import { Blocchi, leggiBlocco, manifestoValido, DIM } from '../src/renderer/features/archivio/lib/blocchi.js';
@@ -115,7 +117,7 @@ describe('stati d\'ufficio', () => {
     s = applica(s, { imposta: 'da-pagare', aggiungiEtichette: ['PNRR', 'pnrr', 'Gara 2026'], nota: 'chiedere al RUP' }, 3);
     expect(s.etichette).toEqual(['PNRR', 'Gara 2026']);
     expect(haStato(s, 'etichetta:pnrr')).toBe(true);
-    expect(descrivi(s).map((c) => c.testo)).toEqual(['Protocollato n. 0001234', 'Da pagare', 'PNRR', 'Gara 2026']);
+    expect(descrivi(s).map((c) => c.testo)).toEqual(['Protocollato (Titulus) n. 0001234', 'Da pagare', 'PNRR', 'Gara 2026']);
     s = applica(s, { imposta: 'pagato', togliEtichette: ['PNRR'] }, 4);
     expect(s.pagamento).toBe('fatto');
     expect(s.etichette).toEqual(['Gara 2026']);
@@ -150,6 +152,61 @@ describe('stati d\'ufficio', () => {
   });
 });
 
+describe('protocollo (Titulus): Leggio non genera numeri, li legge o li riceve', () => {
+  it('legge la segnatura stampata con il modello generico', () => {
+    expect(segnaturaGenerica('Intestazione\nCNR-ICCOM - 0012345 - 12/11/2026\nOggetto: fornitura')).toMatchObject({ numero: '0012345', data: '2026-11-12', aoo: 'CNR-ICCOM' });
+    expect(segnaturaGenerica('Consiglio Nazionale delle Ricerche\nProt. n. 0004567 del 03/10/2026')).toMatchObject({ numero: '0004567', data: '2026-10-03', aoo: '' });
+    expect(segnaturaGenerica('ICCOM Protocollo n. 123/2026 del 1.2.2026')).toMatchObject({ numero: '123', aoo: 'ICCOM' });
+    // non sono segnature: il protocollo INPS del DURC, il numero di fattura, una pagina
+    expect(segnaturaGenerica('Durc On Line Numero Protocollo INPS_42702786 Data richiesta 27/07/2026')).toBe(null);
+    expect(segnaturaGenerica('FATTURA N. 12/2026 del 01/02/2026')).toBe(null);
+    expect(segnaturaGenerica('Pagina 1 - 12 - 12/11/2026')).toBe(null);
+    expect(segnaturaGenerica('')).toBe(null);
+  });
+  it('forma della striscia di Titulus al CNR, con UOR', () => {
+    expect(segnaturaGenerica('Prot. CNR n. 0123456 del 21/09/2026 - UOR: SI000099')).toMatchObject({ numero: '0123456', data: '2026-09-21', aoo: 'CNR', uor: 'SI000099' });
+    expect(segnaturaGenerica('rumore OCR Prot. CNR n° 0123456 del 21/09/2026 UOR SI000099 ~')).toMatchObject({ numero: '0123456', uor: 'SI000099' });
+    expect(segnaturaGenerica('Prot. CNR n. 0004552 del 14/11/2026 - UOR: S1000084')).toMatchObject({ uor: 'SI000084' }); // I letta come 1 dall'OCR
+    expect(testoProtocollo(conSegnatura(null, { numero: '0123456', data: '2026-09-21', uor: 'SI000099' }))).toBe('Protocollato (Titulus) n. 0123456 del 21/09/2026, UOR SI000099 — letto dal documento');
+  });
+  it('trova la striscia candidata tra le immagini della pagina', () => {
+    const view = [0, 0, 595, 842];
+    expect(strisciaCandidata([{ bbox: [57, 737, 291, 800], w: 650, h: 173 }, { bbox: [0, 218, 17, 842], w: 69, h: 2493 }], view)).toMatchObject({ verticale: true, lato: 'sinistra', bbox: [0, 218, 17, 842] });
+    expect(strisciaCandidata([{ bbox: [20, 0, 575, 20], w: 2000, h: 70 }], view)).toMatchObject({ verticale: false, lato: 'basso' });
+    expect(strisciaCandidata([{ bbox: [0, 0, 595, 842] }], view)).toBe(null); // scansione a pagina intera
+    expect(strisciaCandidata([{ bbox: [280, 218, 297, 842] }], view)).toBe(null); // lontana dai bordi
+    const OPS = { save: 1, restore: 2, transform: 3, paintImageXObject: 4, paintFormXObjectBegin: 5, paintFormXObjectEnd: 6 };
+    const imgs = immaginiDisegnate([1, 3, 4, 2], [null, [17, 0, 0, 624, 0, 218], ['img1', 69, 2493], null], OPS);
+    expect(imgs).toEqual([{ bbox: [0, 218, 17, 842], w: 69, h: 2493 }]);
+  });
+  it('accetta la forma del servizio dell\'area avanzati', () => {
+    expect(normalizzaSegnatura({ numero: 12, data: '12/11/2026', sigla: 'CNR-ICCOM' })).toMatchObject({ numero: '12', data: '2026-11-12', aoo: 'CNR-ICCOM' });
+    expect(normalizzaSegnatura({ number: '0001', date: '2026-01-02T00:00' })).toMatchObject({ numero: '0001', data: '2026-01-02' });
+    expect(normalizzaSegnatura(null)).toBe(null);
+    expect(normalizzaSegnatura({ data: '1/1/2026' })).toBe(null);
+    expect(numeroConfrontabile('0012345')).toBe('12345');
+    expect(numeroConfrontabile('n. 12.345')).toBe('N12345');
+  });
+  it('la segnatura letta rende «Protocollato (Titulus) … letto dal documento»; il numero a mano vale di più', () => {
+    const seg = { numero: '0012345', data: '2026-11-12', aoo: 'CNR-ICCOM' };
+    const e = conSegnatura({ protocollo: 'da', pagamento: 'da' }, seg);
+    expect(e).toMatchObject({ protocollo: 'fatto', numeroProtocollo: '0012345', origineProtocollo: 'documento', pagamento: 'da' });
+    expect(testoProtocollo(e)).toBe('Protocollato (Titulus) n. 0012345 del 12/11/2026 — letto dal documento');
+    expect(haStato(e, 'protocollato')).toBe(true);
+    expect(conSegnatura({ protocollo: 'fatto', numeroProtocollo: '999' }, seg).numeroProtocollo).toBe('999');
+    expect(conSegnatura(null, null)).toBe(null);
+  });
+  it('elenco «file → numero» incollato (tabulazioni, frecce, «;», colonne da Excel)', () => {
+    const l = leggiElencoProtocolli('Fattura_Alfa_12.pdf\t0012345\t12/11/2026\nDURC Beta.pdf → 0012346\nordine 3.pdf;12347;13.11.2026\nsenza numero.pdf\t\nnota.pdf 0012348 14/11/2026\n');
+    expect(l).toEqual([
+      { nome: 'Fattura_Alfa_12.pdf', numero: '0012345', data: '2026-11-12' },
+      { nome: 'DURC Beta.pdf', numero: '0012346', data: '' },
+      { nome: 'ordine 3.pdf', numero: '12347', data: '2026-11-13' },
+      { nome: 'nota.pdf', numero: '0012348', data: '2026-11-14' },
+    ]);
+  });
+});
+
 describe('Oggi e scadenzario', () => {
   const recs = [
     { id: '1', nome: 'durc vecchio', tipo: 'durc', piva: '00012345609', fornitore: 'Alfa', data: '2026-01-01', scadenza: '2026-05-01', impronta: H1, aggiunto: 5 },
@@ -171,6 +228,25 @@ describe('Oggi e scadenzario', () => {
     expect(scadenzaDurc({ data: '2026-01-01' }, 120)).toEqual({ scadenza: '2026-05-01', calcolata: true });
     expect(testoGiorni(-3)).toBe('scaduto da 3 giorni');
     expect(testoGiorni(0)).toBe('scade oggi');
+  });
+  it('propone le fatture in scadenza dai dati della fattura, anche se non segnate', () => {
+    const r = [
+      { id: 'a', nome: 'a', tipo: 'fattura', scadenza: '2026-11-20', impronta: H1 },
+      { id: 'b', nome: 'b', tipo: 'fattura', scadenza: '2026-11-01', impronta: H2 },
+      { id: 'c', nome: 'c', tipo: 'fattura', scadenza: '2026-09-01', impronta: H3 }, // troppo vecchia
+      { id: 'd', nome: 'd', tipo: 'fattura', scadenza: '2026-11-15', impronta: 'd'.repeat(64) }, // già «da pagare»
+      { id: 'e', nome: 'e', tipo: 'fattura', scadenza: '2026-12-31', impronta: 'e'.repeat(64) }, // lontana
+      { id: 'f', nome: 'f', tipo: 'fattura', scadenza: '2026-11-13', impronta: 'f'.repeat(64) }, // pagata
+    ];
+    const st = new Map([['d'.repeat(64), { pagamento: 'da' }], ['f'.repeat(64), { pagamento: 'fatto' }]]);
+    const o = riepilogoOggi({ records: r, stati: st, oggi: '2026-11-12' });
+    expect(o.inScadenza.map((x) => x.id)).toEqual(['b', 'a']);
+    expect(o.inScadenza[0]).toMatchObject({ scaduto: true, giorni: -11 });
+    expect(o.fatture.map((x) => x.id)).toEqual(['d']);
+  });
+  it('un documento con la segnatura letta non è più «da protocollare»', () => {
+    const r = [{ ...recs[3], segnatura: { numero: '77', data: '2026-11-12' } }];
+    expect(riepilogoOggi({ records: r, stati, oggi: '2026-11-12' }).daProtocollare).toHaveLength(0);
   });
   it('documenti archiviati esclusi; nessun «nuovo» alla prima apertura', () => {
     const o = riepilogoOggi({ records: recs, stati: new Map([[H3, { archiviato: true }]]), oggi: '2026-11-12' });
@@ -214,6 +290,30 @@ describe('motore di ricerca', () => {
     expect(m.cerca({ ordine: 'data-desc' }).righe.map((x) => x.id)).toEqual(['/a/2', '/a/1', '/a/3']);
     expect(m.cerca({}).righe[0].testo).toBeUndefined(); // il testo non va all'interfaccia
   });
+  it('filtro e ordinamento per numero di protocollo (letto o inserito)', () => {
+    const m = motore();
+    m.metti(doc(4, { segnatura: { numero: '0012345', data: '2026-11-12', aoo: 'CNR-ICCOM' } }));
+    m.stati.set('1'.repeat(64), { protocollo: 'fatto', numeroProtocollo: '0000077' });
+    expect(m.cerca({ protocollo: '12345' }).righe.map((x) => x.id)).toEqual(['/a/4']);
+    expect(m.cerca({ protocollo: '77' }).righe.map((x) => x.id)).toEqual(['/a/1']);
+    expect(m.cerca({ q: '0012345' }).totale).toBe(1);
+    expect(m.cerca({ stato: 'protocollato' }).totale).toBe(2);
+    expect(m.cerca({ ordine: 'protocollo' }).righe.slice(0, 2).map((x) => x.id)).toEqual(['/a/1', '/a/4']);
+    expect(m.riga('/a/4').chips[0].testo).toBe('Protocollato (Titulus) n. 0012345 del 12/11/2026 — letto dal documento');
+  });
+  it('fornitori raggruppati per P.IVA con il nome più frequente', () => {
+    const m = new Motore();
+    m.metti(doc(1, { fornitore: 'Delta Lab', piva: '00012345609' }));
+    m.metti(doc(2, { fornitore: 'Delta Lab S.n.c.', piva: '00012345609' }));
+    m.metti(doc(3, { fornitore: 'Delta Lab', piva: '00012345609' }));
+    m.metti(doc(4, { fornitore: 'Spett.le Delta Lab', piva: '00012345609' }));
+    m.metti(doc(5, { fornitore: 'Altro', piva: '' }));
+    expect(m.conteggi().fornitori).toEqual([{ nome: 'Delta Lab', piva: '00012345609', n: 4 }, { nome: 'Altro', piva: '', n: 1 }]);
+    expect(m.riga('/a/2').fornitore).toBe('Delta Lab');
+    expect(m.riga('/a/2').fornitoreLetto).toBe('Delta Lab S.n.c.');
+    expect(m.cerca({ fornitore: '00012345609' }).totale).toBe(4);
+    expect(m.cerca({ fornitore: 'delta lab' }).totale).toBe(4);
+  });
   it('estratti e conteggi', () => {
     const m = motore();
     const e = m.estratti(['/a/1'], 'colonna');
@@ -240,7 +340,7 @@ describe('motore di ricerca', () => {
     expect(r2.totale).toBe(10000);
     expect(ms1).toBeLessThan(10000);
     expect(ms2).toBeLessThan(30000);
-  });
+  }, 120000);
 });
 
 describe('indice a blocchi', () => {
@@ -293,13 +393,13 @@ describe('indice a blocchi', () => {
 
 describe('esportazione del registro', () => {
   const righe = [
-    { tipo: 'fattura', data: '2026-03-01', numero: '12/2026', fornitore: 'Alfa; "Beta" S.r.l.', piva: '00012345609', importo: 1220.5, cig: ['Z34F05AF62'], cup: [], scadenza: '2026-04-01', stato: { pagamento: 'da' }, nome: 'f.pdf', path: '/x/f.pdf', impronta: H1, firme: 1, pagine: 2 },
+    { tipo: 'fattura', data: '2026-03-01', numero: '12/2026', fornitore: 'Alfa; "Beta" S.r.l.', piva: '00012345609', importo: 1220.5, cig: ['Z34F05AF62'], cup: [], scadenza: '2026-04-01', stato: { pagamento: 'da', protocollo: 'fatto', numeroProtocollo: '0012345', dataProtocollo: '2026-11-12', origineProtocollo: 'documento' }, nome: 'f.pdf', path: '/x/f.pdf', impronta: H1, firme: 1, pagine: 2 },
     { tipo: 'durc', fornitore: '=SOMMA(1;2)', nome: 'd.pdf' },
   ];
   it('CSV per Excel italiano', () => {
     const csv = registroCsv(righe);
-    expect(csv.startsWith('﻿Tipo;Data;')).toBe(true);
-    expect(csv).toContain('Fattura;01/03/2026;12/2026;"Alfa; ""Beta"" S.r.l.";00012345609;;1220,50;Z34F05AF62;');
+    expect(csv.startsWith('\uFEFFTipo;N. protocollo;Data protocollo;UOR;Origine protocollo;Data;')).toBe(true);
+    expect(csv).toContain('Fattura;0012345;12/11/2026;;letto dal documento;01/03/2026;12/2026;"Alfa; ""Beta"" S.r.l.";00012345609;;1220,50;Z34F05AF62;');
     expect(csv).toContain(`"'=SOMMA(1;2)"`); // niente formule eseguite da Excel
   });
   it('XLSX valido (ZIP leggibile, fogli e stili)', () => {

@@ -1,6 +1,7 @@
 // Scadenzario e «Oggi»: DURC in scadenza o scaduti, fatture da pagare, documenti da protocollare
 // o da firmare, documenti nuovi dall'ultima apertura. Logica pura.
 import { aggiungiGiorni, giorniTra, oggiIso, normalizza } from './testo.js';
+import { conSegnatura } from './stati.js';
 
 /**
  * Impostazioni predefinite. La durata del DURC va verificata sulla normativa vigente
@@ -9,7 +10,8 @@ import { aggiungiGiorni, giorniTra, oggiIso, normalizza } from './testo.js';
 export const IMPOSTAZIONI_PREDEFINITE = {
   durataDurc: 120, // giorni di validità, usati solo se nel DURC non c'è la data di scadenza
   preavvisoDurc: 15, // giorni prima della scadenza in cui avvisare
-  preavvisoFatture: 10,
+  preavvisoFatture: 15, // fatture in scadenza proposte in «Oggi» (e evidenziate tra quelle da pagare)
+  scaduteDaProporre: 30, // fatture già scadute, non segnate come pagate, proposte fino a quanti giorni dopo
 };
 
 /** Scadenza del DURC: quella scritta nel documento o, in mancanza, data + durata. */
@@ -26,7 +28,8 @@ export function scadenzaDurc(r, durata = IMPOSTAZIONI_PREDEFINITE.durataDurc) {
  */
 export function riepilogoOggi({ records, stati, impostazioni = {}, ultimaApertura = 0, oggi = oggiIso(), max = 200 }) {
   const imp = { ...IMPOSTAZIONI_PREDEFINITE, ...impostazioni };
-  const st = (r) => (stati && r.impronta ? stati.get(r.impronta) : null);
+  // la segnatura letta dal documento vale «protocollato»: non resta tra i promemoria
+  const st = (r) => conSegnatura(stati && r.impronta ? stati.get(r.impronta) : null, r.segnatura);
 
   // DURC: per ogni fornitore conta solo il più recente (un DURC nuovo «copre» quelli vecchi)
   const durcPerFornitore = new Map();
@@ -48,12 +51,18 @@ export function riepilogoOggi({ records, stati, impostazioni = {}, ultimaApertur
   }
   durc.sort((a, b) => a.scadenza.localeCompare(b.scadenza));
 
-  const fatture = []; const daProtocollare = []; const daFirmare = []; const nuovi = [];
+  const fatture = []; const inScadenza = []; const daProtocollare = []; const daFirmare = []; const nuovi = [];
   for (const r of records) {
     const s = st(r);
     if (s?.pagamento === 'da' && !s.archiviato) {
       const giorni = r.scadenza ? giorniTra(oggi, r.scadenza) : null;
       fatture.push({ id: r.id, nome: r.nome, fornitore: r.fornitore, importo: r.importo ?? null, scadenza: r.scadenza || '', giorni, scaduto: giorni != null && giorni < 0, vicina: giorni != null && giorni <= imp.preavvisoFatture });
+    }
+    // proposte dai dati della fattura (DataScadenzaPagamento nell'XML, scadenza letta nel PDF),
+    // anche se nessuno le ha ancora segnate «da pagare»
+    if (r.tipo === 'fattura' && r.scadenza && !s?.pagamento && !s?.archiviato) {
+      const giorni = giorniTra(oggi, r.scadenza);
+      if (giorni != null && giorni <= imp.preavvisoFatture && giorni >= -imp.scaduteDaProporre) inScadenza.push({ id: r.id, nome: r.nome, fornitore: r.fornitore, importo: r.importo ?? null, scadenza: r.scadenza, giorni, scaduto: giorni < 0 });
     }
     if (s?.protocollo === 'da' && !s.archiviato) daProtocollare.push({ id: r.id, nome: r.nome, fornitore: r.fornitore, data: r.data });
     if (s?.firma === 'da' && !s.archiviato) daFirmare.push({ id: r.id, nome: r.nome, fornitore: r.fornitore, data: r.data });
@@ -61,16 +70,17 @@ export function riepilogoOggi({ records, stati, impostazioni = {}, ultimaApertur
   }
   // prima le scadute, poi per scadenza (quelle senza scadenza in fondo)
   fatture.sort((a, b) => (a.scadenza ? 0 : 1) - (b.scadenza ? 0 : 1) || a.scadenza.localeCompare(b.scadenza));
+  inScadenza.sort((a, b) => a.scadenza.localeCompare(b.scadenza));
   daProtocollare.sort((a, b) => (a.data || '').localeCompare(b.data || ''));
   daFirmare.sort((a, b) => (a.data || '').localeCompare(b.data || ''));
   nuovi.sort((a, b) => b.aggiunto - a.aggiunto);
   return {
     conteggi: {
       durcScaduti: durc.filter((d) => d.scaduto).length, durcInScadenza: durc.filter((d) => !d.scaduto).length,
-      fatture: fatture.length, fattureScadute: fatture.filter((f) => f.scaduto).length,
+      fatture: fatture.length, fattureScadute: fatture.filter((f) => f.scaduto).length, inScadenza: inScadenza.length,
       daProtocollare: daProtocollare.length, daFirmare: daFirmare.length, nuovi: nuovi.length,
     },
-    durc: durc.slice(0, max), fatture: fatture.slice(0, max), daProtocollare: daProtocollare.slice(0, max), daFirmare: daFirmare.slice(0, max), nuovi: nuovi.slice(0, max),
+    durc: durc.slice(0, max), fatture: fatture.slice(0, max), inScadenza: inScadenza.slice(0, max), daProtocollare: daProtocollare.slice(0, max), daFirmare: daFirmare.slice(0, max), nuovi: nuovi.slice(0, max),
   };
 }
 

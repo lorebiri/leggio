@@ -10,6 +10,8 @@ import { pageText } from '../src/renderer/features/avanzati/lib/textsearch.js';
 import { openP7m, innerName } from '../src/renderer/features/avanzati/lib/cades.js';
 import { parseFattura } from '../src/renderer/features/avanzati/lib/fattura.js';
 import { datiDaTesto, datiDaFattura, eScansione, firmePdf } from '../src/renderer/features/archivio/lib/estrai.js';
+import { segnaturaGenerica } from '../src/renderer/features/archivio/lib/segnatura.js';
+import { immaginiDisegnate, strisciaCandidata } from '../src/renderer/features/archivio/lib/striscia.js';
 
 let dir; let files;
 beforeAll(() => {
@@ -35,18 +37,40 @@ const ATTESO = { Fatture: 'fattura', 'Note di credito': 'nota-credito', DURC: 'd
 describe('estrazione su un archivio generato', () => {
   it('riconosce il tipo e i dati chiave dei PDF (≥ 95 %)', async () => {
     let tot = 0; let ok = 0; const sbagli = [];
-    let conPiva = 0; let conImporto = 0; let fatture = 0;
+    let conPiva = 0; let conImporto = 0; let fatture = 0; let segnature = 0; let segnatureSbagliate = 0;
     for (const f of files.filter((x) => x.endsWith('.pdf') && ATTESO[cartella(x)])) {
       const { testo } = await testoPdf(new Uint8Array(fs.readFileSync(f)));
       const d = datiDaTesto(testo, { nome: path.basename(f) });
+      const seg = segnaturaGenerica(testo.split('\f')[0]);
+      const attesa = testo.match(/CNR-ICCOM - (\d{7}) - /)?.[1];
+      if (seg) { segnature++; if (seg.numero !== attesa || seg.aoo !== 'CNR-ICCOM') segnatureSbagliate++; }
+      else if (attesa) segnatureSbagliate++;
       tot++;
       if (d.tipo === ATTESO[cartella(f)]) ok++; else sbagli.push(`${path.relative(dir, f)} → ${d.tipo}`);
       if (d.tipo === 'fattura') { fatture++; if (d.piva) conPiva++; if (d.importo) conImporto++; expect(d.piva).not.toBe('02118311006'); }
     }
     expect(tot).toBeGreaterThan(80);
+    expect(segnature).toBeGreaterThan(5); // segnature di Titulus lette dal documento
+    expect(segnatureSbagliate).toBe(0); // nessuna inventata (DURC, fatture, missioni senza segnatura) e nessuna persa
     expect(ok / tot, sbagli.join('\n')).toBeGreaterThanOrEqual(0.95);
     expect(conPiva / fatture).toBeGreaterThanOrEqual(0.95);
     expect(conImporto / fatture).toBeGreaterThanOrEqual(0.95);
+  }, 120000);
+
+  it('individua la striscia-immagine di segnatura sulla pagina 1 (e nessuna striscia dove non c\'è)', async () => {
+    let con = 0; let senza = 0;
+    for (const f of files.filter((x) => x.endsWith('.pdf') && ['Fatture', 'Ordini e determine', 'DURC', 'Missioni'].includes(cartella(x)))) {
+      const pdf = await pdfjs.getDocument({ data: new Uint8Array(fs.readFileSync(f)), isEvalSupported: false }).promise;
+      try {
+        const pg = await pdf.getPage(1);
+        const ol = await pg.getOperatorList();
+        const imgs = immaginiDisegnate(ol.fnArray, ol.argsArray, pdfjs.OPS);
+        const s = strisciaCandidata(imgs, pg.view);
+        if (imgs.length) { con++; expect(s).toMatchObject({ verticale: true, lato: 'sinistra', px: [69, 2493] }); } else { senza++; expect(s).toBe(null); }
+      } finally { await pdf.loadingTask.destroy(); }
+    }
+    expect(con).toBeGreaterThan(3);
+    expect(senza).toBeGreaterThan(50);
   }, 120000);
 
   it('scansioni senza testo, PDF protetti e rovinati', async () => {

@@ -1,7 +1,7 @@
 // Stati e note d'ufficio dei documenti dell'archivio. Si salvano nell'indice di Leggio (mai nel PDF)
 // e si legano al file tramite la sua impronta (SHA-256 del contenuto): così sopravvivono a rinomina
 // e spostamento dentro le cartelle collegate. Logica pura.
-import { normalizza } from './testo.js';
+import { normalizza, dataIt, dataDaTesto } from './testo.js';
 
 /**
  * Stato di un documento (tutti i campi facoltativi):
@@ -9,8 +9,8 @@ import { normalizza } from './testo.js';
  *   pubblicato: true, archiviato: true, etichette: [..], nota: '', aggiornato: ms }
  */
 export const VOCI_STATO = [
-  { id: 'da-protocollare', label: 'Da protocollare', campo: 'protocollo', valore: 'da' },
-  { id: 'protocollato', label: 'Protocollato', campo: 'protocollo', valore: 'fatto' },
+  { id: 'da-protocollare', label: 'Da protocollare (in Titulus)', campo: 'protocollo', valore: 'da' },
+  { id: 'protocollato', label: 'Protocollato (Titulus)', campo: 'protocollo', valore: 'fatto' },
   { id: 'da-firmare', label: 'Da firmare', campo: 'firma', valore: 'da' },
   { id: 'firmato', label: 'Firmato', campo: 'firma', valore: 'fatto' },
   { id: 'da-pagare', label: 'Da pagare', campo: 'pagamento', valore: 'da' },
@@ -80,8 +80,8 @@ export function applica(s, modifica, ora = Date.now()) {
 export function descrivi(s) {
   if (!s) return [];
   const out = [];
-  if (s.protocollo === 'da') out.push({ id: 'da-protocollare', testo: 'Da protocollare', tipo: 'da' });
-  if (s.protocollo === 'fatto') out.push({ id: 'protocollato', testo: s.numeroProtocollo ? `Protocollato n. ${s.numeroProtocollo}` : 'Protocollato', tipo: 'fatto' });
+  if (s.protocollo === 'da') out.push({ id: 'da-protocollare', testo: 'Da protocollare (in Titulus)', tipo: 'da' });
+  if (s.protocollo === 'fatto') out.push({ id: 'protocollato', testo: testoProtocollo(s), tipo: 'fatto', titolo: s.origineProtocollo === 'documento' ? `Letto dal documento${s.segnaturaTesto ? ': «' + s.segnaturaTesto + '»' : ''}` : 'Inserito a mano' });
   if (s.firma === 'da') out.push({ id: 'da-firmare', testo: 'Da firmare', tipo: 'da' });
   if (s.firma === 'fatto') out.push({ id: 'firmato', testo: 'Firmato', tipo: 'fatto' });
   if (s.pagamento === 'da') out.push({ id: 'da-pagare', testo: 'Da pagare', tipo: 'da' });
@@ -89,6 +89,53 @@ export function descrivi(s) {
   if (s.pubblicato) out.push({ id: 'pubblicato', testo: 'Pubblicato', tipo: 'fatto' });
   if (s.archiviato) out.push({ id: 'archiviato', testo: 'Archiviato', tipo: 'neutro' });
   for (const e of s.etichette || []) out.push({ id: 'etichetta:' + e, testo: e, tipo: 'etichetta' });
+  return out;
+}
+
+/** «Protocollato (Titulus) n. 12345 del 12/11/2026 — letto dal documento» */
+export function testoProtocollo(s) {
+  if (!s || s.protocollo !== 'fatto') return '';
+  let t = 'Protocollato (Titulus)';
+  if (s.numeroProtocollo) t += ` n. ${s.numeroProtocollo}`;
+  if (s.dataProtocollo) t += ` del ${dataIt(s.dataProtocollo)}`;
+  if (s.uorProtocollo) t += `, UOR ${s.uorProtocollo}`;
+  if (s.origineProtocollo === 'documento') t += ' — letto dal documento';
+  return t;
+}
+
+/**
+ * Stato «effettivo»: lo stato d'ufficio più la segnatura di protocollo letta dal documento.
+ * La segnatura stampata prova che il documento è protocollato (vale più di «da protocollare»);
+ * un numero inserito a mano dall'utente vale più di quello letto. Non cambia lo stato salvato.
+ */
+export function conSegnatura(s, seg) {
+  if (!seg?.numero) return s || null;
+  if (s?.protocollo === 'fatto' && s.numeroProtocollo) return s;
+  return { ...(s || {}), protocollo: 'fatto', numeroProtocollo: seg.numero, dataProtocollo: seg.data || s?.dataProtocollo || '', origineProtocollo: 'documento', aooProtocollo: seg.aoo || '', uorProtocollo: seg.uor || '', segnaturaTesto: seg.testo || '' };
+}
+
+/**
+ * Elenco «file → numero di protocollo» incollato dall'utente (da Titulus o da Excel).
+ * Una riga per file: nome, poi numero e (facoltativa) data, separati da tabulazione, «;», «→», «=» o spazi.
+ * → [{ nome, numero, data }]
+ */
+export function leggiElencoProtocolli(testo) {
+  const out = [];
+  for (const riga of String(testo || '').split(/\r?\n/)) {
+    const r = riga.trim();
+    if (!r) continue;
+    let parti = r.split(/\t|;|→|->|=>|=/).map((x) => x.trim()).filter(Boolean);
+    if (parti.length < 2) {
+      // «nome del file.pdf 0012345 12/11/2026»: il numero è la prima parola fatta di cifre dopo il nome
+      const m = r.match(/^(.*?\.[a-z0-9]{2,4})\s+(.+)$/i);
+      if (!m) continue;
+      parti = [m[1], ...m[2].split(/\s+/)];
+    } else if (parti.length === 2 && /\s/.test(parti[1])) parti = [parti[0], ...parti[1].split(/\s+/)];
+    const [nome, ...resto] = parti;
+    const numero = resto.find((x) => /\d/.test(x) && !dataDaTesto(x))?.replace(/^(n\.?|prot\.?)/i, '').trim() || '';
+    const data = resto.map((x) => dataDaTesto(x)).find(Boolean) || '';
+    if (nome && numero) out.push({ nome, numero: numero.slice(0, 40), data });
+  }
   return out;
 }
 

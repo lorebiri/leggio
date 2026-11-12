@@ -20,8 +20,7 @@ copie rinominate, registri) è sempre una copia nuova; nessun file esistente vie
 | Schermata iniziale | con l'archivio attivo compare la sezione **«Oggi in archivio»** sotto i pulsanti principali |
 | Impostazioni | validità del DURC in giorni, preavviso DURC, preavviso fatture, codici fiscali/P.IVA del proprio ente |
 
-Gli strumenti stanno nella categoria `avanzati` perché il nucleo mostra solo le categorie note
-(`core/tools.js` → `CATEGORIES`): una categoria «Archivio» richiede un cambiamento al nucleo (vedi in fondo).
+Gli strumenti stanno nella categoria `archivio` («Archivio d'ufficio») del nucleo.
 
 ## Cosa fa
 
@@ -30,6 +29,11 @@ Gli strumenti stanno nella categoria `avanzati` perché il nucleo mostra solo le
   si aggiunge due volte, una che ne contiene altre le sostituisce.
 - Tipi indicizzati: `.pdf`, `.p7m` (anche annidati, `.xml.p7m`, `.pdf.p7m`), `.xml` (FatturaPA), `.eml` (PEC).
   Si saltano file e cartelle nascosti, i temporanei di Office (`~$…`) e quelli di Leggio.
+- **File nuovi rilevati da soli**: le cartelle locali (anche OneDrive) sono sorvegliate con `fs.watch` (macOS e
+  Windows): un file copiato compare in pochi secondi (misurati 3,6 s per 18 fatture XML). Tutte le cartelle, comprese
+  quelle di rete (`\\server\…` su Windows, `/Volumes/…` su macOS) dove `fs.watch` non è affidabile, hanno anche un
+  controllo leggero ogni 90 secondi (solo dimensione e data). Quando arrivano documenti nuovi compare l'avviso
+  «Sono arrivati N documenti nuovi» con «Vedi».
 - **Incrementale**: si confrontano dimensione e data di ogni file con l'indice; si rilegge solo ciò che è
   nuovo o cambiato. Ogni file letto riceve l'**impronta SHA-256** (calcolata nel processo principale):
   un file spostato o rinominato dentro le cartelle collegate viene riconosciuto e **non viene riletto**.
@@ -51,8 +55,9 @@ Gli strumenti stanno nella categoria `avanzati` perché il nucleo mostra solo le
 - Ricerca istantanea mentre si scrive: tutte le parole devono esserci; `"frase esatta"`; maiuscole e accenti
   ignorati. Cerca nel testo, nel nome e nel percorso, nei dati (fornitore, P.IVA, numero, CIG, CUP,
   firmatari) e nelle note/etichette d'ufficio.
-- Filtri: tipo, stato (anche le etichette), ordinamento; in «Altri filtri»: fornitore o P.IVA (con
-  suggerimenti), intervallo di date (data del documento, o del file se manca), CIG/CUP, cartella,
+- Filtri: N. protocollo, tipo, stato (anche le etichette), ordinamento; in «Altri filtri»: data di protocollo,
+  UOR, fornitore o P.IVA (suggerimenti con i fornitori **raggruppati per P.IVA**, etichetta = nome più frequente:
+  «Delta Lab», «Delta Lab S.n.c.» e «Spett.le Delta Lab» sono un fornitore solo), intervallo di date (data del documento, o del file se manca), CIG/CUP, cartella,
   «Mostra» (scansioni da OCR, firmati, protetti, non letti, senza dati).
 - Ordinamento: pertinenza (predefinito quando si cerca), data, arrivati di recente, nome, fornitore,
   importo, scadenza.
@@ -62,14 +67,38 @@ Gli strumenti stanno nella categoria `avanzati` perché il nucleo mostra solo le
 - Lista **virtualizzata** (solo le righe visibili sono nel DOM): fluida con migliaia di righe.
   Tastiera: frecce su/giù, Spazio seleziona, Invio apre.
 
+### Protocollo: lo fa Titulus, Leggio legge o annota
+All'ICCOM-CNR il protocollo lo fa **Titulus**, il sistema di protocollo informatico del CNR. **Leggio non genera
+mai numeri di protocollo**: nessun contatore, nessun numero «successivo».
+- **Segnatura letta dal documento.** Se nel testo c'è la segnatura (numero, data, sigla AOO, UOR) il documento
+  risulta «Protocollato (Titulus) n. … del …, UOR … — letto dal documento». Al CNR la segnatura è spesso una
+  **striscia-immagine** verticale sul margine sinistro della pagina 1 (forma `Prot. CNR n. NNNNNNN del gg/mm/aaaa -
+  UOR: XX000000`): durante l'indicizzazione si individua soltanto la striscia candidata (immagine stretta e alta
+  vicino a un bordo, dall'elenco delle operazioni di disegno di pdf.js, `lib/striscia.js`); la lettura avviene in
+  una **coda a parte a bassa priorità** dopo l'indicizzazione del testo: un documento alla volta, nei momenti
+  liberi, in pausa se riparte l'indicizzazione, annullabile, ripresa al riavvio. Nel frattempo il documento è
+  «Protocollo: da leggere». Lettura: prima `app.services.segnaturaTitulus` dell'area avanzati (modello
+  configurabile), altrimenti il ripiego dell'archivio: si disegna solo il riquadro della striscia con pdf.js, lo si
+  raddrizza (con le annotazioni: la striscia può essere un timbro) e lo si passa a Tesseract (`app.services.creaWorkerOcr`, modalità riga singola), poi il modello generico (`lib/segnatura.js`;
+  nell'UOR le I lette come 1 vengono corrette). Leggere non modifica nulla: i file firmati restano identici.
+- **Numero inserito dall'utente**: «Cambia stato… › Protocollato (Titulus)»: per un documento si scrive o incolla
+  il numero (e la data); per più documenti si incolla un elenco «nome del file → numero [→ data]» (tabulazioni,
+  «;», «→», o due colonne copiate da Excel). Un numero inserito a mano vale più di quello letto.
+- La segnatura letta vale «protocollato» anche se il documento era segnato «Da protocollare (in Titulus)».
+- Dall'archivio le Azioni guidate **non** offrono il timbro di protocollo (numererebbe i file da sé).
+- Ricerca: filtro **N. protocollo** (senza badare agli zeri iniziali) e, in «Altri filtri», **data di protocollo**
+  (dal/al) e **UOR**; ordinamento per N. protocollo; il numero si trova anche scrivendolo nella ricerca libera.
+  Registro Excel/CSV con le colonne **N. protocollo, Data protocollo, UOR, Origine** (letto dal documento /
+  inserito a mano).
+
 ### Stati e note d'ufficio
-«Da protocollare», «Protocollato n. …», «Da firmare», «Firmato», «Da pagare», «Pagato», «Pubblicato»,
+«Da protocollare (in Titulus)», «Protocollato (Titulus) n. …», «Da firmare», «Firmato», «Da pagare», «Pagato», «Pubblicato»,
 «Archiviato», più **etichette libere** e una **nota**.
 - Si salvano **nell'archivio di Leggio, mai nel PDF** (i file firmati restano intatti).
 - Sono legati all'**impronta** del file: sopravvivono a rinomina e spostamento. Se un file cambia contenuto
   nello stesso percorso (es. timbrato da un altro programma), lo stato lo segue.
-- **Su più documenti insieme** (selezione multipla → «Cambia stato…», «Etichette e nota…»). Per
-  «Protocollato» su più file si indica il primo numero: ai successivi va il numero seguente.
+- **Su più documenti insieme** e **più stati in una volta** (selezione multipla → «Cambia stato…» con le caselle,
+  «Etichette e nota…»).
 - **Esporta / Importa** (Cartelle e privacy): JSON (backup) o CSV per Excel (`;`), con impronta, nome e
   percorso per riconoscere i file a occhio. All'importazione si sceglie «vince il più recente» o «vincono
   quelli importati»; gli stati di file non ancora presenti si applicano quando compariranno.
@@ -79,20 +108,36 @@ Gli strumenti stanno nella categoria `avanzati` perché il nucleo mostra solo le
   la data di scadenza, si calcola dalla data del documento + **durata impostabile** (predefinita 120 giorni,
   validità del DURC online secondo il D.M. 30/01/2015 — *da verificare sulla normativa vigente*, per questo
   è un'impostazione e non una regola fissa). Preavviso impostabile (predefinito 15 giorni).
+- **Fatture in scadenza (dai dati della fattura)**: proposte anche se nessuno le ha segnate, dalla
+  DataScadenzaPagamento delle FatturaPA o dalla scadenza riconosciuta nei PDF: entro N giorni (impostazione,
+  predefinito 15) o scadute da non più di 30 giorni, non segnate «Da pagare», «Pagato» o «Archiviato».
 - **Fatture da pagare** (stato «Da pagare») con la scadenza: scadute in rosso, vicine in arancio.
-- **Da protocollare**, **Da firmare**.
-- **Arrivati dall'ultima apertura**: documenti entrati nell'indice dopo l'ultima volta che si è guardato Oggi.
+- **Da protocollare in Titulus** (promemoria: il protocollo si fa in Titulus; un documento che torna con la
+  segnatura sparisce da qui da solo), **Da firmare**.
+- **Arrivati dall'ultima apertura**: documenti entrati nell'indice dopo l'avvio precedente (alla prima
+  indicizzazione la soglia è la sua fine: i file che arrivano dopo compaiono subito).
 - Ogni voce si apre con un clic; «Vedi tutti» apre la ricerca già filtrata.
 
 ### Azioni sui documenti selezionati
-- **Azioni guidate…**: le stesse operazioni e le **sequenze salvate** delle «Azioni guidate» dell'area avanzati
+Tutto ciò che si apre dall'archivio (risultati, «Oggi», doppio clic, Invio) si apre **in sola lettura**
+(`readOnly: true`): ogni modifica propone «Lavora su una copia» e Salva diventa Salva con nome; l'originale non si
+sovrascrive (provato nell'app). I .p7m e le fatture XML si aprono senza percorso (contenuto estratto): Salva chiede
+sempre dove salvare.
+- **Stampa…**: i selezionati vanno a «Stampa più documenti» (`app.printFiles`); le fatture XML vengono prima
+  impaginate in PDF, dei .p7m si stampa il PDF contenuto.
+- **Firma…**: spiega e apre «Firma più file» dell'area moduli. Quello strumento oggi sceglie i file con la finestra
+  del sistema e **non riceve un elenco**: si possono aprire le cartelle dei documenti, poi selezionarli lì
+  (richiesta all'area moduli in fondo). Se esistesse `app.services.firmaFile(files)` l'archivio lo userebbe.
+- **Altre azioni › Fatture elettroniche in PDF**: una copia PDF impaginata per ogni fattura XML (anche .xml.p7m)
+  in «Elaborati», con il nome proposto dalla fattura; stessa impaginazione dell'area avanzati (`fatturaDocument` +
+  il suo canale `html-to-pdf`), o `app.services.fatturaPdf` se l'area lo offrirà.
+- **Altre azioni › Azioni guidate…** (anche sulle fatture XML, impaginate prima in PDF): le stesse operazioni e le **sequenze salvate** delle «Azioni guidate» dell'area avanzati
   (`lib/batch-ops.js`: timbro di protocollo, numeri di pagina, filigrana, metadati, rendi definitivi,
   ottimizza, proteggi, più le operazioni offerte dalle altre aree con `batch:operations`). L'archivio aggiunge
   all'elenco **Rendi ricercabile (OCR)** (`app.services.ocr`) e **Riduci dimensioni file**
   (`app.services.compress`) se le aree conversione e sicurezza non le hanno già registrate: compaiono quindi
   anche nelle Azioni guidate dell'area avanzati. Le copie vanno in **«Elaborati»** accanto a ogni originale
-  (o in una cartella scelta); con il timbro di protocollo gli originali possono essere segnati
-  «Protocollato n. …» e il contatore di protocollo dell'area avanzati avanza.
+  (o in una cartella scelta). Il timbro di protocollo non è offerto (vedi sopra).
 - **Copie con nome proposto…**: copia ogni documento in «Rinominati» con il nome della «Rinomina dal
   contenuto» (`Fattura_FORNITORE_n123_2026-10-31.pdf`, `DURC_FORNITORE_scad2027-02-15.pdf`), anteprima prima.
 - **Esporta registro…**: i risultati (o i selezionati) in **Excel (.xlsx)** o **CSV** (`;`, virgola decimale):
@@ -156,6 +201,16 @@ L'indice contiene il **testo dei documenti, compresi dati personali** (codici fi
 | Chiusura improvvisa durante l'indicizzazione | indice integro, ripresa dal punto raggiunto (provato: `kill -9`) |
 | Scrittura dell'indice non riuscita (disco pieno) | avviso (al massimo uno al minuto), si riprova alla scrittura successiva |
 
+## Misure dopo Titulus e sorveglianza (stesso Mac, macchina molto carica: carico medio 24–42)
+| Prova | Risultato |
+|---|---|
+| Prima indicizzazione di 3.614 file con individuazione delle strisce | 10,7 s (prima 7,3 s: l'elenco delle operazioni di disegno della pagina 1 costa ~3 s) |
+| Segnature: 183 lette dal testo durante l'indicizzazione; 281 strisce-immagine nella coda | coda: **281 lette su 281 in 55,6 s** (~200 ms l'una); numeri e date corretti; UOR «SI» letto «S1» in 236 casi → corretto dalla normalizzazione aggiunta dopo la misura |
+| File reale protocollato da Titulus (solo prova locale, non nel repository) | striscia trovata (pagina 1, margine sinistro); il ripiego OCR legge numero, data e UOR esatti in 0,9 s. Due correzioni nate da questo file: la striscia va disegnata **con le annotazioni** (nel file reale non compariva senza) e Tesseract va usato in modalità «riga singola» |
+| 18 fatture XML copiate in una cartella collegata | rilevate da sole in **3,6 s** (fs.watch), avviso «18 documenti nuovi», presenti in «Oggi» |
+| Fatture in PDF in blocco, 18 XML | 18 PDF in «Elaborati», 73 s sotto carico |
+| Stampa di 17 XML selezionati | impaginati e passati a «Stampa più documenti» (dialogo aperto, stampa non lanciata) |
+
 ## Misure (12/11/2026, MacBook Apple Silicon 8 GB, Electron 45, app vera comandata via DevTools)
 Archivio di prova generato con `test/archivio-genera.mjs --n=3600 --grande --pesanti=150`: **3.614 file**
 (3.164 PDF, 216 XML, 54 `.p7m`, 180 `.eml`), 545 MB su disco: fatture, note di credito, DURC, ordini e
@@ -172,7 +227,7 @@ determine, missioni, contratti (90 con firma PAdES simulata), 216 scansioni vett
 | Caricamento dell'indice all'avvio (3.644 documenti) | **66 ms** |
 | `kill -9` durante l'indicizzazione (2.329 di 3.614) | al riavvio 2.341 documenti integri, 0 righe rovinate, 1 blocco orfano eliminato, ripresa: 1.303 file letti in 2,7 s |
 | Ricerca nell'app (andata e ritorno con il worker) | 2–14 ms (parola, frase, filtri, tutti i 3.644) |
-| Motore con **10.000** documenti e 85 MB di testo (Node, `scratch`) | caricamento 0,43 s, heap +165 MB; ricerca parola rara 100 ms, parola comune 44 ms, filtri 3 ms |
+| Motore con **10.000** documenti e 85 MB di testo (`node --expose-gc test/archivio-benchmark.mjs`) | macchina scarica: caricamento 0,43 s, heap +165 MB, parola rara 100 ms, parola comune 44 ms, filtri 3 ms; macchina carica (carico medio > 20): caricamento 3,9 s, parola rara 533 ms, comune 323 ms, filtri 32 ms |
 | Memoria del processo renderer (worker compresi, RSS) | a riposo 80–110 MB; **durante l'indicizzazione 450–530 MB stabili** (3 worker di estrazione con il loro pdf.js); dopo 160–165 MB con l'indice in memoria |
 | Processo main | 90–220 MB durante l'indicizzazione |
 
@@ -195,9 +250,14 @@ vere 1–2 MB). Documenti reali più pesanti e cartelle di rete aumenteranno i t
   OCR finiscono in «Elaborati» e vengono indicizzate.
 - Il riconoscimento dei dati dai PDF è a regole: funziona sui documenti con testo e diciture usuali; i campi
   non trovati restano vuoti (mai inventati). Le fatture XML sono lette esattamente.
+- Il timbro di protocollo dell'area avanzati non aggiorna da solo lo stato in archivio (l'archivio legge però la
+  segnatura se il numero di Titulus è stampato con la dicitura «Prot. … n. … del …»).
 - Le firme non vengono **verificate** dall'indice (solo rilevate): la verifica è nell'area avanzati all'apertura.
-- Nessuna sorveglianza continua delle cartelle (su rete e OneDrive `fs.watch` non è affidabile): aggiornamento
-  all'avvio, ogni 15 minuti, dopo le azioni e con «Aggiorna ora».
+- Sulle cartelle di rete i file nuovi si vedono al controllo periodico (al massimo 90 s), non subito. Su Windows
+  un'unità di rete mappata a una lettera non si distingue da un disco locale: si prova `fs.watch`, e resta comunque
+  il controllo periodico.
+- La lettura delle strisce di segnatura è provata su un solo documento reale e su strisce sintetiche: altri formati
+  di Titulus (altre AOO, posizioni) vanno verificati; il modello configurabile è dell'area avanzati.
 - Gli allegati dentro le PEC e dentro le fatture XML non sono indicizzati come documenti separati (i loro nomi sì).
 - Nell'anteprima web le cartelle valgono solo finché la pagina resta aperta (il browser non dà percorsi).
 - Non provato su Windows reale né su cartelle di rete o OneDrive vere (simulata la cartella scollegata).
@@ -205,7 +265,11 @@ vere 1–2 MB). Documenti reali più pesanti e cartelle di rete aumenteranno i t
   verificato nei test (`unzip -t`, contenuto dei fogli), non aperto in Excel.
 
 ## Richieste al nucleo e ad altre aree
-- **Categoria «Archivio»** in `core/tools.js` (`CATEGORIES`) per mostrare gli strumenti in un gruppo proprio.
+- Area moduli: «Firma più file» con un elenco di file in ingresso (es. `app.services.firmaFile([{ path, name }])`),
+  così si firmano direttamente i selezionati dell'archivio.
+- Area avanzati: `app.services.fatturaPdf(xml) → { bytes, nome }` (oggi l'archivio usa `fatturaDocument` e il canale
+  `avanzati:html-to-pdf`); `app.services.segnaturaTitulus(input)` con `input` = testo **oppure**
+  `{ bytes, pagina, area: [x0,y0,x1,y1] in punti PDF, verticale, lato }`, risultato `{ numero, data, aoo, uor }` o
+  null (anche Promise): l'archivio lo usa già se presente.
 - Azioni guidate (area avanzati): `openBatch(app, deps, { items })` per aprire la finestra con file già scelti;
   oggi l'archivio usa le stesse operazioni e sequenze (`lib/batch-ops.js`) con una finestra propria.
-- Chiudendo l'ultima scheda la barra «Trova» resta aperta con la ricerca del documento chiuso (visto nell'app).
