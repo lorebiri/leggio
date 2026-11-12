@@ -1379,7 +1379,22 @@ function register({ ipcMain, dialog, getWindow, app }) {
     if (res.filePaths.length > 500) throw new UserError('Scegli al massimo 500 file per volta.', 'argomenti');
     const opts = obj(a.options || {}, 'opzioni');
     const results = await signFilesWith(res.filePaths, signer, { ...opts, format: a.format === 'p7m' ? 'p7m' : 'pdf' }, (p) => send('feat:moduli:progress', p));
-    return { cancelled: false, results: results.map(({ path: _p, ...r }) => r) };
+    return { cancelled: false, results };
+  }));
+  // firma di un elenco di file già scelti (es. i documenti selezionati nell'archivio): nessuna finestra di scelta
+  ipcMain.handle('feat:moduli:sign-files', safe(async (a) => {
+    obj(a, 'richiesta');
+    if (!Array.isArray(a.paths) || !a.paths.length) throw new UserError('Nessun file da firmare.', 'argomenti');
+    if (a.paths.length > 500) throw new UserError('Si possono firmare al massimo 500 file per volta.', 'argomenti');
+    const paths = a.paths.map((p) => {
+      if (typeof p !== 'string' || !p || p.length > 4096 || p.includes('\0') || !path.isAbsolute(p)) throw new UserError('Percorso di file non valido.', 'argomenti');
+      return p;
+    }).filter((p, i, all) => all.indexOf(p) === i);
+    const signer = await resolveSigner(credOf(a));
+    checkValidity(signer.info);
+    const opts = obj(a.options || {}, 'opzioni');
+    const fmt = a.format === 'p7m' ? 'p7m' : 'pdf';
+    return { results: await signFilesWith(paths, signer, { ...opts, format: fmt }, (p) => send('feat:moduli:progress', p)) };
   }));
 
   // ---- ripiego: programma di firma installato
