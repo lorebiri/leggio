@@ -16,7 +16,7 @@ const MB = 1024 * 1024;
 const MAX_READ = 1024 * MB;
 const MAX_WRITE = 1024 * MB;
 const MAX_HTML = 50 * MB;
-const MAX_LIST = 20000;
+const MAX_LIST = 200000;
 
 // ---------------- validazione ----------------
 class UserError extends Error {}
@@ -73,7 +73,7 @@ async function listFiles({ folder, exts, recursive = true, max = 5000, skipDirs 
   mustBeAllowed(root);
   const extSet = new Set((Array.isArray(exts) ? exts : ['pdf']).slice(0, 50).map((e) => '.' + String(e).toLowerCase().replace(/^\./, '')));
   const skip = new Set((Array.isArray(skipDirs) ? skipDirs : []).slice(0, 20).map(String));
-  const limit = int(max, 'max', 1, MAX_LIST, 5000);
+  const limit = int(max, 'max', 1, MAX_LIST, 50000);
   const out = []; let truncated = false; const errors = [];
   async function walk(dir, depth) {
     if (out.length >= limit) { truncated = true; return; }
@@ -297,6 +297,32 @@ function msOfficeScript(input, out, ext) {
   return `$ErrorActionPreference='Stop'; $a=New-Object -ComObject Word.Application; $a.Visible=$false; $a.DisplayAlerts=0; try { $d=$a.Documents.Open(${i}, $false, $true); $d.SaveAs([ref]${o}, [ref]17); $d.Close([ref]$false) } finally { $a.Quit() }`;
 }
 
+// ---------------- lavoro delle azioni guidate (ripresa dopo un'interruzione) ----------------
+let userDataDir = null;
+const jobFile = () => path.join(userDataDir || os.tmpdir(), 'avanzati-azioni-guidate.json');
+async function jobSave({ json }) {
+  str(json, 'json', 80 * MB);
+  const f = jobFile(); const tmp = f + '.tmp';
+  await fsp.writeFile(tmp, json, 'utf8'); await fsp.rename(tmp, f);
+  return true;
+}
+async function jobLoad() { try { return await fsp.readFile(jobFile(), 'utf8'); } catch { return null; } }
+async function jobClear() { try { await fsp.rm(jobFile(), { force: true }); } catch {} return true; }
+
+// ---------------- HEIC → JPEG (foto dell'iPhone): su macOS con sips di sistema ----------------
+async function heicToJpeg({ name, bytes }) {
+  const data = bytesArg(bytes, 'bytes', 100 * MB);
+  if (process.platform !== 'darwin' || !fs.existsSync('/usr/bin/sips')) throw new UserError('Le foto HEIC si possono convertire solo su macOS. Sul telefono imposta «Più compatibile» (JPEG) oppure salvale come JPEG.');
+  const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'leggio-heic-'));
+  try {
+    const inp = path.join(tmp, 'in.heic'); const out = path.join(tmp, 'out.jpg');
+    await fsp.writeFile(inp, Buffer.from(data.buffer, data.byteOffset, data.byteLength));
+    await run('/usr/bin/sips', ['-s', 'format', 'jpeg', '-s', 'formatOptions', '85', inp, '--out', out], { timeout: 60000 });
+    return new Uint8Array(await fsp.readFile(out));
+  } catch (e) { throw e instanceof UserError ? e : new UserError(`Impossibile convertire «${safeName(name || 'foto')}».`); }
+  finally { fsp.rm(tmp, { recursive: true, force: true }).catch(() => {}); }
+}
+
 // ---------------- registrazione ----------------
 function wrap(fn) {
   return async (_e, args) => {
@@ -308,7 +334,8 @@ function wrap(fn) {
   };
 }
 
-function register({ ipcMain, BrowserWindow, dialog, getWindow }) {
+function register({ ipcMain, BrowserWindow, dialog, getWindow, app }) {
+  try { userDataDir = app?.getPath?.('userData') || null; } catch { userDataDir = null; }
   const h = (name, fn) => { ipcMain.removeHandler('feat:avanzati:' + name); ipcMain.handle('feat:avanzati:' + name, wrap(fn)); };
   h('choose-folder', async ({ title }) => {
     const r = await dialog.showOpenDialog(getWindow(), { title: optStr(title, 'title', 200) || 'Scegli una cartella', properties: ['openDirectory', 'createDirectory'] });
@@ -331,7 +358,11 @@ function register({ ipcMain, BrowserWindow, dialog, getWindow }) {
   h('html-to-pdf', (a) => htmlToPdf(BrowserWindow, a));
   h('office-info', async () => ({ soffice: findSoffice(), msoffice: hasMsOffice(), platform: process.platform }));
   h('office-convert', officeConvert);
+  h('job-save', jobSave);
+  h('job-load', jobLoad);
+  h('job-clear', jobClear);
+  h('heic-to-jpeg', heicToJpeg);
   h('cancel', async ({ jobId }) => { const c = jobs.get(str(jobId, 'jobId', 100)); if (c) { c.leggioCancelled = true; try { c.kill(); } catch {} } return !!c; });
 }
 
-module.exports = { register, _test: { safeName, isAllowed, allow, listFiles, readAllowed, writeAllowed, officeConvert, findSoffice, marginsFor, msOfficeScript, UserError } };
+module.exports = { register, _test: { jobSave, jobLoad, jobClear, heicToJpeg, safeName, isAllowed, allow, listFiles, readAllowed, writeAllowed, officeConvert, findSoffice, marginsFor, msOfficeScript, UserError } };

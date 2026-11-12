@@ -28,7 +28,7 @@ export function openSearchFolder(app, deps) {
       const r = await chooseFolder(app, { recursive: rec.checked, title: 'Scegli la cartella in cui cercare' });
       if (!r) return;
       state.items = r.items; state.label = r.label;
-      where.textContent = `${r.items.length} PDF in «${r.label}»${r.truncated ? ' (solo i primi 20.000)' : ''}`;
+      where.textContent = `${r.items.length} PDF in «${r.label}»${r.truncated ? ' (solo i primi 200.000)' : ''}`;
       if (input.value.trim()) cerca();
       else input.focus();
     } catch (e) { app.reportError(e, 'Cartella non leggibile'); }

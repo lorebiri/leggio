@@ -15,7 +15,11 @@ const KEY_CONF = 'avanzati.conformita';
 export async function dichiarazioneConformita(app) {
   const doc = app.activeDoc;
   const pref = { modelli: [], nome: app.settings.get('author', ''), qualifica: '', luogo: '', dove: 'pagina', spazioFirma: true, ...app.settings.get(KEY_CONF, {}) };
-  const ente = app.settings.get('avanzati.protocollo', {}).ente || '';
+  const profilo = app.services?.profiloCompleto?.() || {};
+  const ente = profilo.ente?.denominazione || app.settings.get('avanzati.protocollo', {}).ente || '';
+  if (!pref.nome) pref.nome = profilo.personale?.nomeCompleto || [profilo.personale?.nome, profilo.personale?.cognome].filter(Boolean).join(' ');
+  if (!pref.qualifica) pref.qualifica = profilo.personale?.qualifica || '';
+  if (!pref.luogo) pref.luogo = profilo.ente?.citta || '';
   const modelli = Array.isArray(pref.modelli) ? pref.modelli : [];
   const v = await app.ui.dialog({
     title: 'Dichiarazione di conformità all\'originale', width: 620,
