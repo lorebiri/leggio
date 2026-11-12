@@ -1,6 +1,6 @@
 // Modello di documento aperto: byte correnti, proxy pdf.js, cronologia annulla/ripeti,
 // coda seriale delle operazioni.
-import { openPdfJs } from './pdf.js';
+import { openPdfJs, destroyPdf } from './pdf.js';
 import { History } from './history.js';
 import { TaskQueue } from './queue.js';
 
@@ -48,14 +48,14 @@ export class Doc {
     const { pdf, password } = await openPdfJs(this.bytes, { password: this.password, onPassword, ...opts });
     const old = this.setPdf(pdf);
     this.password = password;
-    old?.destroy();
+    destroyPdf(old);
     return pdf;
   }
 
   /** Apre byte candidati senza toccare lo stato: serve a verificare una modifica prima di accettarla. */
   async openCandidate(bytes) {
     const { pdf } = await openPdfJs(bytes, { password: this.password });
-    if (!pdf.numPages) { pdf.destroy(); throw new Error('Il risultato non contiene pagine'); }
+    if (!pdf.numPages) { destroyPdf(pdf); throw new Error('Il risultato non contiene pagine'); }
     return pdf;
   }
 
@@ -92,7 +92,7 @@ export class Doc {
   destroy() {
     this.closed = true;
     this.queue.close();
-    try { this.pdf?.destroy(); } catch { /* già distrutto */ }
+    destroyPdf(this.pdf);
     this.pdf = null;
     this.history.clear().catch(() => {});
     this.bytes = new Uint8Array(0);

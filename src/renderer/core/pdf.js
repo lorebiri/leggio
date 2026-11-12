@@ -71,6 +71,12 @@ export function ensureDestroy(pdf) {
   return pdf;
 }
 
+/** Libera un documento pdf.js (worker compreso). Sicura con null e su documenti già liberati. */
+export function destroyPdf(pdf) {
+  if (!pdf) return;
+  try { Promise.resolve(pdf.loadingTask?.destroy()).catch(() => {}); } catch { /* già distrutto */ }
+}
+
 function abortError() { const e = new Error('Apertura annullata'); e.name = 'AbortError'; return e; }
 
 /** Verifica che i byte siano un PDF leggibile (apertura + prima pagina). Lancia un errore se no. */
@@ -81,7 +87,7 @@ export async function verifyPdfBytes(bytes, password) {
     const page = await pdf.getPage(1);
     page.cleanup();
     return pdf.numPages;
-  } finally { pdf.destroy(); }
+  } finally { destroyPdf(pdf); }
 }
 
 /** Apre i byte con pdf-lib (versione @cantoo con supporto cifratura). */

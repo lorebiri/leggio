@@ -3,6 +3,9 @@
 import { EventBus, PDFViewer, PDFLinkService, PDFFindController, ScrollMode, SpreadMode } from 'pdfjs-dist/web/pdf_viewer.mjs';
 import 'pdfjs-dist/web/pdf_viewer.css';
 import { pdfjs } from './pdf.js';
+import { rectToCss } from './geometry.js';
+
+export { rectToCss };
 
 export { ScrollMode, SpreadMode };
 
@@ -83,8 +86,7 @@ export class Viewer {
   /** Rettangolo PDF [x1,y1,x2,y2] → rettangolo CSS {left,top,width,height} nella pagina. */
   pdfRectToCss(pageIndex, rect) {
     const vp = this.getViewport(pageIndex);
-    const [x1, y1, x2, y2] = vp.convertToViewportRectangle(rect);
-    return { left: Math.min(x1, x2), top: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) };
+    return rectToCss(vp, rect);
   }
   /** Rende di nuovo tutte le pagine visibili (es. dopo cambi solo visivi). */
   refresh() { this.pdfViewer.refresh(); }
