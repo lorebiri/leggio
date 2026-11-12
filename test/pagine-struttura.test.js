@@ -148,3 +148,32 @@ describe('file danneggiati', () => {
     await expect(S.caricaPdf(enc.encode('%PDF-1.7\nniente\n%%EOF'), { nome: 'rotto.pdf' })).rejects.toThrow(/rotto.pdf/);
   });
 });
+
+describe('casi limite', () => {
+  it('documento da 1 pagina, tutte le pagine, ultima pagina', async () => {
+    const uno = await creaDoc(1);
+    expect(() => S.elimina(uno, [0])).toThrow(/tutte/);
+    S.inverti(uno, []); S.ruota(uno, [0], 180);
+    expect((await ricarica(uno)).getPage(0).getRotation().angle).toBe(180);
+    const d = await creaDoc(5);
+    const tutte = await S.estraiInNuovo(d, [0, 1, 2, 3, 4]);
+    expect(lab(await ricarica(tutte))).toEqual([1, 2, 3, 4, 5]);
+    S.sposta(d, [4], 0); // ultima in testa
+    expect(lab(await ricarica(d))).toEqual([5, 1, 2, 3, 4]);
+    S.elimina(d, [4]); // ultima
+    expect(lab(await ricarica(d))).toEqual([5, 1, 2, 3]);
+    expect(() => S.ruota(d, [9], 90)).toThrow(/non esiste/);
+    expect(() => S.duplica(d, [])).toThrow(/almeno una/);
+    await expect(S.estraiInNuovo(d, [])).rejects.toThrow(/almeno una/);
+  });
+
+  it('1200 pagine: riordino completo con moduli in meno di 2 secondi', async () => {
+    const d = await creaDoc(1200, { modulo: true });
+    const t0 = performance.now();
+    S.inverti(d, []);
+    const r = await ricarica(d);
+    expect(performance.now() - t0).toBeLessThan(2000);
+    expect(lab(r).slice(0, 2)).toEqual([1200, 1199]);
+    expect(r.getForm().getFields().length).toBe(3);
+  });
+});
