@@ -3,6 +3,7 @@
 const native = typeof window !== 'undefined' ? window.leggio : undefined;
 
 export const isElectron = !!native;
+const readOnlyPaths = new Set();
 export const platformName = native?.platform || (navigator.platform.toLowerCase().includes('mac') ? 'darwin' : 'other');
 export const isMac = platformName === 'darwin';
 export const modKey = isMac ? '⌘' : 'Ctrl';
@@ -45,6 +46,7 @@ export const platform = {
   },
   /** Sovrascrive un percorso noto (scrittura atomica). */
   async writeFile(path, bytes) {
+    if (path && readOnlyPaths.has(path)) throw new Error(`«${path.split(/[\\/]/).pop()}» è aperto in sola lettura: l'originale non può essere sovrascritto. Salva una copia con un altro nome.`);
     if (native && path) return native.invoke('file:write', { path, bytes });
     throw new Error('Percorso non disponibile');
   },
@@ -87,6 +89,13 @@ export const platform = {
   async log(entry) { if (native) return native.invoke('app:log', entry); },
   async openLogs() { if (native) return native.invoke('app:open-logs'); },
   isElectron,
+  /** Protegge (o libera) un file aperto in sola lettura: anche il main rifiuterà di scriverlo. */
+  async setReadOnly(path, on) {
+    if (!path) return;
+    if (on) readOnlyPaths.add(path); else readOnlyPaths.delete(path);
+    if (native) await native.invoke('file:set-readonly', { path, readOnly: !!on });
+  },
+  isReadOnlyPath(path) { return !!path && readOnlyPaths.has(path); },
   /** Stampanti disponibili (solo app): [{ name, displayName, isDefault }]. */
   async printers() { return native ? native.invoke('app:printers') : []; },
   /** Stampa la pagina corrente (#print-root) con le opzioni (solo app). → { ok, err } */

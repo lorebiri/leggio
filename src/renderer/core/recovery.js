@@ -57,7 +57,7 @@ export class Recovery {
         catch { /* proxy sostituito nel frattempo: si usa l'ultimo stato dei byte */ }
       }
       if (doc.closed) return;
-      const meta = { id: doc.id, name: doc.name, path: doc.path || null, size: bytes.length, time: Date.now(), pages: doc.pageCount };
+      const meta = { id: doc.id, name: doc.name, path: doc.path || null, size: bytes.length, time: Date.now(), pages: doc.pageCount, readOnly: !!doc.readOnly };
       await this.backend.write(meta, bytes);
       st.key = key;
     })();
@@ -104,7 +104,8 @@ export class Recovery {
     for (const e of list) {
       try {
         const bytes = await this.backend.read(e.session, e.id);
-        const doc = await this.app.openBytes(bytes, { name: e.name, path: e.path, dirty: true });
+        // un documento in sola lettura torna in sola lettura (il ripristino non deve poter sovrascrivere l'originale)
+        const doc = await this.app.openBytes(bytes, { name: e.name, path: e.path, dirty: true, readOnly: !!e.readOnly });
         if (doc) { ok++; await this.snapshot(doc); }
       } catch (err) { log('error', 'recupero: ripristino non riuscito', { name: e.name, error: String(err?.message || err) }); }
     }

@@ -1,7 +1,7 @@
 // Registro degli strumenti e pannello "Tutti gli strumenti" (anche come palette comandi ⌘K).
 import { h, toast } from './ui.js';
 import { icon } from './icons.js';
-import { rankTools } from './toolsearch.js';
+import { rankTools, foundByAcrobatName } from './toolsearch.js';
 
 export const CATEGORIES = [
   ['archivio', 'Archivio d\'ufficio'],
@@ -32,7 +32,7 @@ export const ACROBAT_NAMES = {
   ocr: ['Scansione e OCR', 'riconosci testo ocr scansione'],
   compare: ['Confronta file', 'confronta differenze'],
   'create-pdf': ['Crea PDF', 'crea converti in pdf immagini'],
-  sign: ['Usa un certificato', 'firma digitale certificato pades'],
+  sign: [undefined, 'firma firme firmare sigla autografa'],
   'delete-pages': ['Elimina pagine', 'elimina cancella pagine'],
   metadata: ['Proprietà documento', 'proprieta titolo autore metadati'],
 };
@@ -49,7 +49,7 @@ export class ToolRegistry {
     if (!def.id || !def.name) throw new Error('Strumento senza id/nome');
     if (this.tools.has(def.id)) console.warn('[tools] id duplicato sostituito:', def.id);
     const acro = ACROBAT_NAMES[def.id];
-    this.tools.set(def.id, { needsDoc: true, category: 'avanzati', keywords: '', acrobatName: acro?.[0], ...def, keywords: `${def.keywords || ''} ${acro ? acro.join(' ') : ''}`.trim() });
+    this.tools.set(def.id, { needsDoc: true, category: 'avanzati', keywords: '', acrobatName: acro?.[0], ...def, keywords: `${def.keywords || ''} ${acro ? acro.filter(Boolean).join(' ') : ''}`.trim() });
     this.app.bus.emit('tools:changed');
   }
   list() { return [...this.tools.values()]; }
@@ -102,7 +102,7 @@ export class ToolRegistry {
         grid));
     const toolButton = (t) => h('button', { class: 'hub-tool', 'data-tool-id': t.id, onclick: () => { close(); this.run(t.id); } },
       h('span', { class: 'hub-ico', html: icon(t.icon || 'tools', 22) }),
-      h('span', { class: 'hub-txt' }, h('strong', {}, t.name, t.acrobatName && t.acrobatName !== t.name ? h('span', { class: 'hub-acro' }, ` (in Acrobat: ${t.acrobatName})`) : null), h('small', {}, t.description || '')));
+      h('span', { class: 'hub-txt' }, h('strong', {}, t.name, foundByAcrobatName(t, search.value) ? h('span', { class: 'hub-acro' }, ` (in Acrobat si chiama «${t.acrobatName}»)`) : null), h('small', {}, t.description || '')));
     let best = null;
     const render = () => {
       const q = search.value.trim();

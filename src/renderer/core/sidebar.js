@@ -18,7 +18,10 @@ export class Sidebar {
   #renderRail() {
     this.rail.innerHTML = '';
     for (const p of [...this.panels.values()].sort((a, b) => a.order - b.order)) {
-      this.rail.append(h('button', { class: 'rail-btn' + (this.current === p.id ? ' active' : ''), title: p.title, 'aria-label': p.title, 'aria-pressed': String(this.current === p.id), onclick: () => this.toggle(p.id), html: icon(p.icon, 20) }));
+      const b = h('button', { class: 'rail-btn' + (this.current === p.id ? ' active' : ''), title: p.title, 'aria-label': p.title, 'aria-pressed': String(this.current === p.id), onclick: () => this.toggle(p.id), html: icon(p.icon, 20) });
+      // etichetta breve sotto l'icona (Impostazioni › «Mostra i nomi sotto le icone»); def.railLabel per sceglierla
+      b.append(h('span', { class: 'rail-label', 'aria-hidden': 'true' }, p.railLabel || railLabel(p.title)));
+      this.rail.append(b);
     }
   }
 
@@ -236,4 +239,12 @@ export function outlinePanel(app) {
       return () => { alive = false; };
     },
   };
+}
+
+/** Etichetta breve per la colonna dei pannelli: il titolo, accorciato alle prime due parole significative. */
+export function railLabel(title) {
+  const w = String(title || '').replace(/\s*\(.*\)\s*$/, '').split(/\s+/).filter(Boolean);
+  if (w.join(' ').length <= 12) return w.join(' ');
+  const keep = w.filter((x, i) => i === 0 || !/^(il|lo|la|i|gli|le|un|una|di|del|della|dei|delle|e|in|da|con|per|a|al|alla)$/i.test(x));
+  return keep.slice(0, 2).join(' ');
 }
