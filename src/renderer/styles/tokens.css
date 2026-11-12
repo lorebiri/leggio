@@ -97,6 +97,10 @@
   color-scheme: light;
 }
 
+/* pdf.js dichiara «color-scheme: light dark»: senza questa regola, con il sistema in modalità scura e Leggio in
+   tema chiaro, caselle, menu e barre di scorrimento diventerebbero scuri. */
+:root:not([data-theme="dark"]) { color-scheme: light; }
+
 /* Tema scuro: stesse variabili, valori per il buio. Duplicato per «Come il sistema». */
 :root[data-theme="dark"] {
   --bg: #17181b; --surface: #202226; --surface-2: #1b1c20; --surface-3: #141518;
