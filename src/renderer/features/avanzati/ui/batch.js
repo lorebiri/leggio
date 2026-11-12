@@ -1,9 +1,10 @@
 // Azioni guidate: file → sequenza di operazioni → dove salvare → avanzamento → rapporto finale.
-import { tutteLeOperazioni, validaSequenza, eseguiSequenza, nomeUscita, SkipError } from '../lib/batch-ops.js';
+import { tutteLeOperazioni, validaSequenza, eseguiSequenza, nomeUscita, SkipError, operazioneProteggi, destinazione } from '../lib/batch-ops.js';
 import { chooseFolder, chooseFiles, writeOut, isDesktop, call, fileItem, dirname, basename } from '../native.js';
 import { preferenze as prefProtocollo } from './protocollo.js';
 import { contatoreCorrente } from '../lib/protocollo.js';
 import { nomeDalContenuto } from './coda.js';
+import { nuovoLavoro, registra, daFare, conteggi, lavoroValido, registroCsv, chiaveDi } from '../lib/registro.js';
 
 const KEY_SEQ = 'avanzati.sequenze';
 const MAX_FILE = 500 * 1024 * 1024;
@@ -13,9 +14,22 @@ export const SEQUENZE_ESEMPIO = [
   { nome: 'Raddrizza scansioni (ruota di 90°)', passi: [{ op: 'ruota', params: { angolo: '90', pagine: 'tutte' } }] },
 ];
 
-function operazioni(app) {
+/**
+ * Operazioni disponibili: le nostre + quelle registrate dalle altre aree con 'batch:operations'. Se un'area espone
+ * il servizio ma non ha (ancora) registrato l'operazione, la offriamo noi sopra il servizio, così compare comunque.
+ */
+export function operazioni(app) {
   const esterne = [];
   try { app.bus.emit('batch:operations', esterne); } catch (e) { console.error(e); }
+  const ha = (...ids) => esterne.some((x) => ids.includes(x?.id));
+  const sv = app.services || {};
+  const prog = (ctx) => ({ set() {}, signal: ctx.signal, get cancelled() { return !!ctx.signal?.aborted; } });
+  if (typeof sv.ocr === 'function' && !ha('ocr', 'conv-ocr')) esterne.push({ id: 'ocr', label: 'Rendi ricercabile (OCR)', description: 'Riconosce il testo delle scansioni (italiano e inglese)', fields: [{ name: 'info', type: 'info', text: 'Le pagine che hanno già testo non vengono toccate.' }], summary: () => 'Rendi ricercabile (OCR)', runBytes: (b, _p, ctx) => sv.ocr(b, { deskew: true, progress: prog(ctx) }) });
+  if (typeof sv.protect === 'function' && !ha('proteggi')) esterne.push({ ...operazioneProteggi(sv.protect), esterna: true });
+  if (typeof sv.compress === 'function' && !ha('comprimi-sotto') && !ha('riduci')) esterne.push({ id: 'comprimi-sotto', label: 'Riduci dimensioni (sotto N MB)', description: 'Comprime le immagini fino a stare sotto la dimensione scelta', fields: [{ name: 'mb', label: 'Dimensione massima (MB)', type: 'number', value: 10, min: 0.2, max: 500, step: 0.1 }], summary: (p) => `Riduci sotto ${p.mb} MB`, validate: (p) => (!(+p.mb > 0) ? 'Scrivi una dimensione in MB.' : null), runBytes: async (b, p, ctx) => { const r = await sv.compress(b, { maxBytes: Math.round(+p.mb * 1048576), signal: ctx.signal }); if (r && r.reached === false) ctx.note = [ctx.note, `sopra ${p.mb} MB anche dopo la riduzione`].filter(Boolean).join(' — '); return r?.bytes || b; } });
+  if (typeof sv.pdfa === 'function' && !ha('pdfa', 'conv-pdfa')) esterne.push({ id: 'pdfa', label: 'Converti in PDF/A', description: 'Formato per la conservazione, con verifica', fields: [{ name: 'part', label: 'Variante', type: 'select', value: '2', options: [{ value: '2', label: 'PDF/A-2 (consigliata)' }, { value: '3', label: 'PDF/A-3' }] }, { name: 'ocr', label: 'Riconosci il testo delle scansioni', type: 'checkbox', value: true }], summary: (p) => `PDF/A-${p.part}`, runBytes: async (b, p, ctx) => { const r = await sv.pdfa(b, { part: +p.part || 2, ocr: !!p.ocr, lang: 'it-IT', progress: prog(ctx) }); const ko = (r.verifica || []).filter((x) => !x.ok).length; ctx.note = [ctx.note, ko ? `PDF/A: ${ko} controlli non superati` : 'PDF/A verificato'].filter(Boolean).join(' — '); return r.bytes; } });
+  if (typeof sv.sanitize === 'function' && !ha('sanifica') && !ha('sanitize')) esterne.push({ id: 'sanifica', label: 'Togli contenuti nascosti', description: 'Metadati, commenti, allegati, JavaScript, livelli nascosti, versioni precedenti', fields: [{ name: 'commenti', label: 'Togli anche i commenti', type: 'checkbox', value: true }, { name: 'allegati', label: 'Togli anche gli allegati', type: 'checkbox', value: true }], summary: () => 'Togli contenuti nascosti', runBytes: async (b, p) => (await sv.sanitize(b, { metadati: true, javascript: true, allegati: !!p.allegati, commenti: !!p.commenti, campiNascosti: true, livelliNascosti: true, datiPrivati: true, xfa: true, versioni: true })).bytes });
+  if (typeof sv.oscuraDatiPersonali === 'function' && !ha('oscura-modelli')) esterne.push({ id: 'oscura-modelli', label: 'Oscura dati personali (modelli)', description: 'Codici fiscali, IBAN e altri dati trovati con i modelli', fields: [{ name: 'info', type: 'info', text: 'Oscuramento definitivo: il testo sotto viene eliminato.' }], summary: () => 'Oscura dati personali', runBytes: async (b, _p, ctx) => { const r = await sv.oscuraDatiPersonali(b, { progress: prog(ctx) }); ctx.note = [ctx.note, `${r.trovati ?? 0} dati oscurati`].filter(Boolean).join(' — '); return r.bytes; } });
   return tutteLeOperazioni(esterne);
 }
 
@@ -51,7 +65,7 @@ export function openBatch(app, deps, preset = null) {
   });
   const col1 = h('section', { class: 'av-box' }, h('h3', {}, h('span', { class: 'av-step-n' }, '1'), 'File da elaborare'),
     h('div', { class: 'av-row' },
-      h('button', { class: 'btn primary', onclick: async () => { try { const r = await chooseFolder(app, { recursive: state.recursive, skipDirs: ['Elaborati'], title: 'Scegli la cartella con i PDF' }); if (r) { addItems(r.items, r.folder, r.label); if (r.truncated) app.ui.toast('La cartella contiene moltissimi file: ne sono stati presi i primi 20.000.', { kind: 'warning' }); } } catch (e) { app.reportError(e, 'Cartella non leggibile'); } } }, 'Scegli cartella…'),
+      h('button', { class: 'btn primary', onclick: async () => { try { const r = await chooseFolder(app, { recursive: state.recursive, skipDirs: ['Elaborati'], title: 'Scegli la cartella con i PDF' }); if (r) { addItems(r.items, r.folder, r.label); if (r.truncated) app.ui.toast('La cartella contiene moltissimi file: ne sono stati presi i primi 200.000.', { kind: 'warning' }); } } catch (e) { app.reportError(e, 'Cartella non leggibile'); } } }, 'Scegli cartella…'),
       h('button', { class: 'btn', onclick: async () => { try { addItems(await chooseFiles(app, { title: 'Aggiungi PDF' })); } catch (e) { app.reportError(e, 'File non aggiunti'); } } }, 'Aggiungi file…'),
       state.items ? h('button', { class: 'btn', onclick: () => { state.items = []; state.folder = null; state.label = ''; renderFiles(); } }, 'Svuota') : null),
     h('label', { class: 'chk', for: 'av-b-rec' }, recursive, 'Comprendi le sottocartelle'),
@@ -150,68 +164,115 @@ export function openBatch(app, deps, preset = null) {
       const ok = await app.ui.confirm(`Vuoi davvero sostituire ${state.items.length} file originali con quelli elaborati? Non si potrà annullare.`, { title: 'Sostituire gli originali?', okLabel: 'Sostituisci gli originali', danger: true });
       if (!ok) return;
     }
-    const esiti = [];
-    const t0 = Date.now();
+    const lavoro = nuovoLavoro({ items: state.items, passi: state.passi, opzioni: { folder: state.folder, dest: state.dest, destFolder: state.destFolder, nome: state.nome, label: state.label } });
+    await esegui(lavoro, state.items, state.passi);
+  }
+
+  /** Esegue (o riprende) un lavoro: salva lo stato ogni pochi file, così dopo un'interruzione si riparte da lì. */
+  async function esegui(lavoro, items, passi) {
+    const byKey = new Map(items.map((it) => [chiaveDi(it), it]));
+    const opz = lavoro.opzioni;
+    const t0 = Date.now(); let ultimoSalvataggio = 0;
+    const salva = async (forza) => {
+      if (!isDesktop()) return;
+      if (!forza && Date.now() - ultimoSalvataggio < 3000) return;
+      ultimoSalvataggio = Date.now();
+      try { await call(app, 'job-save', { json: JSON.stringify(lavoro) }); } catch (e) { console.warn('[avanzati] stato non salvato', e); }
+    };
+    const registroDove = async () => {
+      const csv = new TextEncoder().encode(registroCsv(lavoro));
+      const folder = opz.dest === 'other' ? opz.destFolder : opz.folder;
+      if (isDesktop() && folder) { try { return await call(app, 'write', { folder, sub: opz.dest === 'other' ? '' : 'Elaborati', name: `registro_azioni_guidate_${lavoro.id}.csv`, bytes: csv, overwrite: true }); } catch {} }
+      return null;
+    };
+    const scrivi = async (d, name, bytes) => {
+      if (d.folder && isDesktop()) return call(app, 'write', { folder: d.folder, sub: d.sub, name, bytes, overwrite: d.overwrite });
+      return writeOut(app, null, { name, bytes });
+    };
+    await salva(true);
+    const todo = daFare(lavoro);
     const done = await app.ui.withProgress('Azioni guidate', async (p) => {
-      for (let i = 0; i < state.items.length; i++) {
+      const c0 = conteggi(lavoro);
+      for (let i = 0; i < todo.length; i++) {
         if (p.cancelled) break;
-        const it = state.items[i];
-        p.set(i / state.items.length, `File ${i + 1} di ${state.items.length}: ${it.name}`);
-        const ctx = { index: i, name: it.name };
+        const rec = todo[i]; const it = byKey.get(rec.k) || { ...rec, read: () => call(app, 'read', { path: rec.path }) };
+        const k = c0.fatti + i;
+        const el = (Date.now() - t0) / 1000; const rate = i ? el / i : 0;
+        p.set(k / lavoro.items.length, `File ${k + 1} di ${lavoro.items.length}: ${it.name}${i > 5 ? ` — circa ${Math.ceil((todo.length - i) * rate / 60)} min alla fine` : ''}`);
+        const dest = destinazione(it, opz);
+        // ctx.scriviFile: le operazioni che producono altri file (.docx, .txt…) li scrivono accanto al risultato
+        const ctx = { index: lavoro.items.indexOf(rec), name: it.name, signal: p.signal, scriviFile: (nome, b) => scrivi({ ...dest, overwrite: true }, nome, b) };
+        const s0 = performance.now();
         try {
           if (it.size > MAX_FILE) throw new SkipError('Il file è troppo grande (oltre 500 MB).');
           const bytes = await it.read();
-          const out = await eseguiSequenza(bytes, state.passi, { PDFLib: app.lib.PDFLib, openPdfLib: (b) => app.lib.openPdfLib(b), savePdfLib: (d) => app.lib.savePdfLib(d), ops, ctx, signal: p.signal });
-          const name = state.nome === 'contenuto' ? await nomeDalContenuto(out, it.name, app.settings.get('avanzati.rinomina.regola')) : nomeUscita(it.name, { modo: state.nome });
-          if (state.nome === 'contenuto') ctx.note = [ctx.note, `nuovo nome: ${name}`].filter(Boolean).join(' — ');
-          let dove;
-          if (state.dest === 'overwrite' && it.path) dove = await call(app, 'write', { folder: dirname(it.path), name: basename(it.path), bytes: out, overwrite: true });
-          else if (state.dest === 'other' && state.destFolder) dove = await writeOut(app, state.destFolder, { name, bytes: out });
-          else if (it.path) {
-            // sottocartella «Elaborati» accanto all'originale, mantenendo la struttura delle sottocartelle
-            const base = state.folder && it.path.startsWith(state.folder) ? state.folder : dirname(it.path);
-            const relDir = state.folder && it.path.startsWith(state.folder) ? dirname(it.rel.replace(/\\/g, '/')) : '';
-            dove = await call(app, 'write', { folder: base, sub: ['Elaborati', relDir && relDir !== it.rel ? relDir : ''].filter(Boolean).join('/'), name, bytes: out });
-          } else dove = await writeOut(app, null, { name, bytes: out });
-          esiti.push({ it, ok: true, dove, note: ctx.note || '' });
+          const out = await eseguiSequenza(bytes, passi, { PDFLib: app.lib.PDFLib, openPdfLib: (b) => app.lib.openPdfLib(b), savePdfLib: (d) => app.lib.savePdfLib(d), ops, ctx, signal: p.signal });
+          const name = opz.nome === 'contenuto' ? await nomeDalContenuto(out, it.name, app.settings.get('avanzati.rinomina.regola')) : nomeUscita(it.name, { modo: opz.nome });
+          if (opz.nome === 'contenuto') ctx.note = [ctx.note, `nuovo nome: ${name}`].filter(Boolean).join(' — ');
+          const dove = await scrivi(dest, opz.dest === 'overwrite' && it.path ? basename(it.path) : name, out);
+          registra(lavoro, rec, { s: 'ok', dove, nota: ctx.note || '', ms: performance.now() - s0 });
         } catch (e) {
           if (e?.name === 'AbortError') break;
-          esiti.push({ it, ok: false, skip: e instanceof SkipError, motivo: e?.message || String(e) });
+          registra(lavoro, rec, { s: e instanceof SkipError ? 'saltato' : 'errore', motivo: e?.message || String(e), ms: performance.now() - s0 });
         }
-        await new Promise((r) => setTimeout(r, 0)); // lascia respirare l'interfaccia
+        await salva(false);
+        if (i % 4 === 3) await new Promise((r) => setTimeout(r, 0)); // lascia respirare l'interfaccia
       }
       return true;
     });
-    const prot = state.passi.find((s) => s.op === 'protocollo');
+    const cc = conteggi(lavoro);
+    const registro = await registroDove();
+    if (isDesktop()) { if (cc.mancanti) await salva(true); else await call(app, 'job-clear').catch(() => {}); }
+    const prot = passi.find((s) => s.op === 'protocollo');
     if (prot) {
       const base = parseInt(String(prot.params.numero).replace(/\D/g, ''), 10);
-      const usati = esiti.filter((e) => e.ok).length;
-      if (Number.isFinite(base) && usati) app.settings.set('avanzati.protocollo.contatore', { anno: new Date().getFullYear(), prossimo: base + state.items.length });
+      if (Number.isFinite(base) && cc.ok) app.settings.set('avanzati.protocollo.contatore', { anno: new Date().getFullYear(), prossimo: base + lavoro.items.length });
     }
-    mostraRapporto(esiti, Date.now() - t0, done === undefined);
+    mostraRapporto(lavoro, Date.now() - t0, done === undefined || cc.mancanti > 0, registro);
   }
 
-  function mostraRapporto(esiti, ms, annullato) {
+  // lavoro interrotto (chiusura dell'app, annullamento): proponi di riprenderlo
+  if (isDesktop()) {
+    call(app, 'job-load').then((json) => {
+      let l = null; try { l = json && JSON.parse(json); } catch { l = null; }
+      if (!lavoroValido(l)) return;
+      const cc = conteggi(l);
+      if (!cc.mancanti) return;
+      const box = h('section', { class: 'av-box av-resume' },
+        h('h3', {}, 'Elaborazione interrotta'),
+        h('p', {}, `Il ${new Date(l.aggiornato).toLocaleString('it-IT')} un'elaborazione di ${cc.totale} file si è fermata: ${cc.fatti} fatti, ${cc.mancanti} da fare. Le impostazioni e l'elenco dei file sono stati conservati (le password no).`),
+        h('div', { class: 'av-row' },
+          h('button', { class: 'btn primary', onclick: async () => {
+            for (const s of l.passi) if (s.op === 'proteggi' && !s.params?.password) { const o = ops.find((x) => x.id === 'proteggi'); const pp = await askParams(app, o, s.params); if (!pp) return; s.params = pp; }
+            const err = validaSequenza(l.passi, ops); if (err) return app.ui.toast(err, { kind: 'warning' });
+            box.remove(); await esegui(l, [], l.passi);
+          } }, `Riprendi (${cc.mancanti} file)`),
+          h('button', { class: 'btn', onclick: async () => { if (await app.ui.confirm('Dimenticare l\'elaborazione interrotta? I file già elaborati restano dove sono.', { okLabel: 'Dimentica' })) { await call(app, 'job-clear').catch(() => {}); box.remove(); } } }, 'Dimentica')));
+      pane.body.prepend(box);
+    }).catch(() => {});
+  }
+
+  function mostraRapporto(lavoro, ms, interrotto, registro) {
     report.innerHTML = '';
-    const ok = esiti.filter((e) => e.ok); const ko = esiti.filter((e) => !e.ok);
+    const cc = conteggi(lavoro);
     const sec = Math.max(1, Math.round(ms / 1000));
+    const righe = lavoro.items.map((it) => ({ it, e: lavoro.esiti[it.k] })).filter((x) => x.e);
+    const problemi = righe.filter((x) => x.e.s !== 'ok');
+    const mostrati = [...problemi.slice(0, 500), ...righe.filter((x) => x.e.s === 'ok').slice(0, Math.max(0, 200 - Math.min(problemi.length, 200)))];
     report.append(h('section', { class: 'av-box' },
       h('h3', {}, 'Rapporto finale'),
-      h('p', { class: 'av-big-ok' }, `${ok.length} file elaborati correttamente${ko.length ? `, ${ko.length} non elaborati` : ''}${annullato ? ' (operazione interrotta)' : ''} — ${sec} s.`),
+      h('p', { class: 'av-big-ok' }, `${cc.ok} file elaborati${cc.saltati ? `, ${cc.saltati} saltati` : ''}${cc.errori ? `, ${cc.errori} non riusciti` : ''}${interrotto && cc.mancanti ? ` — interrotta: ${cc.mancanti} da fare (riprendi riaprendo Azioni guidate)` : ''} — ${sec} s.`),
+      registro ? h('p', { class: 'av-note' }, `Registro completo salvato in: ${registro}`) : null,
       h('div', { class: 'av-row' },
-        ok[0]?.dove && isDesktop() ? h('button', { class: 'btn', onclick: () => app.platform.showInFolder(ok[0].dove) }, 'Mostra nella cartella') : null,
-        h('button', { class: 'btn', onclick: () => app.platform.download(new TextEncoder().encode(rapportoTesto(esiti)), 'rapporto_azioni_guidate.txt') }, 'Salva il rapporto (testo)')),
+        righe.find((x) => x.e.s === 'ok')?.e.dove && isDesktop() ? h('button', { class: 'btn', onclick: () => app.platform.showInFolder(righe.find((x) => x.e.s === 'ok').e.dove) }, 'Mostra nella cartella') : null,
+        h('button', { class: 'btn', onclick: () => app.platform.download(new TextEncoder().encode(registroCsv(lavoro)), 'registro_azioni_guidate.csv') }, 'Scarica il registro (CSV)')),
+      righe.length > mostrati.length ? h('p', { class: 'av-note' }, `Qui sotto: tutti i file con problemi (fino a 500) e alcuni di quelli riusciti. L'elenco completo è nel registro.`) : null,
       h('table', {}, h('tr', {}, h('th', {}, 'File'), h('th', {}, 'Esito'), h('th', {}, 'Dettagli')),
-        esiti.map((e) => h('tr', {}, h('td', {}, e.it.rel || e.it.name),
-          h('td', { class: e.ok ? 'av-ok' : e.skip ? 'av-skip' : 'av-ko' }, e.ok ? 'Fatto' : e.skip ? 'Saltato' : 'Non riuscito'),
-          h('td', {}, e.ok ? [e.note, e.dove].filter(Boolean).join(' — ') : e.motivo))))));
+        mostrati.map(({ it, e }) => h('tr', {}, h('td', {}, it.rel || it.name),
+          h('td', { class: e.s === 'ok' ? 'av-ok' : e.s === 'saltato' ? 'av-skip' : 'av-ko' }, e.s === 'ok' ? 'Fatto' : e.s === 'saltato' ? 'Saltato' : 'Non riuscito'),
+          h('td', {}, e.s === 'ok' ? [e.nota, e.dove].filter(Boolean).join(' — ') : e.motivo))))));
     report.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
-}
-
-function rapportoTesto(esiti) {
-  return ['Rapporto delle azioni guidate — Leggio', new Date().toLocaleString('it-IT'), '',
-    ...esiti.map((e) => `${e.ok ? 'FATTO     ' : e.skip ? 'SALTATO   ' : 'NON RIUSCITO'}  ${e.it.rel || e.it.name}  ${e.ok ? e.dove || '' : e.motivo}`)].join('\r\n');
 }
 
 function defaultsFor(app, o) {

@@ -4,7 +4,8 @@ import { applicaProtocollo, POSIZIONI, DIREZIONI, oggi, normalizzaData, contator
 const KEY = 'avanzati.protocollo';
 
 export function preferenze(app) {
-  return { ente: '', ufficio: '', direzione: 'entrata', classificazione: '', posizione: 'alto-destra', pagine: 'prima', colore: '#1f4e9a', cifre: 0, automatico: true, ...app.settings.get(KEY, {}) };
+  const e = app.services?.profiloEnte?.() || {};
+  return { ente: e.sigla || e.denominazione || '', ufficio: e.ufficio || '', direzione: 'entrata', classificazione: '', posizione: 'alto-destra', pagine: 'prima', colore: '#1f4e9a', cifre: 0, automatico: true, ...app.settings.get(KEY, {}) };
 }
 
 export async function timbroProtocollo(app, deps) {

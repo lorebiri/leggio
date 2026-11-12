@@ -24,7 +24,8 @@ const extOf = (n) => (String(n).match(/\.([^.\\/]+)$/)?.[1] || '').toLowerCase()
 
 /** Elemento sorgente: { name, rel, path, size, mtime, read() → Uint8Array } */
 export function fileItem(f) {
-  return { name: f.name, rel: f.webkitRelativePath || f.name, path: null, size: f.size, mtime: f.lastModified, file: f, read: async () => new Uint8Array(await f.arrayBuffer()) };
+  // nel browser webkitRelativePath comincia con il nome della cartella scelta: lo togliamo (come nell'app)
+  return { name: f.name, rel: (f.webkitRelativePath || '').split('/').slice(1).join('/') || f.name, path: null, size: f.size, mtime: f.lastModified, file: f, read: async () => new Uint8Array(await f.arrayBuffer()) };
 }
 function nativeItem(app, f) {
   return { name: f.name, rel: f.rel || f.name, path: f.path, size: f.size, mtime: f.mtime, read: () => call(app, 'read', { path: f.path }) };
@@ -38,7 +39,7 @@ export async function chooseFolder(app, { exts = ['pdf'], recursive = true, titl
   if (isDesktop()) {
     const folder = await call(app, 'choose-folder', { title });
     if (!folder) return null;
-    const r = await call(app, 'list', { folder, exts, recursive, max: 20000, skipDirs });
+    const r = await call(app, 'list', { folder, exts, recursive, max: 200000, skipDirs });
     return { folder, label: folder, items: r.files.map((f) => nativeItem(app, f)), truncated: r.truncated, errors: r.errors };
   }
   const files = await pickInput({ directory: true });
@@ -50,7 +51,7 @@ export async function chooseFolder(app, { exts = ['pdf'], recursive = true, titl
 
 /** Elenca di nuovo una cartella già autorizzata (solo app). */
 export async function relist(app, folder, { exts = ['pdf'], recursive = false } = {}) {
-  const r = await call(app, 'list', { folder, exts, recursive, max: 20000 });
+  const r = await call(app, 'list', { folder, exts, recursive, max: 200000 });
   return r.files.map((f) => nativeItem(app, f));
 }
 

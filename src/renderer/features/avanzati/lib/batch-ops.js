@@ -138,9 +138,16 @@ export const OPERAZIONI = [
     summary: () => 'Ottimizza (compressione leggera)',
     run() { /* il salvataggio con flussi di oggetti compatti è già la compressione */ },
   },
-  {
-    id: 'proteggi', label: 'Proteggi con password', description: 'Chiede una password per aprire il file',
-    last: true,
+];
+
+/**
+ * «Proteggi con password» sopra un servizio di cifratura (app.services.protect dell'area sicurezza, che cifra anche
+ * le stringhe). Nessuna cifratura propria: se il servizio manca, l'operazione non viene offerta.
+ * protect(bytes, { userPassword, permissions: { stampa: 'high'|'none', copia } }) → bytes
+ */
+export function operazioneProteggi(protect) {
+  return {
+    id: 'proteggi', label: 'Proteggi con password', description: 'Chiede una password per aprire il file', last: true,
     fields: [
       { name: 'password', label: 'Password per aprire', type: 'password', value: '', required: true },
       { name: 'stampa', label: 'Consenti la stampa', type: 'checkbox', value: true },
@@ -148,12 +155,26 @@ export const OPERAZIONI = [
     ],
     summary: () => 'Proteggi con password',
     validate: (p) => (String(p.password || '').length < 4 ? 'La password deve avere almeno 4 caratteri.' : null),
-    run(doc, PDFLib, p) {
-      const owner = Array.from(crypto.getRandomValues(new Uint8Array(18)), (b) => b.toString(16).padStart(2, '0')).join('');
-      doc.encrypt({ userPassword: String(p.password), ownerPassword: owner, permissions: { printing: p.stampa ? 'highResolution' : false, copying: !!p.copia, modifying: false, annotating: true, fillingForms: true, contentAccessibility: true, documentAssembly: false } });
+    runBytes: async (bytes, p) => {
+      const r = await protect(bytes, { userPassword: String(p.password), permissions: { stampa: p.stampa ? 'high' : 'none', copia: !!p.copia, modifica: false, assemblaggio: false } });
+      return r?.bytes || r;
     },
-  },
-];
+  };
+}
+
+/**
+ * Dove scrivere il risultato di un file. opz: { dest: 'sub'|'other'|'overwrite', folder, destFolder }
+ * it: { path, rel, name }. → { folder, sub, overwrite } (folder null = nessun percorso: nel browser si scarica)
+ */
+export function destinazione(it, opz) {
+  const dirOf = (p) => { const i = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\')); return i > 0 ? p.slice(0, i) : p; };
+  if (opz.dest === 'overwrite' && it.path) return { folder: dirOf(it.path), sub: '', overwrite: true };
+  if (opz.dest === 'other' && opz.destFolder) return { folder: opz.destFolder, sub: '', overwrite: false };
+  if (!it.path) return { folder: null, sub: '', overwrite: false };
+  const inFolder = opz.folder && it.path.startsWith(opz.folder);
+  const relDir = inFolder ? String(it.rel || '').replace(/\\/g, '/').split('/').slice(0, -1).join('/') : '';
+  return { folder: inFolder ? opz.folder : dirOf(it.path), sub: ['Elaborati', relDir].filter(Boolean).join('/'), overwrite: true };
+}
 
 export function tutteLeOperazioni(esterne = []) {
   const map = new Map(OPERAZIONI.map((o) => [o.id, o]));
@@ -181,11 +202,14 @@ export function validaSequenza(passi, ops) {
  */
 export async function eseguiSequenza(bytes, passi, env) {
   const byId = new Map(env.ops.map((o) => [o.id, o]));
+  // le operazioni ricevono sempre ctx.signal (per interrompersi a metà di un file lungo) e, se c'è, ctx.scriviFile
+  env.ctx = env.ctx || {};
+  if (env.signal && !env.ctx.signal) env.ctx.signal = env.signal;
   let cur = bytes;
   let doc = null;
   const flush = async () => { if (doc) { cur = await env.savePdfLib(doc); doc = null; } };
   for (const s of passi) {
-    if (env.signal?.aborted) throw new DOMException('Annullato', 'AbortError');
+    if (env.signal?.aborted || env.ctx.signal?.aborted) throw new DOMException('Annullato', 'AbortError');
     const o = byId.get(s.op);
     if (!o) throw new Error(`Operazione non disponibile: ${s.op}`);
     if (o.esterna) {

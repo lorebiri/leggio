@@ -116,3 +116,5 @@
 .av-side .av-dl { grid-template-columns: 1fr; gap: 0; }
 .av-side .av-dl dt { margin-top: 8px; font-size: 13px; }
 .av-small { font-size: 13px; }
+.av-input { padding: 5px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; min-width: 0; }
+.av-resume { border: 2px solid var(--warning); }

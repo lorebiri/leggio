@@ -19,6 +19,10 @@ import { isFattura } from './lib/fattura.js';
 import { looksLikeP7m } from './lib/cades.js';
 import { extOf } from './native.js';
 import { dichiarazioneConformita, rinominaIntelligente, apriEml } from './ui/coda.js';
+import { setupEnte, modificaProfiloEnte, inserisciEnteTool, compilaConEnte } from './ui/ente.js';
+import { registerDatiChiave } from './ui/datichiave.js';
+import { praticaMissione, fascicoloConIndice, pacchettoRendicontazione } from './ui/raccoglitori.js';
+import { prontoPubblicazione } from './ui/pubblicabile.js';
 
 export default function register(app) {
   const deps = {};
@@ -59,6 +63,36 @@ export default function register(app) {
     description: 'Mostra ricevute e messaggi PEC salvati (daticert.xml) e ne apre gli allegati',
     keywords: 'pec posta certificata eml daticert ricevuta accettazione consegna allegati email',
     run: async () => { const files = await app.platform.openFiles({ multiple: true, raw: true, title: 'Apri messaggio PEC', filters: [{ name: 'Messaggi di posta', extensions: ['eml'] }] }); for (const f of files || []) await deps.openEml(app, f.bytes, f.name); } });
+
+  // ---------- flussi dell'ufficio amministrativo ----------
+  setupEnte(app);
+  registerDatiChiave(app);
+  app.registerTool({ id: 'mission-file', name: 'Pratica di missione', category: 'crea', icon: 'merge', needsDoc: false,
+    description: 'Modulo e giustificativi (PDF, foto, scansioni) in un solo PDF sotto la dimensione scelta',
+    keywords: 'missione rimborso trasferta giustificativi scontrini ricevute biglietti foto heic pratica',
+    run: () => praticaMissione(app, deps) });
+  app.registerTool({ id: 'dossier-index', name: 'Fascicolo con indice', category: 'crea', icon: 'bookmark', needsDoc: false,
+    description: 'Unisce i documenti con pagina indice cliccabile e segnalibri (gare, rendicontazioni, ispezioni)',
+    keywords: 'fascicolo indice unisci combina allegati gara ispezione rendicontazione segnalibri sommario',
+    run: () => fascicoloConIndice(app, deps) });
+  app.registerTool({ id: 'reporting-package', name: 'Pacchetto per la rendicontazione', category: 'crea', icon: 'pages', needsDoc: false,
+    description: 'Un PDF per ogni voce di spesa con allegati numerati e riepilogo per Excel',
+    keywords: 'rendicontazione rendiconto pnrr progetto europeo voci di spesa giustificativi csv excel',
+    run: () => pacchettoRendicontazione(app, deps) });
+  app.registerTool({ id: 'publish-ready', name: 'Pronto per la pubblicazione', category: 'proteggi', icon: 'check',
+    description: 'Amministrazione Trasparente: oscura i dati personali, pulisci, PDF/A, accessibilità e rapporto',
+    keywords: 'amministrazione trasparente pubblicazione albo pubblicabile privacy oscura pdf/a accessibilità sito',
+    run: () => prontoPubblicazione(app, deps) });
+  app.registerTool({ id: 'entity-profile', name: 'Profilo dell\'ente', category: 'moduli', icon: 'settings', needsDoc: false,
+    description: 'Denominazione, sede, codice fiscale, P.IVA, codice IPA, PEC, direttore e firmatari',
+    keywords: 'ente istituto profilo dati dell\'ente denominazione codice ipa codice univoco pec direttore firmatari',
+    run: () => modificaProfiloEnte(app) });
+  app.registerTool({ id: 'insert-entity', name: 'Inserisci dati dell\'ente', category: 'moduli', icon: 'text',
+    description: 'Scegli il dato e fai clic sulla pagina dove scriverlo', keywords: 'ente intestazione denominazione inserisci timbro dati',
+    interactive: inserisciEnteTool(app) });
+  app.registerTool({ id: 'fill-entity', name: 'Compila con i dati dell\'ente', category: 'moduli', icon: 'form',
+    description: 'Riempie i campi del modulo (denominazione, P.IVA, codice IPA, PEC…)', keywords: 'compila modulo ente dati automatico',
+    run: () => compilaConEnte(app) });
 
   // ---------- azioni guidate, creazione, ricerca ----------
   app.registerTool({ id: 'batch', name: 'Azioni guidate (elaborazione in blocco)', category: 'avanzati', icon: 'layers', needsDoc: false,
