@@ -76,12 +76,16 @@ export class App {
     return (ext && this.openers.find((o) => o.extensions.includes(ext))) || null;
   }
   /** Apre un file qualunque {path, name, bytes}: gestori registrati, poi PDF. */
-  async openFile(file) {
+  /**
+   * Apre un file qualunque {path, name, bytes}: gestori registrati, poi PDF.
+   * opts (solo PDF): { page (1-based), search (testo da cercare ed evidenziare), readOnly }.
+   */
+  async openFile(file, opts = {}) {
     const op = this.openerFor(file.name);
     if (op) {
-      try { return await op.open(file, this); } catch (err) { this.reportError(err, `Impossibile aprire «${file.name}»`); return null; }
+      try { return await op.open(file, this, opts); } catch (err) { this.reportError(err, `Impossibile aprire «${file.name}»`); return null; }
     }
-    return this.openBytes(file.bytes, { name: file.name, path: /\.pdf$/i.test(file.name) ? file.path : null });
+    return this.openBytes(file.bytes, { ...opts, name: file.name, path: /\.pdf$/i.test(file.name) ? file.path : null });
   }
 
   /** Il documento contiene firme digitali (campo firma con valore)? Risultato memorizzato per versione. */
@@ -121,6 +125,12 @@ export class App {
    */
   async applyEdit(label, fn, doc = this.activeDoc, { signatureWarning = true } = {}) {
     if (!doc) throw new Error('Nessun documento aperto');
+    if (doc.readOnly) {
+      const v = await ui.choice({ title: 'Documento in sola lettura', message: `«${doc.name}» è aperto in sola lettura (per esempio dall'archivio). Per modificarlo lavora su una copia: l'originale resta com'è.`, buttons: [{ value: 'cancel', label: 'Lascia perdere' }, { value: 'copy', label: 'Lavora su una copia', primary: true }] });
+      if (v !== 'copy') return false;
+      doc.readOnly = false; doc.path = null; doc.name = doc.name.replace(/(\.pdf)?$/i, '_copia.pdf'); doc.dirty = true;
+      this.#renderTabs(); this.#updateTitle();
+    }
     if (signatureWarning && !(await this.#confirmSignedEdit(doc))) return false;
     if (!(await this.#confirmRestrictedEdit(doc))) return false;
     return this.#exclusive(doc, label, async () => {
@@ -203,9 +213,9 @@ export class App {
   }
 
   /** Apre byte come nuova scheda. opts: { name, path, dirty } */
-  async openBytes(bytes, { name, path, dirty = false, _repaired = false } = {}) {
+  async openBytes(bytes, { name, path, dirty = false, _repaired = false, page, search, readOnly } = {}) {
     const existing = path && this.docs.find((d) => d.path === path);
-    if (existing) { this.activate(existing); return existing; }
+    if (existing) { this.activate(existing); this.#applyOpenOptions(existing, { page, search }); return existing; }
     const displayName = name || 'Senza titolo.pdf';
     const pre = precheck(bytes, displayName);
     if (pre) { this.#openFailed(pre, displayName); return null; }
@@ -246,11 +256,25 @@ export class App {
       return null;
     } finally { clearTimeout(timer); prog?.close(); }
     if (dirty) doc.dirty = true;
+    if (readOnly) doc.readOnly = true;
     this.#watchForms(doc);
     this.docs.push(doc);
     this.activate(doc);
     this.bus.emit('document:loaded', { doc });
+    this.#applyOpenOptions(doc, { page, search });
     return doc;
+  }
+
+  /** Pagina e ricerca richieste all'apertura (es. dall'archivio): si applicano quando la vista è pronta. */
+  #applyOpenOptions(doc, { page, search } = {}) {
+    if (!page && !search) return;
+    const go = () => {
+      if (doc !== this.activeDoc) return;
+      if (page) this.viewer.page = Math.max(1, Math.min(doc.pageCount, Number(page) || 1));
+      if (search) { this.openFind(); const inp = this.el.findbar.querySelector('input[type=search]'); if (inp) { inp.value = String(search); this.viewer.find(String(search)); } }
+    };
+    if (this.viewer.pdfViewer.pagesCount && this.viewer.doc === doc) setTimeout(go, 0);
+    else this.bus.once('viewer:pagesinit', () => setTimeout(go, 0));
   }
 
   #openFailed(message, name) {
@@ -270,8 +294,11 @@ export class App {
   }
 
   /** Apre un percorso (solo app desktop), es. dai recenti. */
-  async openPath(p) {
-    try { const f = await platform.readFile(p); if (f) return this.openFile(f); }
+  async openPath(p, opts) {
+    // già aperto: si attiva e si applicano pagina/ricerca
+    const existing = this.docs.find((d) => d.path === p);
+    if (existing) { this.activate(existing); this.#applyOpenOptions(existing, opts); return existing; }
+    try { const f = await platform.readFile(p); if (f) return this.openFile(f, opts); }
     catch (err) { this.#openFailed(cleanIpcMessage(err?.message || err), p.split(/[\\/]/).pop()); }
     return null;
   }
@@ -342,6 +369,7 @@ export class App {
    */
   async save(doc = this.activeDoc, { as = false } = {}) {
     if (!doc || doc.closed) return false;
+    if (doc.readOnly && !as) as = true; // sola lettura: mai sovrascrivere l'originale
     try {
       return await this.#exclusive(doc, 'Salvataggio', async () => {
         const version = doc.version;
@@ -354,6 +382,7 @@ export class App {
           const r = await platform.saveAs(bytes, doc.name);
           if (!r) return false;
           if (r.path) { doc.path = r.path; doc.name = r.name; }
+          doc.readOnly = false;
         }
         doc.replaceBytes(bytes);
         if (doc.version === version) doc.markSaved();
@@ -557,7 +586,7 @@ export class App {
     for (const d of this.docs) {
       const unsaved = d.dirty || d.formsDirty;
       const tab = h('div', { class: 'tab' + (d === this.activeDoc ? ' active' : '') + (unsaved ? ' dirty' : ''), role: 'tab', 'aria-selected': String(d === this.activeDoc), title: (d.path || d.name) + (unsaved ? ' — modifiche non salvate' : ''), tabindex: 0 },
-        h('span', { class: 'tab-name' }, d.name),
+        h('span', { class: 'tab-name' }, d.name, d.readOnly ? h('small', { class: 'tab-ro' }, ' (sola lettura)') : null),
         h('button', { class: 'tab-close', title: 'Chiudi ' + d.name, 'aria-label': 'Chiudi ' + d.name, onclick: (e) => { e.stopPropagation(); this.closeDoc(d); }, html: icon('close', 13) }));
       tab.addEventListener('click', () => this.activate(d));
       tab.addEventListener('auxclick', (e) => { if (e.button === 1) this.closeDoc(d); });
@@ -721,7 +750,7 @@ export class App {
     const st = this.el.status; st.textContent = '';
     if (d) {
       if (d.dirty || d.formsDirty) st.append(h('span', { class: 'status-dirty' }, 'Modifiche non salvate ·'));
-      st.append(`${d.busy ? `In corso: ${d.queue.current}… · ` : ''}${d.pageCount} pagine · ${formatBytes(d.bytes.length)}${(d.bytes.length < 64 * MB ? this.isSigned(d) : d.data.__signed) ? ' · firmato digitalmente' : ''}${d.password ? ' · protetto da password' : ''}${d.path ? ' · ' + d.path : ''}`);
+      st.append(`${d.busy ? `In corso: ${d.queue.current}… · ` : ''}${d.pageCount} pagine · ${formatBytes(d.bytes.length)}${(d.bytes.length < 64 * MB ? this.isSigned(d) : d.data.__signed) ? ' · firmato digitalmente' : ''}${d.password ? ' · protetto da password' : ''}${d.readOnly ? ' · sola lettura' : ''}${d.path ? ' · ' + d.path : ''}`);
     }
   }
 
