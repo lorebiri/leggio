@@ -138,3 +138,10 @@ export function svgEl(tag, attrs) {
   for (const [k, v] of Object.entries(attrs)) if (v != null) el.setAttribute(k, v);
   return el;
 }
+/** Rettangolo PDF → CSS {left,top,width,height} (pdf.js 6 non ha più convertToViewportRectangle). */
+export function pdfRectToCss(app, pageIndex, rect) {
+  const vp = app.viewer.getViewport(pageIndex);
+  const [x1, y1] = vp.convertToViewportPoint(rect[0], rect[1]);
+  const [x2, y2] = vp.convertToViewportPoint(rect[2], rect[3]);
+  return { left: Math.min(x1, x2), top: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) };
+}

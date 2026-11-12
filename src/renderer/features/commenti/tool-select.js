@@ -2,7 +2,7 @@
 // selezionarlo, spostarlo, ridimensionarlo, cambiarne colore e testo, rispondere, impostare lo stato, eliminarlo.
 import { PALETTE, distToPolyline, pointInRect, normRect } from './geom.js';
 import { updateAnnot, deleteAnnots, addReply, setStatus, STATE_LABELS, TYPE_LABELS } from './annots.js';
-import { S, author, edit, overlayOf, eventPoint, cssRectToPdf, pageComments, rgb } from './ui-common.js';
+import { S, author, edit, overlayOf, eventPoint, cssRectToPdf, pageComments, rgb, pdfRectToCss } from './ui-common.js';
 import { editFreeTextInline } from './tools-draw.js';
 
 const state = { sel: null, app: null }; // sel: { key, pageIndex, comment }
@@ -90,7 +90,7 @@ function drawSelection(app) {
   const ov = app.viewer.getOverlay(s.pageIndex); if (!ov) return;
   const H = app.ui.h;
   const c = s.comment;
-  const r = app.viewer.pdfRectToCss(s.pageIndex, c.rect);
+  const r = pdfRectToCss(app, s.pageIndex, c.rect);
   const box = H('div', { class: 'lg-sel', 'data-key': c.key, style: { left: r.left + 'px', top: r.top + 'px', width: Math.max(8, r.width) + 'px', height: Math.max(8, r.height) + 'px' }, tabindex: -1, 'aria-label': `${TYPE_LABELS[c.type] || 'Commento'} selezionato` });
   if (canResize(c)) for (const hd of ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']) box.append(H('span', { class: 'lg-h lg-h-' + hd, 'data-h': hd }));
   ov.append(box);
@@ -134,7 +134,7 @@ export function selectTool(app) {
           if (state.sel && onBox && state.sel.pageIndex === pi) {
             if (e.button === 2) return;
             e.preventDefault(); ov.setPointerCapture(e.pointerId);
-            const r = app.viewer.pdfRectToCss(pi, state.sel.comment.rect);
+            const r = pdfRectToCss(app, pi, state.sel.comment.rect);
             drag = { ov, pi, start: p, handle, r, box: onBox, moved: false };
             return;
           }
@@ -147,7 +147,7 @@ export function selectTool(app) {
           e.preventDefault();
           const box = ov.querySelector('.lg-sel');
           ov.setPointerCapture(e.pointerId);
-          drag = { ov, pi, start: p, handle: null, r: app.viewer.pdfRectToCss(pi, hit.rect), box, moved: false };
+          drag = { ov, pi, start: p, handle: null, r: pdfRectToCss(app, pi, hit.rect), box, moved: false };
         };
         const onMove = (e) => {
           if (!drag) return;

@@ -8,6 +8,9 @@ import { S, setS, author, edit, swatchRow, segmented, rangeOpt, selectOpt, rgb, 
  * Area di testo sopra la pagina che si allarga mentre si scrive. → Promise<{ text, box } | null>
  * box in CSS della pagina. Invio+Ctrl/⌘ o clic fuori = conferma; Esc = annulla.
  */
+let openEditor = null; // finish() dell'editor aperto
+/** Conferma l'editor di testo aperto (se c'è). → true se ce n'era uno. */
+export function commitOpenEditor() { if (!openEditor) return false; openEditor(true); return true; }
 export function inlineEditor(app, ov, { left, top, width = 0, value = '', fontPx = 16, color = '#000', bg = 'transparent', border = '#e03131', minW = 120, placeholder = 'Scrivi qui…' }) {
   return new Promise((resolve) => {
     const H = app.ui.h;
@@ -15,15 +18,18 @@ export function inlineEditor(app, ov, { left, top, width = 0, value = '', fontPx
     ta.value = value;
     Object.assign(ta.style, { left: left + 'px', top: top + 'px', fontSize: fontPx + 'px', color, background: bg === 'none' ? 'rgba(255,255,255,.85)' : bg, borderColor: border, minWidth: Math.max(minW, width) + 'px' });
     const pageW = ov.clientWidth;
+    const meas = document.createElement('canvas').getContext('2d');
+    meas.font = `${fontPx}px Helvetica, Arial, sans-serif`;
     const grow = () => {
-      ta.style.width = '0px'; ta.style.height = '0px';
-      const w = Math.min(pageW - left - 4, Math.max(minW, width, ta.scrollWidth + 4));
+      const longest = Math.max(0, ...ta.value.split('\n').map((l) => meas.measureText(l + 'M').width));
+      const w = Math.max(40, Math.min(pageW - left - 4, Math.max(minW, width, longest + 10)));
       ta.style.width = w + 'px';
+      ta.style.height = '0px';
       ta.style.height = ta.scrollHeight + 2 + 'px';
     };
     let done = false;
     const finish = (ok) => {
-      if (done) return; done = true;
+      if (done) return; done = true; openEditor = null;
       const box = { left, top, width: ta.offsetWidth, height: ta.offsetHeight };
       ta.remove(); offR();
       resolve(ok && ta.value.trim() ? { text: ta.value.replace(/\s+$/, ''), box } : null);
@@ -38,6 +44,8 @@ export function inlineEditor(app, ov, { left, top, width = 0, value = '', fontPx
     ta.addEventListener('blur', () => setTimeout(() => finish(true), 0));
     // se la pagina viene ridisegnata (zoom) l'editor si conferma
     const offR = app.bus.on('page:rendered', ({ pageIndex }) => { if (pageIndex === +ov.dataset.pageIndex && !ov.isConnected) finish(true); });
+    commitOpenEditor();
+    openEditor = finish;
     ov.append(ta);
     grow(); ta.focus();
   });
@@ -57,8 +65,9 @@ export function stickyNoteTool(app) {
         app.viewer.setMode('tool', 'copy');
         const c = app.viewer.container;
         const onDown = async (e) => {
-          const ov = overlayOf(e.target); if (!ov || e.button !== 0) return;
+          const ov = overlayOf(e.target); if (!ov || e.button !== 0 || e.target.closest('.lg-inline')) return;
           e.preventDefault();
+          if (commitOpenEditor()) return; // il primo clic fuori conferma il testo in corso
           const p = eventPoint(app, ov, e);
           const pi = +ov.dataset.pageIndex;
           const scale = app.viewer.scale;
@@ -70,7 +79,7 @@ export function stickyNoteTool(app) {
         c.addEventListener('pointerdown', onDown);
         off = () => c.removeEventListener('pointerdown', onDown);
       },
-      deactivate() { off?.(); },
+      deactivate() { off?.(); commitOpenEditor(); },
     },
   };
 }
@@ -109,8 +118,9 @@ export function freeTextTool(app) {
         app.viewer.setMode('tool', 'text');
         const c = app.viewer.container;
         const onDown = async (e) => {
-          const ov = overlayOf(e.target); if (!ov || e.button !== 0) return;
+          const ov = overlayOf(e.target); if (!ov || e.button !== 0 || e.target.closest('.lg-inline')) return;
           e.preventDefault();
+          if (commitOpenEditor()) return;
           const p = eventPoint(app, ov, e);
           const pi = +ov.dataset.pageIndex;
           const f = freeTextOptions(app);
@@ -126,7 +136,7 @@ export function freeTextTool(app) {
         c.addEventListener('pointerdown', onDown);
         off = () => c.removeEventListener('pointerdown', onDown);
       },
-      deactivate() { off?.(); },
+      deactivate() { off?.(); commitOpenEditor(); },
     },
   };
 }

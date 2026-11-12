@@ -41,6 +41,7 @@ export function selectionByPage(app) {
       if (!str.trim()) continue;
       let entry = byPage.get(pageIndex);
       if (!entry) { entry = { rects: [], text: '' }; byPage.set(pageIndex, entry); }
+      if (entry.text && !/\s$/.test(entry.text) && !/^\s/.test(str)) entry.text += ' ';
       entry.text += str;
       for (const cr of sub.getClientRects()) {
         if (cr.width < 0.5 || cr.height < 0.5) continue;
@@ -171,6 +172,7 @@ export function installSelectionBar(app) {
       H('button', { class: 'lg-tbtn', onclick: async () => { hide(); await noteOnSelection(app, groups); } }, 'Nota'),
       H('button', { class: 'lg-tbtn', onclick: () => { navigator.clipboard?.writeText(sel.toString()); hide(); app.ui.toast('Testo copiato'); } }, 'Copia'));
     bar.addEventListener('pointerdown', (e) => e.preventDefault()); // non perdere la selezione
+    bar.addEventListener('mousedown', (e) => e.preventDefault());
     document.getElementById('overlay-root').append(bar);
     const bw = bar.offsetWidth, bh = bar.offsetHeight;
     let x = Math.min(innerWidth - bw - 8, Math.max(8, last.right - bw / 2));
