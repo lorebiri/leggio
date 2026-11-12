@@ -123,6 +123,35 @@ lunga 5 m e larga 5 m; 50 pagine con 5 000 annotazioni e 2 000 campi; font Arial
 | 3 001 segnalibri | pannello in 0,5 s (livelli profondi costruiti solo quando si aprono) |
 | 50 pagine × 100 annotazioni + 40 campi | pagina 1: 1 200 annotazioni e 200 campi disegnati |
 
+### Profilo di volume (ufficio con migliaia di documenti)
+`node test/stress/genera-volume.mjs` crea 200 PDF «da ufficio» (1–40 pagine, uno su dieci con una scansione, 34 MB in tutto);
+`node test/stress/volume-app.mjs` li apre nell'app vera (avviata con `--remote-debugging-port=9333`) e misura, con raccolta
+della memoria forzata prima di ogni misura. Risultati (Mac 8 GB, app Electron, 12/11/2026):
+
+| Fase | Documenti | Heap JS | RSS renderer | Worker pdf.js | prima della correzione (RSS / worker) |
+|---|---|---|---|---|---|
+| inizio | 0 | 8 MB | 117 MB | 0 | 127 MB / 0 |
+| 200 aperti in rapida successione | 200 | 12 MB | 409 MB | **1** | 544 MB / **200** |
+| chiusi fino a 50 | 50 | 11 MB | 406 MB | 1 | 926 MB / 50 |
+| dopo 300 cambi di scheda (uno ogni 20 ms) | 50 | 12 MB | 406 MB | 1 | 591 MB / 50 |
+| tutto chiuso | 0 | 10 MB | 309 MB | 1 | 424 MB / 0 |
+| secondo giro (50 aperti e chiusi) | 0 | 10 MB | **307 MB** (stabile) | 1 | **574 MB** (in crescita) |
+
+Apertura: **31 ms per file** (prima 72); cambio di scheda: mediana 2 ms, 95° percentile 3,5 ms, massimo 8,8 ms (sincrono;
+il disegno della pagina segue). Correzione: un solo worker di pdf.js condiviso da tutti i documenti (prima uno per documento,
+ciascuno con la propria memoria); le operazioni usa e getta (verifica al salvataggio, stampa) usano un worker proprio.
+Con molte schede compare il pulsante «Tutte le schede» (elenco completo) e la scheda attiva resta sempre visibile.
+
+### Stampa
+Dialogo con stampante (elenco reale del sistema), copie, fronte/retro, colori, pagine, qualità, timbro «COPIA» disegnato solo
+sulla stampa, «Ricorda queste scelte». Con una stampante scelta l'app stampa senza la finestra di sistema (`webContents.print`
+silenzioso); senza, si apre la finestra di sistema. Più documenti in un solo invio (strumento «Stampa più documenti…» o
+`app.printFiles`), al massimo 200 pagine per invio, pagina bianca fra un file e l'altro in fronte/retro. Collaudo nell'app:
+elenco stampanti reale (2 stampanti dell'ufficio), dialogo di Leggio, stampante inesistente → messaggio chiaro, finestra di
+stampa di sistema aperta e chiusa con «Annulla» (→ «Stampa annullata»). **Non stampato su carta**: l'invio finale con stampante
+scelta è stato verificato sostituendo la chiamata al main (opzioni ricevute corrette: stampante, 2 copie, fronte/retro lato lungo;
+6 pagine; con 3 file 1+6+2 pagine in fronte/retro: 10 pagine di cui 1 bianca). Nessuna stampante PDF virtuale disponibile.
+
 ## 5. Sicurezza dell'app Electron
 - `contextIsolation`, **`sandbox: true`**, `nodeIntegration: false`, `webviewTag: false`, `navigateOnDragDrop: false`.
 - Navigazione: solo `dist/index.html` (o l'URL di sviluppo); tutto il resto bloccato. `setWindowOpenHandler` nega sempre;
