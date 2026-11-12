@@ -3,7 +3,7 @@
 // campi modulo e link restano validi; le copie e le pagine esterne ricevono campi modulo propri.
 import {
   PDFDocument, PDFName, PDFArray, PDFDict, PDFRef, PDFNumber, PDFString, PDFHexString,
-  PDFPage, PDFPageLeaf, degrees,
+  PDFPage, PDFPageLeaf, PDFObjectCopier, degrees,
 } from '@cantoo/pdf-lib';
 import { ErroreUtente, validaIndici, aBlocchi } from './util.js';
 
@@ -320,8 +320,7 @@ export async function copiaPagineEsterne(doc, src, indici) {
       let font = dr.lookupMaybe(N('Font'), PDFDict);
       if (!font) { font = ctx.obj({}); dr.set(N('Font'), font); }
       // copia dei font mancanti (oggetti piccoli)
-      const { PDFObjectCopier } = await import('@cantoo/pdf-lib');
-      const copier = PDFObjectCopier ? PDFObjectCopier.for(src.context, ctx) : null;
+      const copier = PDFObjectCopier.for(src.context, ctx);
       for (const [k, v] of srcFont.entries()) {
         if (font.get(k) !== undefined) continue;
         if (copier) font.set(k, copier.copy(v));
