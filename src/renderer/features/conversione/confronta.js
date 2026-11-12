@@ -91,8 +91,10 @@ function pagMod(m, A, B) {
   return { pa, pb };
 }
 
+const testiCache = new WeakMap();
+const testi = (P) => { let t = testiCache.get(P); if (!t) { t = P.parole.map((w) => w.text); testiCache.set(P, t); } return t; };
 function testoModifica(m, A, B) {
-  return descriviModifica(m, A.parole.map((w) => w.text), B.parole.map((w) => w.text), 120);
+  return descriviModifica(m, testi(A), testi(B), 120);
 }
 
 /** Rapporto HTML autonomo delle modifiche. */
@@ -173,11 +175,12 @@ function apriVista(app, res, nomeA, nomeB, pdfA, pdfB, chiudiExtra) {
   function costruisci(pane, info, pdf, lato) {
     const pages = [];
     const W = colW();
+    const frag = document.createDocumentFragment();
     info.pagine.forEach((pg, i) => {
       const s = W / pg.width;
       const div = h('div', { class: 'conv-cmp-page', style: { width: W + 'px', height: Math.round(pg.height * s) + 'px' }, 'data-i': i }, h('span', { class: 'conv-cmp-pn' }, String(i + 1)));
       pages.push({ div, s, canvas: null, pdf, i, rendering: false });
-      pane.append(div);
+      frag.append(div);
     });
     // evidenziazioni
     const tipoLato = (m) => (m.tipo === 'sostituzione' ? 'mod' : lato === 'A' ? 'del' : 'ins');
@@ -199,6 +202,7 @@ function apriVista(app, res, nomeA, nomeB, pdfA, pdfB, chiudiExtra) {
       const pg = pages[d.page]; if (!pg) return;
       for (const q of d.riquadri) pg.div.append(h('div', { class: 'conv-hl vis', 'data-k': modifiche.length + k, style: { left: q.x0 * pg.s + 'px', top: q.y0 * pg.s + 'px', width: (q.x1 - q.x0) * pg.s + 'px', height: (q.y1 - q.y0) * pg.s + 'px' } }));
     });
+    pane.append(frag);
     const io = new IntersectionObserver((entries) => {
       for (const e of entries) {
         const pg = pages[Number(e.target.dataset.i)];
