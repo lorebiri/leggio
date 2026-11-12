@@ -153,3 +153,27 @@ describe('tabelle', () => {
     expect(t.rows[1]).toEqual(['a1', '', 'c1']);
   });
 });
+
+import { tabellaDaFrammenti } from '../src/renderer/features/conversione/lib/testo.js';
+describe('griglia da riquadro', () => {
+  it('allinea le colonne anche con numeri allineati a destra', () => {
+    const R = (str, x1, y) => L(str, x1 - str.length * 5, y);
+    const f = [L('Fattura', 50, 100), R('Imponibile', 300, 100), R('IVA', 400, 100),
+      L('n. 12/2026', 50, 114), R('1.234,56', 300, 114), R('271,60', 400, 114),
+      L('n. 13/2026', 50, 128), R('99,00', 300, 128), R('21,78', 400, 128)];
+    expect(tabellaDaFrammenti(f)).toEqual([['Fattura', 'Imponibile', 'IVA'], ['n. 12/2026', '1.234,56', '271,60'], ['n. 13/2026', '99,00', '21,78']]);
+  });
+  it('riquadro vuoto → nessuna riga', () => { expect(tabellaDaFrammenti([])).toEqual([]); });
+});
+
+describe('paragrafo spezzato tra colonne', () => {
+  it('viene ricomposto', () => {
+    const f = [];
+    for (let i = 0; i < 5; i++) f.push(L(`riga sinistra ${i} di un testo che continua sempre`, 40, 200 + i * 12));
+    f.push(L('e qui finisce la colonna senza punto', 40, 260));
+    f.push(L('continua nella seconda colonna fino alla fine.', 320, 200));
+    for (let i = 1; i < 6; i++) f.push(L(`Nuova frase destra numero ${i} con testo lungo.`, 320, 200 + i * 12 + (i === 1 ? 12 : 0)));
+    const b = ricostruisciPagina(f, { width: 600 });
+    expect(b[0].text).toContain('senza punto continua nella seconda colonna');
+  });
+});

@@ -308,6 +308,7 @@ export function ricostruisciPagina(frags, opts = {}) {
   const regions = ordineLettura(boxes);
   const blocks = [];
   for (const region of regions) {
+    const startCount = blocks.length;
     const tablesHere = region.filter((b) => b.isTable);
     const lines = region.filter((b) => !b.isTable);
     // le tabelle si inseriscono nella posizione verticale giusta
@@ -320,8 +321,21 @@ export function ricostruisciPagina(frags, opts = {}) {
       else pending.push(it.l);
     }
     flushLines();
+    if (blocks.length > startCount) blocks[startCount].regionStart = true;
   }
-  return blocks;
+  // un paragrafo spezzato tra due colonne (finisce senza punteggiatura, riprende in minuscolo) torna intero
+  const out = [];
+  for (const b of blocks) {
+    const prev = out[out.length - 1];
+    if (b.regionStart && prev && prev.type === 'paragraph' && b.type === 'paragraph' && !/[.!?:;»"”)]$/.test(prev.text) && /^[a-zà-ÿ]/.test(b.text)) {
+      prev.text = joinLines(prev.text, b.text);
+      prev.runs = mergeRuns([...prev.runs, { text: ' ', bold: false, italic: false }, ...b.runs]);
+      continue;
+    }
+    out.push(b);
+  }
+  for (const b of out) delete b.regionStart;
+  return out;
 }
 
 /** Unisce in una riga i segmenti della stessa riga (es. testo con tabulazioni non riconosciuto come tabella). */
@@ -432,4 +446,28 @@ export function blocchiInTesto(blocks) {
     if (b.type === 'list') return (b.ordered ? '' : '• ') + b.text;
     return b.text;
   }).join('\n\n');
+}
+
+/**
+ * Griglia di celle da un insieme di frammenti (es. un riquadro selezionato o un'intera pagina):
+ * righe per linea di base, colonne dagli spazi verticali comuni. → [[cella]]
+ */
+export function tabellaDaFrammenti(frags, { gapFactor = 1.0 } = {}) {
+  const segs = costruisciSegmenti(frags, { gapFactor });
+  if (!segs.length) return [];
+  const size = median(segs.map((s) => s.size)) || 10;
+  const gs = gutters(segs, Math.max(3, size * 0.5));
+  const edges = [-Infinity, ...gs.map((g) => (g[0] + g[1]) / 2), Infinity];
+  const nCols = gs.length + 1;
+  const byRow = new Map();
+  for (const s of segs) { if (!byRow.has(s.rowIndex)) byRow.set(s.rowIndex, []); byRow.get(s.rowIndex).push(s); }
+  return [...byRow.entries()].sort((a, b) => a[0] - b[0]).map(([, r]) => {
+    const cells = Array.from({ length: nCols }, () => '');
+    for (const s of r.sort((a, b) => a.x0 - b.x0)) {
+      let c = 0;
+      while (c < nCols - 1 && s.x0 >= edges[c + 1]) c++;
+      cells[c] = cells[c] ? cells[c] + ' ' + s.text : s.text;
+    }
+    return cells;
+  });
 }
