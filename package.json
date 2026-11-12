@@ -17,7 +17,8 @@
     "preview": "bash scripts-preview.sh",
     "icone": "node scripts/genera-icone.mjs",
     "dist:prova": "vite build && electron-builder --mac dmg --arm64 --publish never",
-    "verifica:pacchetto": "node scripts/verifica-pacchetto.mjs"
+    "verifica:pacchetto": "node scripts/verifica-pacchetto.mjs",
+    "test:stress": "node test/stress/genera.mjs && node test/stress/misura.mjs"
   },
   "dependencies": {
     "@cantoo/pdf-lib": "^2.11.1",

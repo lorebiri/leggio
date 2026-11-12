@@ -34,6 +34,7 @@ apertura di file protetti), **@pdf-lib/fontkit**, **tesseract.js** (OCR), **docx
 | Pannello destro | `const c = app.openRightPanel('Titolo', { onClose })`, `app.closeRightPanel()` |
 | Interfaccia | `app.ui.dialog({ title, fields:[…], validate })`, `confirm`, `prompt`, `toast(msg,{kind})`, `withProgress(title, async p => { p.set(0.5,'…'); p.signal })`, `contextMenu`, `h(tag, attrs, …children)`, `parsePageRanges` |
 | Pagine da stringa | `app.parsePages('1-3, 5')` → indici 0-based (lancia errore leggibile) |
+| Liberare un documento pdf.js | **pdf.js 6 non ha più `pdf.destroy()`**: usare `pdf.loadingTask.destroy()` (il nucleo ripristina comunque `pdf.destroy()` sui documenti che apre) |
 | Librerie | `app.lib.PDFLib`, `app.lib.pdfjs`, `app.lib.openPdfLib(bytes, pw)`, `app.lib.savePdfLib(doc)`, `app.lib.renderPageToCanvas(pdf, i, scale, opts)` |
 | Piattaforma | `app.platform.openFiles({ multiple, filters })`, `saveAs`, `chooseFolder`, `writeInFolder`, `invokeFeature('canale', …)` (→ `feat:canale` nel main) |
 | Impostazioni | `app.settings.get(k, def)`, `app.settings.set(k, v)`; campi extra nel dialogo: `app.bus.on('settings:fields', arr => arr.push({ key, field }))` |
@@ -42,7 +43,8 @@ apertura di file protetti), **@pdf-lib/fontkit**, **tesseract.js** (OCR), **docx
 ### Visualizzatore (`app.viewer`)
 - `page`, `pageIndex`, `scale`, `zoomIn()`, `rotateView()`, `goToDestination()`, `refresh()`, `setMode('select'|'hand'|'tool', cursor)`.
 - `getOverlay(i)` → div sopra la pagina i (sopra testo e moduli). In modalità `tool` cattura il puntatore.
-- `getViewport(i)` (PageViewport pdf.js: `convertToPdfPoint`, `convertToViewportPoint`, `convertToViewportRectangle`),
+- `getViewport(i)` (PageViewport pdf.js: `convertToPdfPoint`, `convertToViewportPoint`; **pdf.js 6 non ha più
+  `convertToViewportRectangle`**: usare `pdfRectToCss` oppure `rectToCss(viewport, rect)` da `core/geometry.js`),
   `clientToPdf(i, clientX, clientY)`, `pdfRectToCss(i, [x1,y1,x2,y2])`, `getPageDiv(i)`.
 - `app.viewer.pdfViewer` è il `PDFViewer` di pdf.js; `app.viewer.eventBus` il suo bus.
 
@@ -68,7 +70,9 @@ Id riservati usati dalla schermata iniziale (se l'area li implementa, usare **es
 3. Testi dell'interfaccia in **italiano**, chiari, senza gergo. Messaggi d'errore che dicono cosa fare.
 4. Ogni modifica al documento passa da `applyEdit`/`editWithPdfLib` (così c'è sempre Annulla).
 5. Operazioni lunghe con `withProgress` e annullabili tramite `p.signal` / `p.cancelled`.
-6. Niente rete: tutto deve funzionare offline. Niente telemetria.
+6. Niente rete: tutto deve funzionare offline. Niente telemetria. Unica eccezione: il controllo degli aggiornamenti
+   (`electron/updater.cjs`), che fa solo una richiesta GET all'API pubblica delle release di GitHub, senza inviare dati
+   dell'utente; se la rete manca l'app funziona comunque.
 7. Logica pura (che non tocca il DOM) in file separati, coperta da test vitest (`npm test`).
 8. Collaudo: `npx vite build && mkdir -p dist/fixtures && cp test/fixtures/*.pdf dist/fixtures/` poi anteprima
    su http://localhost:5199 (`npx vite preview --port 5199`); in console `window.__leggio` è l'app.

@@ -1,13 +1,18 @@
 // Applicazione: schede documento, barra strumenti, salvataggio, annulla/ripeti, stampa, ricerca,
 // e l'API pubblica usata dalle feature (vedi docs/ARCHITETTURA.md).
 import { Bus } from './bus.js';
-import { Doc } from './doc.js';
+import { Doc, historyConfig } from './doc.js';
+import { History, DiskStore, memoryBudget, diskBudget, MB } from './history.js';
+import { precheck, describeOpenError, MAX_PDF_BYTES, cleanIpcMessage, sniff } from './errors.js';
+import { repairPdf } from './repair.js';
+import { installGuards, log } from './guard.js';
+import { Recovery } from './recovery.js';
 import { Viewer, isTyping } from './viewer.js';
 import { Sidebar, thumbnailsPanel, outlinePanel } from './sidebar.js';
 import { ToolRegistry } from './tools.js';
 import { Settings } from './settings.js';
 import { platform, isMac, modKey } from './platform.js';
-import { openPdfLib, savePdfLib, renderPageToCanvas, openPdfJs, PDFLib, pdfjs } from './pdf.js';
+import { openPdfLib, savePdfLib, renderPageToCanvas, openPdfJs, verifyPdfBytes, PDFLib, pdfjs } from './pdf.js';
 import * as ui from './ui.js';
 import { h, toast, dialog, confirm, withProgress, parsePageRanges, formatBytes, escapeHtml } from './ui.js';
 import { icon } from './icons.js';
@@ -22,6 +27,9 @@ export class App {
     this.docs = [];
     this.activeDoc = null;
     this.saveHooks = [];
+    this.log = log;
+    installGuards(this);
+    this.#setupHistory();
     this.el = this.#buildShell(root);
     this.viewer = new Viewer(this, this.el.viewerContainer);
     this.sidebar = new Sidebar(this, this.el.rail, this.el.sideBody);
@@ -38,6 +46,8 @@ export class App {
     this.bus.on('viewer:pagesinit', () => this.#updateNav());
     this.#renderTabs();
     this.#renderHome();
+    this.recovery = new Recovery(this);
+    this.recovery.start();
   }
 
   // ======================= API per le feature =======================
@@ -52,26 +62,39 @@ export class App {
   async currentBytes(doc = this.activeDoc) {
     if (doc.pdf && doc.pdf.annotationStorage.size > 0 && doc.formsDirty) {
       const saved = await doc.pdf.saveDocument();
-      doc.bytes = new Uint8Array(saved);
+      doc.replaceBytes(saved instanceof Uint8Array ? saved : new Uint8Array(saved));
       doc.formsDirty = false;
     }
     return doc.bytes;
   }
 
   /**
-   * Applica una modifica annullabile al documento attivo.
+   * Applica una modifica annullabile al documento (di default quello attivo).
    * fn(bytes, doc) → Promise<Uint8Array>. La vista mantiene pagina e zoom.
+   * Le modifiche allo stesso documento sono eseguite una alla volta (coda): due chiamate
+   * contemporanee non si intrecciano. Il risultato viene verificato con pdf.js prima di
+   * essere accettato: se non è un PDF leggibile, il documento resta com'era.
+   * NB: non chiamare applyEdit/undo/save dello stesso documento dall'interno di fn (attenderebbe sé stessa).
    */
   async applyEdit(label, fn, doc = this.activeDoc) {
     if (!doc) throw new Error('Nessun documento aperto');
-    const before = await this.currentBytes(doc);
-    const after = await fn(before, doc);
-    if (!after || after === before) return false;
-    doc.commit(label, after instanceof Uint8Array ? after : new Uint8Array(after));
-    await this.#reload(doc);
-    this.bus.emit('document:changed', { doc, label });
-    toast(label, { kind: 'success', timeout: 2600, action: { label: 'Annulla', run: () => this.undo() } });
-    return true;
+    return this.#exclusive(doc, label, async () => {
+      const before = await this.currentBytes(doc);
+      const after = await fn(before, doc);
+      if (!after || after === before || doc.closed) return false;
+      const next = after instanceof Uint8Array ? after : new Uint8Array(after);
+      if (next.length === 0) throw new Error(`«${label}» ha prodotto un file vuoto: il documento non è stato modificato.`);
+      if (next.length > MAX_PDF_BYTES) throw new Error(`«${label}» produrrebbe un file oltre i 2 GB: il documento non è stato modificato.`);
+      let pdf;
+      try { pdf = await doc.openCandidate(next); }
+      catch (err) { throw new Error(`«${label}» ha prodotto un PDF non leggibile (${err?.message || err}). Il documento non è stato modificato.`); }
+      if (doc.closed) { pdf.destroy(); return false; }
+      await doc.commit(label, next);
+      await this.#swapPdf(doc, pdf);
+      this.bus.emit('document:changed', { doc, label });
+      toast(label, { kind: 'success', timeout: 2600, action: { label: 'Annulla', run: () => this.undo(doc) } });
+      return true;
+    });
   }
 
   /** Come applyEdit ma con un PDFDocument di pdf-lib già aperto: fn(pdfDoc, PDFLib, doc). */
@@ -84,17 +107,58 @@ export class App {
     }, doc);
   }
 
-  /** Apre byte come nuova scheda. */
-  async openBytes(bytes, { name, path } = {}) {
+  /** Esegue fn nella coda del documento (operazioni serializzate). Utile alle feature per operazioni lunghe che leggono e poi modificano. */
+  runExclusive(doc, label, fn) { return this.#exclusive(doc, label, fn); }
+
+  #exclusive(doc, label, fn) {
+    if (!doc.queue.onChange) doc.queue.onChange = () => { if (doc === this.activeDoc) this.#updateBusy(); };
+    return doc.queue.run(label, fn);
+  }
+
+  /** Apre byte come nuova scheda. opts: { name, path, dirty } */
+  async openBytes(bytes, { name, path, dirty = false, _repaired = false } = {}) {
     const existing = path && this.docs.find((d) => d.path === path);
     if (existing) { this.activate(existing); return existing; }
+    const displayName = name || 'Senza titolo.pdf';
+    const pre = precheck(bytes, displayName);
+    if (pre) { this.#openFailed(pre, displayName); return null; }
     const doc = new Doc({ name, path, bytes });
+    const askPw = (reason) => ui.prompt(reason === 2 ? 'Password errata, riprova:' : `«${doc.name}» è protetto. Inserisci la password:`, '', { title: 'Documento protetto', type: 'password', okLabel: 'Apri' });
+    // i file grandi mostrano l'avanzamento (annullabile) se l'apertura supera qualche istante
+    const ctrl = new AbortController();
+    let prog = null;
+    const timer = setTimeout(() => {
+      prog = ui.progress(`Apertura di «${doc.name}»`);
+      prog.signal.addEventListener('abort', () => ctrl.abort());
+      prog.set(null, formatBytes(bytes.length));
+    }, bytes.length > 20 * MB ? 0 : 1200);
     try {
-      await doc.load((reason) => ui.prompt(reason === 2 ? 'Password errata, riprova:' : `«${doc.name}» è protetto. Inserisci la password:`, '', { title: 'Documento protetto', type: 'password', okLabel: 'Apri' }));
+      await doc.load(askPw, {
+        signal: ctrl.signal,
+        onProgress: ({ loaded, total }) => prog?.set(total ? loaded / total : null),
+      });
+      if (!doc.pageCount) throw new Error('Il documento non contiene pagine leggibili');
     } catch (err) {
-      if (err?.name === 'PasswordException') { toast('Apertura annullata'); return null; }
-      this.reportError(err, `Impossibile aprire «${doc.name}»`); return null;
-    }
+      doc.destroy();
+      clearTimeout(timer); prog?.close();
+      if (err?.name === 'AbortError') { toast('Apertura annullata'); return null; }
+      if (err?.name === 'PasswordException') { if (/non inserita/.test(err.message)) toast('Apertura annullata'); else this.#openFailed(describeOpenError(err, bytes, displayName), displayName); return null; }
+      log('warn', 'apertura non riuscita', { name: displayName, size: bytes.length, error: String(err?.message || err) });
+      // ultimo tentativo: riparazione (file troncati, xref/trailer mancanti)
+      const kind = sniff(bytes).kind;
+      if (!_repaired && (kind === 'pdf' || kind === 'pdf-offset')) {
+        const rep = await repairPdf(bytes);
+        if (rep) {
+          log('info', 'file riparato', { name: displayName, pages: rep.pages });
+          const fixed = await this.openBytes(rep.bytes, { name: displayName.replace(/(\.pdf)?$/i, ' (riparato).pdf'), dirty: true, _repaired: true });
+          if (fixed) dialog({ title: 'Documento riparato', message: `«${displayName}» era danneggiato e non poteva essere letto così com'è. Leggio ne ha recuperato ${fixed.pageCount} ${fixed.pageCount === 1 ? 'pagina' : 'pagine'}: controlla che il contenuto sia completo e salvalo con un nuovo nome. L'originale non è stato modificato.`, cancelLabel: null, okLabel: 'Ho capito' });
+          return fixed;
+        }
+      }
+      this.#openFailed(describeOpenError(err, bytes, displayName), displayName);
+      return null;
+    } finally { clearTimeout(timer); prog?.close(); }
+    if (dirty) doc.dirty = true;
     this.#watchForms(doc);
     this.docs.push(doc);
     this.activate(doc);
@@ -102,35 +166,59 @@ export class App {
     return doc;
   }
 
+  #openFailed(message, name) {
+    dialog({ title: 'Impossibile aprire il documento', message, cancelLabel: null, okLabel: 'Chiudi' });
+    this.bus.emit('document:open-failed', { name, message });
+  }
+
   async openDialog() {
-    const files = await platform.openFiles({ multiple: true });
+    let files;
+    try { files = await platform.openFiles({ multiple: true }); }
+    catch (err) { this.#openFailed(cleanIpcMessage(err?.message || err), 'file'); return; }
     for (const f of files) await this.openBytes(f.bytes, f);
   }
 
+  /** Apre un percorso (solo app desktop), es. dai recenti. */
+  async openPath(p) {
+    try { const f = await platform.readFile(p); if (f) return this.openBytes(f.bytes, f); }
+    catch (err) { this.#openFailed(cleanIpcMessage(err?.message || err), p.split(/[\\/]/).pop()); }
+    return null;
+  }
+
   activate(doc) {
-    if (this.activeDoc === doc) return;
+    if (this.activeDoc === doc && (doc || this.viewer.doc == null)) return;
     this.tools.deactivate();
-    this.viewer.saveViewState();
+    if (this.activeDoc) this.viewer.saveViewState();
     this.activeDoc = doc;
     this.el.root.classList.toggle('has-doc', !!doc);
     this.viewer.setDocument(doc);
     this.#renderTabs();
     this.#updateTitle();
     this.sidebar.refresh();
-    this.#updateNav();
+    this.#updateBusy();
     this.bus.emit('document:activated', { doc });
   }
 
   async closeDoc(doc = this.activeDoc) {
-    if (!doc) return;
+    if (!doc || doc.closed) return true;
+    if (doc.busy) {
+      // un'operazione è in corso su questo documento: si aspetta che finisca, poi si chiude
+      const t = toast(`Attendo la fine di «${doc.queue.current}» prima di chiudere…`, { timeout: 60000 });
+      await doc.queue.idle();
+      t.remove();
+      if (doc.closed) return true;
+    }
     if (doc.dirty || doc.formsDirty) {
+      if (this.activeDoc !== doc) this.activate(doc);
       const v = await dialog({ title: 'Modifiche non salvate', message: `Vuoi salvare le modifiche a «${doc.name}» prima di chiudere?`, fields: [{ name: 'a', type: 'radio', value: 'save', options: [{ value: 'save', label: 'Salva' }, { value: 'discard', label: 'Non salvare' }] }], okLabel: 'Continua' });
-      if (!v) return false;
+      if (!v || doc.closed) return false;
       if (v.a === 'save' && !(await this.save(doc))) return false;
     }
+    await doc.queue.idle();
+    if (doc.closed) return true;
     const i = this.docs.indexOf(doc);
-    this.docs.splice(i, 1);
-    if (this.activeDoc === doc) { this.activeDoc = null; this.activate(this.docs[Math.min(i, this.docs.length - 1)] || null); }
+    if (i >= 0) this.docs.splice(i, 1);
+    if (this.activeDoc === doc) { this.tools.deactivate(); this.activeDoc = null; this.activate(this.docs[Math.min(i, this.docs.length - 1)] || null); }
     doc.destroy();
     this.#renderTabs();
     if (!this.docs.length) this.#renderHome();
@@ -145,38 +233,69 @@ export class App {
     return bytes;
   }
 
+  /**
+   * Salva (o Salva con nome). Passa dalla coda del documento: non si intreccia con modifiche o Annulla.
+   * I byte vengono verificati con pdf.js prima di toccare il file su disco; la scrittura nel main è
+   * atomica e controllata (vedi electron/core/safe-write.cjs). → true se salvato.
+   */
   async save(doc = this.activeDoc, { as = false } = {}) {
-    if (!doc) return false;
+    if (!doc || doc.closed) return false;
     try {
-      const bytes = await this.bytesForSave(doc);
-      if (doc.path && !as) await platform.writeFile(doc.path, bytes);
-      else {
-        const r = await platform.saveAs(bytes, doc.name);
-        if (!r) return false;
-        if (r.path) { doc.path = r.path; doc.name = r.name; }
-      }
-      doc.bytes = bytes; doc.dirty = false;
-      this.#renderTabs(); this.#updateTitle();
-      toast(`Salvato: ${doc.name}`, { kind: 'success' });
-      this.bus.emit('document:saved', { doc });
-      return true;
-    } catch (err) { this.reportError(err, 'Salvataggio non riuscito'); return false; }
+      return await this.#exclusive(doc, 'Salvataggio', async () => {
+        const version = doc.version;
+        const bytes = await this.bytesForSave(doc);
+        if (bytes.length > MAX_PDF_BYTES) throw new Error('Il documento supera i 2 GB e non può essere salvato. Riduci le immagini (Comprimi) o dividilo in più file.');
+        try { await verifyPdfBytes(bytes, doc.password); }
+        catch (err) { throw new Error(`Il documento da salvare non risulta un PDF valido (${err?.message || err}). Il file su disco non è stato toccato.`); }
+        if (doc.path && !as) await platform.writeFile(doc.path, bytes);
+        else {
+          const r = await platform.saveAs(bytes, doc.name);
+          if (!r) return false;
+          if (r.path) { doc.path = r.path; doc.name = r.name; }
+        }
+        doc.replaceBytes(bytes);
+        if (doc.version === version) doc.markSaved();
+        this.#renderTabs(); this.#updateTitle();
+        toast(`Salvato: ${doc.name}`, { kind: 'success' });
+        this.bus.emit('document:saved', { doc });
+        return true;
+      });
+    } catch (err) {
+      if (err?.name === 'QueueClosedError') return false;
+      this.reportError(err, 'Salvataggio non riuscito');
+      return false;
+    }
   }
 
   /** Esporta byte arbitrari (es. conversioni) con dialogo "Salva con nome". */
   async exportFile(bytes, defaultName, filters) { return platform.saveAs(bytes, defaultName, filters); }
 
-  async undo() {
-    const d = this.activeDoc; if (!d) return;
-    const label = d.undo(); if (!label) return toast('Niente da annullare');
-    await this.#reload(d); toast('Annullato: ' + label);
-    this.bus.emit('document:changed', { doc: d, label: 'undo' });
-  }
-  async redo() {
-    const d = this.activeDoc; if (!d) return;
-    const label = d.redo(); if (!label) return toast('Niente da ripetere');
-    await this.#reload(d); toast('Ripetuto: ' + label);
-    this.bus.emit('document:changed', { doc: d, label: 'redo' });
+  async undo(doc = this.activeDoc) { return this.#history(doc, 'undo'); }
+  async redo(doc = this.activeDoc) { return this.#history(doc, 'redo'); }
+
+  async #history(d, dir) {
+    if (!d || d.closed) return;
+    try {
+      await this.#exclusive(d, dir === 'undo' ? 'Annulla' : 'Ripeti', async () => {
+        const prev = { bytes: d.bytes, version: d.version };
+        const label = dir === 'undo' ? await d.undo() : await d.redo();
+        if (!label) { toast(dir === 'undo' ? 'Niente da annullare' : 'Niente da ripetere'); return; }
+        let pdf;
+        try { pdf = await d.openCandidate(d.bytes); }
+        catch (err) {
+          // lo stato recuperato non si apre (non dovrebbe succedere): si torna indietro
+          dir === 'undo' ? await d.redo() : await d.undo();
+          d.bytes = prev.bytes; d.version = prev.version;
+          throw err;
+        }
+        if (d.closed) { pdf.destroy(); return; }
+        await this.#swapPdf(d, pdf);
+        toast((dir === 'undo' ? 'Annullato: ' : 'Ripetuto: ') + label);
+        this.bus.emit('document:changed', { doc: d, label: dir });
+      });
+    } catch (err) {
+      if (err?.name !== 'QueueClosedError') this.reportError(err, dir === 'undo' ? 'Annulla non riuscito' : 'Ripeti non riuscito');
+    }
   }
 
   /** Sposta pagine (indici 0-based) prima della posizione target. */
@@ -201,7 +320,8 @@ export class App {
 
   reportError(err, context = 'Errore') {
     console.error(context, err);
-    const msg = err?.message || String(err);
+    log('error', context, { message: String(err?.message || err), stack: err?.stack });
+    const msg = cleanIpcMessage(err?.message || String(err));
     dialog({ title: context, message: msg, cancelLabel: null, okLabel: 'Chiudi' });
   }
 
@@ -209,15 +329,47 @@ export class App {
 
   // ======================= interni =======================
 
-  async #reload(doc) {
-    await doc.load();
+  /** Sostituisce il proxy pdf.js del documento aggiornando la vista, poi libera il vecchio. */
+  async #swapPdf(doc, pdf) {
+    const old = doc.setPdf(pdf);
     this.#watchForms(doc);
     if (doc === this.activeDoc) { await this.viewer.reloadKeepingView(); this.sidebar.refresh(); }
+    try { old?.destroy(); } catch { /* già distrutto */ }
     this.#renderTabs(); this.#updateTitle(); this.#updateNav();
   }
 
+  #setupHistory() {
+    // tetto di memoria: dalla RAM del computer (nell'app) o dalle informazioni del browser
+    const nav = typeof navigator !== 'undefined' ? navigator : {};
+    let memInfo = { deviceMemoryGB: nav.deviceMemory, heapLimit: performance?.memory?.jsHeapSizeLimit };
+    let diskFree = 0;
+    const backend = platform.historyBackend();
+    platform.memoryInfo().then((m) => { if (m) { memInfo = { ...memInfo, totalMemory: m.total }; diskFree = m.diskFree || 0; } }).catch(() => {});
+    const trimmedOnce = new WeakSet();
+    historyConfig.makeHistory = (doc) => new History({
+      disk: backend ? new DiskStore(backend) : null,
+      memoryBudget: () => memoryBudget(memInfo),
+      diskBudget: () => diskBudget(diskFree),
+      onTrim: ({ reason }) => {
+        if (reason === 'count' || trimmedOnce.has(doc)) return;
+        trimmedOnce.add(doc);
+        toast(`Cronologia di «${doc.name}» accorciata: per non esaurire la ${reason === 'disk' ? 'spazio su disco' : 'memoria'} si potranno annullare solo le modifiche più recenti.`, { kind: 'warning', timeout: 8000 });
+        log('info', 'cronologia accorciata', { reason, size: doc.bytes.length });
+      },
+    });
+  }
+
+  #updateBusy() {
+    const d = this.activeDoc;
+    const busy = !!d?.busy;
+    this.el.root.classList.toggle('doc-busy', busy);
+    for (const b of this.el.toolbar.querySelectorAll('[data-cmd="undo"],[data-cmd="redo"],[data-cmd="save"]')) b.disabled = busy;
+    this.#updateNav();
+  }
+
   #watchForms(doc) {
-    doc.pdf.annotationStorage.onSetModified = () => { doc.formsDirty = true; this.#renderTabs(); this.#updateTitle(); };
+    const st = doc.pdf.annotationStorage;
+    st.onSetModified = () => { doc.formsDirty = true; doc.formsRev++; this.#renderTabs(); this.#updateTitle(); this.bus.emit('document:forms-changed', { doc }); };
   }
 
   #updateTitle() {
@@ -305,7 +457,7 @@ export class App {
       quick.length ? h('section', { class: 'home-sec' }, h('h2', {}, 'Strumenti più usati'),
         h('div', { class: 'home-tools' }, quick.map((t) => h('button', { class: 'home-tool', onclick: () => this.tools.run(t.id) }, h('span', { class: 'hub-ico', html: icon(t.icon || 'tools', 22) }), h('strong', {}, t.name), h('small', {}, t.description || ''))))) : null,
       recent.length ? h('section', { class: 'home-sec' }, h('h2', {}, 'Recenti'),
-        h('ul', { class: 'recent' }, recent.slice(0, 8).map((p) => h('li', {}, h('button', { class: 'recent-item', onclick: async () => { const f = await platform.readFile(p); if (f) this.openBytes(f.bytes, f); } }, h('span', { html: icon('file', 16) }), h('span', { class: 'recent-name' }, p.split(/[\\/]/).pop()), h('small', {}, p)))))) : null));
+        h('ul', { class: 'recent' }, recent.slice(0, 8).map((p) => h('li', {}, h('button', { class: 'recent-item', onclick: () => this.openPath(p) }, h('span', { html: icon('file', 16) }), h('span', { class: 'recent-name' }, p.split(/[\\/]/).pop()), h('small', {}, p)))))) : null));
   }
 
   #renderQuickTools() {
@@ -326,7 +478,7 @@ export class App {
     const match = [...sel.options].find((o) => o.value === sv);
     if (match) sel.value = sv;
     else { const c = sel.querySelector('option[value=custom]'); c.textContent = Math.round((pv.currentScale || 1) * 100) + '%'; sel.value = 'custom'; }
-    this.el.status.textContent = d ? `${d.pageCount} pagine · ${formatBytes(d.bytes.length)}${d.path ? ' · ' + d.path : ''}` : '';
+    this.el.status.textContent = d ? `${d.busy ? `In corso: ${d.queue.current}… · ` : ''}${d.pageCount} pagine · ${formatBytes(d.bytes.length)}${d.path ? ' · ' + d.path : ''}` : '';
   }
 
   #applyTheme() {
@@ -349,10 +501,15 @@ export class App {
       'mode-select': () => { this.tools.deactivate(); v.setMode('select'); this.#modeButtons('mode-select'); },
       'mode-hand': () => { this.tools.deactivate(); v.setMode('hand'); this.#modeButtons('mode-hand'); },
       settings: () => this.showSettings(), shortcuts: () => this.showShortcuts(),
+      'open-logs': () => platform.openLogs(),
     };
     if (id.startsWith('tool:')) return this.tools.run(id.slice(5));
-    const needsDoc = !['open', 'tools', 'settings', 'shortcuts', 'toggle-theme'].includes(id);
+    const needsDoc = !['open', 'tools', 'settings', 'shortcuts', 'toggle-theme', 'open-logs'].includes(id);
     if (needsDoc && !this.activeDoc) return;
+    if (['undo', 'redo', 'save', 'save-as', 'print'].includes(id) && this.activeDoc?.busy) {
+      toast(`Attendi: «${this.activeDoc.queue.current}» è ancora in corso`, { kind: 'warning' });
+      return;
+    }
     await map[id]?.();
   }
   #modeButtons(active) { this.el.toolbar.querySelectorAll('.mode-btn').forEach((b) => b.classList.toggle('active', b.dataset.cmd === active)); }
@@ -370,11 +527,17 @@ export class App {
     this.el.zoomSel.addEventListener('change', () => { if (this.el.zoomSel.value !== 'custom') this.viewer.scaleValue = this.el.zoomSel.value; });
     platform.on('app:command', (id) => this.command(id));
     platform.on('app:open-file', (f) => this.openBytes(f.bytes, f));
+    platform.on('app:open-recovery', () => this.recovery?.offer(true));
     platform.on('app:before-close', async () => {
       for (const d of [...this.docs]) if (!(await this.closeDoc(d))) return;
+      await this.recovery?.cleanExit();
       window.leggio.invoke('app:confirm-close');
     });
-    window.addEventListener('beforeunload', (e) => { if (!window.leggio && this.docs.some((d) => d.dirty)) e.preventDefault(); });
+    platform.on('app:notify', ({ kind = 'info', message, title } = {}) => {
+      if (kind === 'error') dialog({ title: title || 'Leggio', message, cancelLabel: null, okLabel: 'Chiudi' });
+      else toast(message, { kind });
+    });
+    window.addEventListener('beforeunload', (e) => { if (!window.leggio && this.docs.some((d) => d.dirty || d.formsDirty)) e.preventDefault(); });
     document.addEventListener('keydown', (e) => {
       const mod = isMac ? e.metaKey : e.ctrlKey;
       if (mod && !window.leggio) {
@@ -403,7 +566,15 @@ export class App {
       const files = [...e.dataTransfer.files];
       const pdfs = files.filter((f) => /\.pdf$/i.test(f.name) || f.type === 'application/pdf');
       const others = files.filter((f) => !pdfs.includes(f));
-      for (const f of pdfs) await this.openBytes(new Uint8Array(await f.arrayBuffer()), { name: f.name, path: window.leggio ? f.path || null : null });
+      for (const f of pdfs) {
+        if (f.size > MAX_PDF_BYTES) { this.#openFailed(precheck({ length: f.size }, f.name), f.name); continue; }
+        let path = null;
+        try { path = window.leggio?.pathForFile?.(f) || null; } catch { path = null; }
+        let bytes;
+        try { bytes = new Uint8Array(await f.arrayBuffer()); }
+        catch (err) { this.#openFailed(`Impossibile leggere «${f.name}»: ${err?.message || err}`, f.name); continue; }
+        await this.openBytes(bytes, { name: f.name, path });
+      }
       if (others.length) this.bus.emit('files:dropped-nonpdf', { files: others });
     });
   }
