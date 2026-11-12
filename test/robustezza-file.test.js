@@ -10,7 +10,7 @@ import { repairPdf } from '../src/renderer/core/repair.js';
 import { sniff, precheck, describeOpenError, hasEof, cleanIpcMessage, isBenignError } from '../src/renderer/core/errors.js';
 
 const require = createRequire(import.meta.url);
-pdfjs.GlobalWorkerOptions.workerSrc = require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs');
+pdfjs.GlobalWorkerOptions.workerSrc = (await import('node:url')).pathToFileURL(require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs')).href;
 const TIMEOUT = 15000;
 
 // In Node pdf.js usa un "worker finto" nello stesso processo: i suoi errori interni su file

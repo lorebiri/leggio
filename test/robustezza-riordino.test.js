@@ -5,7 +5,7 @@ import { PDFDocument, StandardFonts, degrees } from '@cantoo/pdf-lib';
 import { reorderPdfPages } from '../src/renderer/core/pagetree.js';
 
 const require = createRequire(import.meta.url);
-pdfjs.GlobalWorkerOptions.workerSrc = require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs');
+pdfjs.GlobalWorkerOptions.workerSrc = (await import('node:url')).pathToFileURL(require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs')).href;
 async function texts(bytes) {
   const t = pdfjs.getDocument({ data: bytes.slice(), verbosity: 0 }); const pdf = await t.promise; const out = [];
   for (let i = 1; i <= pdf.numPages; i++) { const p = await pdf.getPage(i); out.push((await p.getTextContent()).items.map((x) => x.str).join('') + '@' + p.rotate); }

@@ -9,7 +9,7 @@ import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-pdfjs.GlobalWorkerOptions.workerSrc = require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs');
+pdfjs.GlobalWorkerOptions.workerSrc = (await import('node:url')).pathToFileURL(require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs')).href;
 
 const dir = resolve(process.argv[2] || process.env.LEGGIO_STRESS_DIR || join(homedir(), 'Developer/leggio-out/robustezza/stress'));
 const MB = 1024 * 1024;

@@ -13,7 +13,7 @@ import { compareOutside } from '../src/renderer/features/modifica/verify.js';
 import { rewriteContentStream } from '../src/renderer/features/modifica/contentstream.js';
 
 const require = createRequire(import.meta.url);
-pdfjs.GlobalWorkerOptions.workerSrc = require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs');
+pdfjs.GlobalWorkerOptions.workerSrc = (await import('node:url')).pathToFileURL(require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs')).href;
 const LIB = (n) => readFileSync(require.resolve('pdfjs-dist/standard_fonts/' + n));
 const env = { loadUnicodeFont: async ({ bold, italic }) => LIB(`LiberationSans-${bold && italic ? 'BoldItalic' : bold ? 'Bold' : italic ? 'Italic' : 'Regular'}.ttf`) };
 const DIR = process.env.LEGGIO_REAL_PDFS;

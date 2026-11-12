@@ -14,7 +14,7 @@ import { addLink, listLinks, deleteLink, updateLink } from '../src/renderer/feat
 import { mul } from '../src/renderer/features/modifica/interpreter.js';
 
 const require = createRequire(import.meta.url);
-pdfjs.GlobalWorkerOptions.workerSrc = require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs');
+pdfjs.GlobalWorkerOptions.workerSrc = (await import('node:url')).pathToFileURL(require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs')).href;
 const { PDFDocument, StandardFonts, rgb, PDFName, PDFArray } = PDFLib;
 const LIB = (n) => readFileSync(require.resolve('pdfjs-dist/standard_fonts/' + n));
 const env = { loadUnicodeFont: async ({ bold, italic }) => LIB(`LiberationSans-${bold && italic ? 'BoldItalic' : bold ? 'Bold' : italic ? 'Italic' : 'Regular'}.ttf`) };

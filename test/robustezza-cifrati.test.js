@@ -6,7 +6,7 @@ import { PDFDocument, StandardFonts, degrees } from '@cantoo/pdf-lib';
 import { openPdfLib } from '../src/renderer/core/pdflib.js';
 
 const require = createRequire(import.meta.url);
-pdfjs.GlobalWorkerOptions.workerSrc = require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs');
+pdfjs.GlobalWorkerOptions.workerSrc = (await import('node:url')).pathToFileURL(require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs')).href;
 
 async function make(userPassword) {
   const d = await PDFDocument.create(); const f = await d.embedFont(StandardFonts.Helvetica);
