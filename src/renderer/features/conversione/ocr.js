@@ -57,6 +57,40 @@ export async function creaWorkerOcr(langs, { onLog } = {}) {
   } finally { URL.revokeObjectURL(wurl); }
 }
 
+/**
+ * Gruppo di worker Tesseract riusabili tra un documento e l'altro (elaborazione di cartelle intere):
+ * si evitano i 1–3 s di avvio per ogni file. I worker vengono chiusi dopo un periodo di inattività,
+ * all'annullamento e, per prudenza sulla memoria del motore, dopo molte pagine.
+ */
+export function creaPoolOcr({ inattivitaMs = 60000, maxUsi = 150 } = {}) {
+  let chiave = ''; let workers = []; let timer = null;
+  const usi = new Map();
+  const pool = {
+    async prendi(langs, n, signal) {
+      clearTimeout(timer);
+      const k = langs.join('+');
+      if (k !== chiave) { await pool.chiudi(); chiave = k; }
+      // ricicla i worker usati a lungo
+      for (const w of workers.filter((x) => (usi.get(x) || 0) >= maxUsi)) { workers.splice(workers.indexOf(w), 1); usi.delete(w); w.terminate().catch(() => {}); }
+      while (workers.length < n) {
+        const pr = creaWorkerOcr(langs);
+        try { workers.push(await conAbort(pr, signal)); }
+        catch (e) { pr.then((w) => w.terminate()).catch(() => {}); throw e; }
+      }
+      return workers.slice(0, n);
+    },
+    segna(w) { usi.set(w, (usi.get(w) || 0) + 1); },
+    rilascia() { clearTimeout(timer); timer = setTimeout(() => pool.chiudi(), inattivitaMs); },
+    async chiudi() {
+      clearTimeout(timer);
+      const w = workers; workers = []; chiave = ''; usi.clear();
+      await Promise.all(w.map((x) => x.terminate().catch(() => {})));
+    },
+    get attivi() { return workers.length; },
+  };
+  return pool;
+}
+
 /** Pagine senza testo (scansioni): controlla le prime `max` pagine. → { scansione, pagineSenzaTesto, controllate } */
 export async function rilevaScansione(pdf, { max = 5 } = {}) {
   const n = Math.min(pdf.numPages, max);
@@ -90,34 +124,46 @@ export async function riconosciPagine(opts) {
   const saltate = [];
   const t0 = performance.now();
   const check = () => { if (signal?.aborted) throw new DOMException('Annullato', 'AbortError'); };
-  const nWorkers = Math.max(1, Math.min(opts.workers || Math.min(3, Math.max(1, Math.floor((navigator.hardwareConcurrency || 2) / 2))), pages.length));
+  // prima le pagine che hanno già testo (veloce): se non resta nulla, nessun worker viene avviato
+  let daFare = pages;
+  if (skipText) {
+    daFare = [];
+    for (const i of pages) {
+      check();
+      const page = await pdf.getPage(i + 1);
+      try { if (caratteriTesto(await page.getTextContent()) >= 20) saltate.push(i); else daFare.push(i); }
+      finally { page.cleanup(); }
+    }
+  }
+  if (!daFare.length) return { pagine: [], saltate, ms: performance.now() - t0 };
+  const nWorkers = Math.max(1, Math.min(opts.workers || Math.min(3, Math.max(1, Math.floor((navigator.hardwareConcurrency || 2) / 2))), daFare.length));
   progress?.set(0, 'Preparo il motore di riconoscimento (offline)…');
-  const workers = [];
-  const onAbort = () => { for (const w of workers) w.terminate().catch(() => {}); };
+  const pool = opts.pool || null;
+  let workers = [];
+  const onAbort = () => { if (pool) pool.chiudi(); else for (const w of workers) w.terminate().catch(() => {}); };
   signal?.addEventListener('abort', onAbort, { once: true });
   try {
-    // i worker partono in parallelo; quelli creati vengono registrati subito per poterli terminare all'annullamento
-    await conAbort(Promise.all(Array.from({ length: nWorkers }, async (_, k) => {
-      const w = await creaWorkerOcr(langs);
-      workers.push(w);
-      if (signal?.aborted) w.terminate().catch(() => {});
-      dbg('worker pronto', k);
-    })), signal);
+    if (pool) workers = await pool.prendi(langs, nWorkers, signal);
+    else {
+      // i worker partono in parallelo; quelli creati vengono registrati subito per poterli terminare all'annullamento
+      await conAbort(Promise.all(Array.from({ length: nWorkers }, async (_, k) => {
+        const w = await creaWorkerOcr(langs);
+        workers.push(w);
+        if (signal?.aborted) w.terminate().catch(() => {});
+        dbg('worker pronto', k);
+      })), signal);
+    }
     check();
     let next = 0; let fatte = 0;
-    const totale = pages.length;
+    const totale = daFare.length;
     const lavora = async (worker) => {
-      while (next < pages.length) {
+      while (next < daFare.length) {
         check();
-        const index = pages[next++];
+        const index = daFare[next++];
         const ordine = next;
         dbg('page', index);
         const page = await pdf.getPage(index + 1);
         try {
-          if (skipText) {
-            const tc = await page.getTextContent();
-            if (caratteriTesto(tc) >= 20) { saltate.push(index); continue; }
-          }
           const base = page.getViewport({ scale: 1 });
           // risoluzione: dpi scelti, con tetto per non esaurire la memoria su pagine enormi
           let scale = dpi / 72;
@@ -136,6 +182,7 @@ export async function riconosciPagine(opts) {
           const immagine = new Blob([pgmGrigio(img.data, w, h)], { type: 'image/x-portable-graymap' });
           dbg('recognize', index);
           const r = await conAbort(worker.recognize(immagine, { rotateAuto: !!deskew }, { blocks: true, text: false, imageColor: !!deskew }), signal);
+          pool?.segna(worker);
           check();
           const rot = r.data.rotateRadians || 0;
           const entry = { index, viewportTransform: vp.transform, pxSize: [w, h], ptSize: [base.width, base.height], rotateRadians: rot, scale };
@@ -162,7 +209,7 @@ export async function riconosciPagine(opts) {
     check();
   } finally {
     signal?.removeEventListener('abort', onAbort);
-    await Promise.all(workers.map((w) => w.terminate().catch(() => {})));
+    if (!pool) await Promise.all(workers.map((w) => w.terminate().catch(() => {})));
   }
   results.sort((a, b) => a.index - b.index);
   return { pagine: results, saltate: saltate.sort((a, b) => a - b), ms: performance.now() - t0 };
