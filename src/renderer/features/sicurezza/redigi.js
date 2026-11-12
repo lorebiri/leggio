@@ -4,6 +4,9 @@ import { PDFJS_ASSETS } from '../../core/pdf.js';
 import { PDFString, PDFHexString } from '@cantoo/pdf-lib';
 import { findMatches } from './logica/modelli.js';
 import { buildPageText, rangeRects, pageWords, wordsOutside } from './logica/testo.js';
+import { FIRMA } from './logica/preset.js';
+import { findSignatures } from './logica/firme.js';
+export { findSignatures };
 import { redactPage, embedTextFont, finalizeRedaction, redactOutlineTitles, removeStructure } from './logica/redazione.js';
 import { verifyRedaction } from './logica/verifica.js';
 import { sanitize } from './logica/sanifica.js';
@@ -16,7 +19,7 @@ const abort = (signal) => { if (signal?.aborted) throw new DOMException('Annulla
 /**
  * Cerca con i cercatori in tutte le pagine. → { byPage: Map(i → rects), hits: [{ page, text, matcher }], textless: [indici] }
  */
-export async function findInPdf(pdf, matchers, { signal, onProgress, OPS } = {}) {
+export async function findInPdf(pdf, matchers, { signal, onProgress, OPS, signatures = false } = {}) {
   const byPage = new Map(); const hits = []; const textless = [];
   for (let i = 0; i < pdf.numPages; i++) {
     abort(signal);
@@ -28,6 +31,13 @@ export async function findInPdf(pdf, matchers, { signal, onProgress, OPS } = {})
       if (!OPS || await hasImages(page, OPS)) textless.push(i);
       page.cleanup();
       continue;
+    }
+    if (signatures && OPS) {
+      for (const rect of await findSignatures(page, tc, OPS)) {
+        if (!byPage.has(i)) byPage.set(i, []);
+        byPage.get(i).push(rect);
+        hits.push({ page: i, text: 'firma', matcher: FIRMA, rects: [rect], noTerm: true, before: 'riquadro dell\'immagine della firma', after: '' });
+      }
     }
     page.cleanup();
     const pt = buildPageText(tc.items, tc.styles);

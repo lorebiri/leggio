@@ -83,3 +83,15 @@ chiave del lotto): la ripresa dopo un'interruzione la gestisce il motore delle a
   `app.services.sogliaPecAllegati()` (byte di allegati, tolto il base64 e un margine). «Riduci dimensioni» propone
   «Per PEC (N MB)» con lo stesso valore. Le altre aree devono usare questi servizi.
 - «Prepara per PEC» parte dal solo documento attivo; «Aggiungi documenti aperti…» e «Aggiungi file…» per gli altri.
+
+## Modelli pronti (un solo menu, in «Cerca e oscura», nella conferma di «Pronto per la pubblicazione» e nelle Azioni guidate)
+`logica/preset.js`. Il menu «Modello pronto» decide cosa cercare e cosa è spuntato; l'elenco resta da confermare
+(nell'interfaccia sempre; nelle Azioni guidate si applicano le scelte del modello e il rapporto per file lo dice).
+- **Dati personali comuni**: CF, IBAN, email, telefono spuntati; P.IVA, indirizzi, nascita visibili ma non spuntati.
+- **Incarichi e assegni (Amministrazione Trasparente)**: oscura indirizzo di residenza/domicilio, telefono, email
+  personale, luogo e data di nascita, codice fiscale delle persone (quello alfanumerico), IBAN e firma autografa
+  (riquadro dell'immagine vicina a «Firma», «In fede», «Il dichiarante»…; se non ce n'è, avviso «segna a mano»).
+  Restano nome, P.IVA, compenso, sede e email istituzionali. Fonti nel menu: art. 15 d.lgs. 33/2013 (verificato);
+  elenco dei dati da non pubblicare secondo le Linee guida del Garante 2014 e regole di Leggio su email
+  istituzionali e indirizzi di sede — **da verificare** con il responsabile della trasparenza.
+Test: `test/sicurezza-preset.test.js` (contratto di lavoro autonomo e decreto di assegno realistici, firma in un PDF vero).
