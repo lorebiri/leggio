@@ -20,11 +20,26 @@ I file `.p7m` (apertura, trascinamento) sono gestiti dall'area «avanzati»; la 
 
 Barra informativa sopra il documento: campi compilabili (Evidenzia campi, Compila con i miei dati) e documento firmato (avviso prima di modificarlo, Pannello firme).
 
+## Servizio per le altre aree: `app.services.firmaFile(files, opzioni)`
+- `files`: `[{ path, name }]` (o percorsi come stringhe) già scelti, per esempio i documenti selezionati nell'archivio.
+- Una sola finestra: scelta del certificato (sistema/smart card o .p12), tipo di firma (PAdES nei PDF o buste .p7m) e motivo;
+  nessuna finestra di scelta dei file. Poi la barra di avanzamento; la finestra di esito compare **solo se qualche file non è
+  stato firmato** (altrimenti un avviso «Firmati N documenti»). `opzioni.mostraEsito` la forza o la toglie.
+- Stessa sequenza di «Firma più file» (canale `feat:moduli:sign-files`): un solo PIN se il middleware lo consente, copie
+  `_firmato.pdf` / `.p7m` accanto agli originali senza mai sovrascrivere, scrittura atomica, verifica di ogni firma.
+- Restituisce `[{ path, ok, uscita, errore }]` nell'ordine di `files` (anche in caso di annullamento: `errore: 'Firma annullata.'`).
+- Per ogni file firmato emette `archivio:stato` con `{ path (originale), nome, modifica: { imposta: 'firmato' }, origine: 'firma', copia }`.
+  Lo stesso evento lo emette anche lo strumento «Firma più file».
+- `opzioni`: `{ formato: 'pdf'|'p7m', motivo, mostraEsito }` (formato e motivo sono solo i valori proposti nella finestra).
+- Provato: canale e servizio con ID .p12 (argomenti non validi, file mancanti, nessuna sovrascrittura, .p7m, annullamento) e con
+  un'identità in un portachiavi temporaneo (`LEGGIO_TEST_KEYCHAIN=1`, `test/moduli-servizi.test.js`). Non provato nell'app
+  dall'archivio vero né con una smart card.
+
 ## Struttura
 - `lib/` logica pura testata: `formdata.js` (formati dati), `detect.js` (riconoscimento campi), `geom.js` (rotazioni, tratti, sfondo firma), `store.js` (firme e profilo in localStorage).
 - `board.js` elementi posizionati sugli overlay (modello in coordinate PDF, ridisegno su `page:rendered`).
 - `fillsign.js`, `sigpad.js`, `profile.js`, `formeditor.js`, `formtools.js`, `digital.js`, `bridge.js`.
-- `electron/features/moduli.cjs` (main): canali `feat:moduli:sign | sign-p7m | sign-batch | describe-id | list-system-ids | create-id | verify | verify-p7m | external-apps | external-choose | external-sign | external-cancel` (evento `feat:moduli:external-result`); le richieste di firma portano `credential: { type:'p12', p12, password } | { type:'system', id }`; risposta sempre `{ok, result}` o `{ok:false, error, code}`.
+- `electron/features/moduli.cjs` (main): canali `feat:moduli:sign | sign-p7m | sign-batch | sign-files | describe-id | list-system-ids | create-id | verify | verify-p7m | external-apps | external-choose | external-sign | external-cancel` (evento `feat:moduli:external-result`); le richieste di firma portano `credential: { type:'p12', p12, password } | { type:'system', id }`; risposta sempre `{ok, result}` o `{ok:false, error, code}`.
 
 ## Firma digitale: garanzie
 - Aggiornamento **incrementale** (xref classica o a flusso, come l'originale): i byte originali restano identici; le firme precedenti restano valide.
