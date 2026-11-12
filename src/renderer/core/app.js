@@ -615,20 +615,71 @@ export class App {
    * nel pulsante «Altri strumenti»; se nemmeno così basta, la barra va a capo.
    */
   layoutToolbar() {
-    const tb = this.el.toolbar; const more = this.el.moreTools;
-    if (!tb || !more) return;
-    const btns = [...this.el.quick.querySelectorAll('.quick-btn')];
-    tb.classList.remove('wrap');
-    btns.forEach((b) => (b.hidden = false));
-    more.hidden = true;
-    const overflows = () => tb.scrollWidth > tb.clientWidth + 1;
-    if (overflows()) {
-      more.hidden = false;
-      for (let i = btns.length - 1; i >= 0 && overflows(); i--) btns[i].hidden = true;
-      if (overflows()) tb.classList.add('wrap');
+    const tb = this.el.toolbar;
+    if (!tb || !this.el.moreTools || !tb.clientWidth) return;
+    // Livelli di compattazione, dal meno al più invasivo, finché si vedono almeno 4 strumenti rapidi:
+    // 1 = via i pulsanti −/+ dello zoom e le frecce pagina (restano tendina, campo pagina, scorciatoie e menu Vista);
+    // 2 = via anche «Ruota la visualizzazione» (resta nel menu Vista e con ⌘/Ctrl+R);
+    // 3 = pulsanti con etichetta più stretti.
+    const want = Math.min(4, this.el.quick.querySelectorAll('.quick-btn').length);
+    let n = 0;
+    for (const level of [0, 1, 2, 3]) {
+      tb.classList.toggle('tb-compact1', level >= 1);
+      tb.classList.toggle('tb-compact2', level >= 2);
+      tb.classList.toggle('tb-compact3', level >= 3);
+      n = this.#fitQuick();
+      if (n >= want) break;
     }
+    // non bastano ancora (finestra stretta, caratteri grandi): gli strumenti rapidi vanno su una seconda riga
+    // (con la seconda riga, la prima torna completa se ci sta: zoom −/+, frecce pagina, ruota)
+    if (n < want) {
+      const first = tb.firstElementChild; const lastFixed = this.el.toolbar.querySelector(':scope > .tb-group:last-child');
+      for (const level of [0, 1, 2, 3]) {
+        tb.classList.toggle('tb-compact1', level >= 1);
+        tb.classList.toggle('tb-compact2', level >= 2);
+        tb.classList.toggle('tb-compact3', level >= 3);
+        this.#fitQuick({ ownRow: true });
+        if (!lastFixed || Math.abs(lastFixed.offsetTop - first.offsetTop) < 4) break;
+      }
+    }
+    if (tb.scrollWidth > tb.clientWidth + 2) tb.classList.add('wrap');
+  }
+
+  /** Mostra quanti più strumenti rapidi possibile, misurando le larghezze reali. → quanti visibili. */
+  #fitQuick({ ownRow = false } = {}) {
+    const tb = this.el.toolbar; const more = this.el.moreTools; const quick = this.el.quick;
+    const btns = [...quick.querySelectorAll('.quick-btn')];
+    tb.classList.remove('wrap');
+    tb.classList.toggle('quick-row', ownRow);
+    btns.forEach((b) => (b.hidden = false));
+    more.hidden = false;
+    const cs = getComputedStyle(tb);
+    const gap = parseFloat(cs.columnGap) || 0;
+    const inner = tb.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+    const outer = (el) => { const st = getComputedStyle(el); return el.offsetWidth + (parseFloat(st.marginLeft) || 0) + (parseFloat(st.marginRight) || 0); };
+    // le parti fisse si misurano senza strumenti rapidi; nessun elemento della barra si restringe (flex-shrink: 0)
+    quick.hidden = true;
+    const kids = [...tb.children].filter((el) => !el.hidden && getComputedStyle(el).display !== 'none' && el !== more && !el.classList.contains('tb-spacer'));
+    let fixed = 0;
+    if (!ownRow) for (const el of kids) fixed += outer(el);
+    else kids.length = 0; // sulla seconda riga ci sono solo gli strumenti rapidi e «Altri strumenti»
+    quick.hidden = false;
+    const qs = getComputedStyle(quick);
+    const qGap = parseFloat(qs.columnGap) || 0;
+    const qChrome = ['paddingLeft', 'paddingRight', 'marginLeft', 'marginRight', 'borderLeftWidth', 'borderRightWidth'].reduce((t, k) => t + (parseFloat(qs[k]) || 0), 0);
+    const widths = btns.map((b) => b.offsetWidth);
+    const moreW = outer(more);
+    // elementi in riga: fissi + contenitore rapidi (+ «Altri strumenti»); lo spaziatore vale 0 ma ha il suo gap
+    const room = (withMore) => inner - fixed - (kids.length + 1 + (withMore ? 1 : 0)) * gap - (withMore ? moreW : 0) - qChrome;
+    const fitCount = (avail) => { let w = 0; let k = 0; for (const x of widths) { const add = x + (k ? qGap : 0); if (w + add > avail) break; w += add; k++; } return k; };
+    let n = fitCount(room(false));
+    const showMore = n < btns.length;
+    if (showMore) n = fitCount(room(true));
+    btns.forEach((b, i) => (b.hidden = i >= n));
+    more.hidden = !showMore;
+    quick.hidden = n === 0;
     this.hiddenQuick = btns.filter((b) => b.hidden).map((b) => b.dataset.toolId);
-    more.hidden = !this.hiddenQuick.length;
+    return n;
   }
   #openMoreTools(anchor) {
     const r = anchor.getBoundingClientRect();
@@ -942,7 +993,7 @@ function stepZoom(cur, dir) {
 /** Etichetta breve per un'icona della barra: al massimo due parole significative. */
 function shortLabel(name) {
   const w = String(name).replace(/\s*\(.*\)\s*$/, '').split(/\s+/);
-  if (w.join(' ').length <= 14) return w.join(' ');
+  if (w.join(' ').length <= 16) return w.join(' ');
   const keep = w.filter((x, i) => i === 0 || !/^(il|lo|la|i|gli|le|un|una|di|del|della|dei|delle|e|in|da|con|per|a|al|alla|PDF)$/i.test(x));
   return keep.slice(0, 2).join(' ');
 }

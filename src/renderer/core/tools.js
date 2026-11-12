@@ -1,6 +1,7 @@
 // Registro degli strumenti e pannello "Tutti gli strumenti" (anche come palette comandi ⌘K).
 import { h, toast } from './ui.js';
 import { icon } from './icons.js';
+import { rankTools } from './toolsearch.js';
 
 export const CATEGORIES = [
   ['crea', 'Crea e combina'],
@@ -98,31 +99,34 @@ export class ToolRegistry {
       h('div', { class: 'hub-inner' },
         h('header', { class: 'hub-head' }, h('h2', {}, 'Tutti gli strumenti'), h('span', { class: 'hub-free' }, 'Tutto incluso, gratis per sempre'), search, h('button', { class: 'icon-btn', 'aria-label': 'Chiudi', onclick: close, html: icon('close') })),
         grid));
-    const norm = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-    const score = (t, q) => (norm(t.name).startsWith(q) || norm(t.acrobatName || '').startsWith(q) ? 2 : norm(`${t.name} ${t.acrobatName || ''}`).includes(q) ? 1 : 0);
+    const toolButton = (t) => h('button', { class: 'hub-tool', 'data-tool-id': t.id, onclick: () => { close(); this.run(t.id); } },
+      h('span', { class: 'hub-ico', html: icon(t.icon || 'tools', 22) }),
+      h('span', { class: 'hub-txt' }, h('strong', {}, t.name, t.acrobatName && t.acrobatName !== t.name ? h('span', { class: 'hub-acro' }, ` (in Acrobat: ${t.acrobatName})`) : null), h('small', {}, t.description || '')));
+    let best = null;
     const render = () => {
-      const q = norm(search.value.trim());
+      const q = search.value.trim();
       grid.innerHTML = '';
-      let first = null;
+      const ranked = rankTools(this.list(), q);
+      best = ranked[0] || null;
+      if (q && ranked.length) {
+        // in cima i migliori della classifica; sotto, le categorie (ordinate per classifica)
+        const top = h('section', { class: 'hub-sec hub-best' }, h('h3', {}, 'Risultati migliori'));
+        for (const t of ranked.slice(0, 5)) top.append(toolButton(t));
+        grid.append(top);
+      }
       for (const [cat, catName] of CATEGORIES) {
-        const items = this.list().filter((t) => t.category === cat && !t.hidden && (!q || q.split(/\s+/).every((w) => norm(`${t.name} ${t.acrobatName || ''} ${t.description || ''} ${t.keywords}`).includes(w))));
-        // nome o nome Acrobat che iniziano con la ricerca: prima
-        if (q) items.sort((a, b) => score(b, q) - score(a, q));
+        const items = ranked.filter((t) => t.category === cat);
         if (!items.length) continue;
         const sec = h('section', { class: 'hub-sec' }, h('h3', {}, catName));
-        for (const t of items) {
-          const b = h('button', { class: 'hub-tool', onclick: () => { close(); this.run(t.id); } },
-            h('span', { class: 'hub-ico', html: icon(t.icon || 'tools', 22) }),
-            h('span', { class: 'hub-txt' }, h('strong', {}, t.name, t.acrobatName && t.acrobatName !== t.name ? h('span', { class: 'hub-acro' }, ` (in Acrobat: ${t.acrobatName})`) : null), h('small', {}, t.description || '')));
-          first ||= b; sec.append(b);
-        }
+        for (const t of items) sec.append(toolButton(t));
         grid.append(sec);
       }
-      if (!grid.children.length) grid.append(h('p', { class: 'muted' }, `Nessuno strumento trovato per «${search.value.trim()}». Prova con un'altra parola (per esempio «unisci», «comprimi», «firma»); alcune funzioni potrebbero non essere ancora disponibili.`));
-      return first;
+      if (!grid.children.length) grid.append(h('p', { class: 'muted' }, `Nessuno strumento trovato per «${q}». Prova con un'altra parola (per esempio «unisci», «comprimi», «firma»); alcune funzioni potrebbero non essere ancora disponibili.`));
+      return grid.querySelector('.hub-tool');
     };
     search.addEventListener('input', render);
-    search.addEventListener('keydown', (e) => { if (e.key === 'Enter') { const f = grid.querySelector('.hub-tool'); f?.click(); } });
+    // Invio apre il primo della classifica
+    search.addEventListener('keydown', (e) => { if (e.key === 'Enter' && best) { e.preventDefault(); close(); this.run(best.id); } });
     const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
     document.addEventListener('keydown', onKey, true);
     render();
