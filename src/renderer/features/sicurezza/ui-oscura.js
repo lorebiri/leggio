@@ -14,6 +14,7 @@ import { N, lookupDict } from './logica/pdfutil.js';
 import { PDFString, PDFHexString } from '@cantoo/pdf-lib';
 
 const DEFAULT_OFF = new Set(['Partita IVA', 'Date']);
+const fmtKB = (n) => (n < 1048576 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1048576).toFixed(1).replace('.', ',') + ' MB');
 let active = null; // { app, mode, cleanup[] }
 
 function marks(app) { return st(app.activeDoc).marks; }
@@ -193,7 +194,11 @@ async function markPages(app) {
 export async function openSearchPanel(app) {
   const { h } = app.ui;
   if (app.tools.active?.id !== 'redact') app.tools.run('redact');
-  const c = app.openRightPanel('Cerca e oscura', { onClose: () => { if (active) active.renderResults = null; } });
+  const panelDoc = app.activeDoc;
+  const c = app.openRightPanel(`Cerca e oscura — ${panelDoc.name}`, { onClose: () => { offAct(); offClose(); if (active) active.renderResults = null; } });
+  // il pannello appartiene a questo documento: cambiando scheda si chiude (inciampo n. 5 della segreteria)
+  const offAct = app.bus.on('document:activated', ({ doc }) => { if (doc !== panelDoc) { offAct(); offClose(); if (active) active.renderResults = active.onChange = null; if (c.isConnected) app.closeRightPanel(); } });
+  const offClose = app.bus.on('document:closed', ({ doc }) => { if (doc === panelDoc) { offClose(); offAct(); if (c.isConnected) app.closeRightPanel(); } });
   const terms = h('textarea', { class: 'input', rows: 3, placeholder: 'Parole o frasi da oscurare, una per riga (es. Mario Rossi)', 'aria-label': 'Parole da cercare', style: { height: 'auto', padding: '8px 10px' } });
   const models = MODELLI.map((m) => { const i = h('input', { type: 'checkbox', value: m.id, checked: ['cf', 'iban'].includes(m.id) }); return { i, el: h('label', { title: 'Esempio: ' + m.esempio }, i, m.label) }; });
   const cs = h('input', { type: 'checkbox' }); const ww = h('input', { type: 'checkbox', checked: true });
@@ -305,12 +310,12 @@ async function applyRedactions(app) {
   const v = await app.ui.dialog({
     title: 'Applica oscuramento', okLabel: 'Oscura definitivamente', danger: true, width: 520,
     body: app.ui.h('div', {},
-      boxAvviso(app, `Verranno eliminati per sempre il testo, le immagini, i commenti e i campi sotto ${on.length} ${on.length === 1 ? 'area' : 'aree'} su ${byPage.size} ${byPage.size === 1 ? 'pagina' : 'pagine'}. Le pagine interessate diventano immagini con il testo restante ancora ricercabile; le altre pagine restano intatte.`, 'info'),
+      boxAvviso(app, `Verranno eliminati per sempre il testo, le immagini, i commenti e i campi sotto ${on.length} ${on.length === 1 ? 'area' : 'aree'} su ${byPage.size} ${byPage.size === 1 ? 'pagina' : 'pagine'}. Le pagine interessate diventano immagini (il testo restante resta ricercabile): il file cresce (circa 25–50 KB per pagina di testo, di più per le pagine con foto); le altre pagine restano intatte.`, 'info'),
       nSig ? boxAvviso(app, avvisoFirma(nSig, 'oscuri')) : null),
     fields: [
       { type: 'color', name: 'color', label: 'Colore dei riquadri', value: app.settings.get('sic.redColor', '#000000') },
       { type: 'text', name: 'label', label: 'Testo sui riquadri (facoltativo)', value: app.settings.get('sic.redLabel', ''), placeholder: 'es. OMISSIS' },
-      { type: 'checkbox', name: 'sanitize', label: 'Rimuovi anche le informazioni nascoste (proprietà, metadati, commenti, allegati, livelli, JavaScript)', value: app.settings.get('sic.redSanitize', true) },
+      { type: 'checkbox', name: 'sanitize', label: 'Rimuovi anche le informazioni nascoste', help: 'Proprietà, metadati, commenti, allegati, livelli nascosti, JavaScript.', value: app.settings.get('sic.redSanitize', true) },
       { type: 'radio', name: 'out', value: nSig ? 'copy' : app.settings.get('sic.redOut', 'copy'), options: [
         { value: 'copy', label: `Salva una copia «${copyName(doc, 'oscurato')}» (consigliato: l'originale resta intatto)` },
         { value: 'doc', label: 'Applica al documento aperto (si può annullare finché non salvi)' }] },
@@ -339,7 +344,7 @@ async function applyRedactions(app) {
       const words = pageWords(tc.items, tc.styles);
       const keep = wordsOutside(words, rects);
       removedWords += words.length - keep.length;
-      const img = await renderRedactedPage(pdfjs, doc.pdf, i, rects, { color: v.color, label: v.label.trim(), dpi: pages.length > 60 ? 200 : 300, quality: pages.length > 60 ? 0.85 : 0.92, signal: p.signal });
+      const img = await renderRedactedPage(pdfjs, doc.pdf, i, rects, { color: v.color, label: v.label.trim(), dpi: pages.length > 60 ? 200 : 300, quality: 0.8, signal: p.signal });
       const r = await redactPage(pdfDoc, i, { image: img, view: img.view, rects, keepWords: keep, font });
       annots += r.annots; fields += r.fields;
     }
@@ -384,15 +389,34 @@ async function applyRedactions(app) {
     `verifica superata: nessuno dei testi oscurati è più presente nel file (${(result.ms / 1000).toFixed(1).replace('.', ',')} s)`,
   ].filter(Boolean);
   const body = h('div', {}, boxAvviso(app, 'Oscuramento completato e verificato.', 'ok'), h('ul', {}, items.map((x) => h('li', {}, x))));
+  const sizeNote = h('p', { class: 'muted' }, `Dimensione: ${fmtKB(bytes.length)} → ${fmtKB(result.out.length)}. Per alleggerire il file puoi usare «Riduci dimensioni file».`);
   if (v.out === 'copy') {
-    const ok = await app.ui.dialog({ title: 'Oscuramento completato', okLabel: 'Salva la copia…', cancelLabel: 'Annulla', body, width: 540 });
-    if (ok && await salvaCopia(app, result.out, copyName(doc, 'oscurato'))) { st(doc).marks = st(doc).marks.filter((m) => !m.on); redrawAll(app); }
+    // si salva subito (un clic in meno); se l'utente chiude la finestra di salvataggio il risultato NON va perso
+    const saved = await salvaCopia(app, result.out, copyName(doc, 'oscurato'));
+    if (saved) {
+      st(doc).marks = st(doc).marks.filter((m) => !m.on); redrawAll(app); active?.renderResults?.();
+      await app.ui.dialog({ title: 'Oscuramento completato', okLabel: 'Chiudi', cancelLabel: null, body: h('div', {}, body, sizeNote), width: 540 });
+    } else {
+      const choice = await app.ui.dialog({
+        title: 'Copia oscurata non salvata', okLabel: 'Salva la copia…', cancelLabel: null, width: 540,
+        body: h('div', {}, boxAvviso(app, 'L\'oscuramento è pronto e verificato, ma la copia non è stata salvata.'), body),
+        fields: [{ type: 'radio', name: 'a', value: 'save', options: [
+          { value: 'save', label: 'Salva la copia adesso' },
+          { value: 'tab', label: 'Aprila in una nuova scheda (la salverai dopo)' },
+          { value: 'drop', label: 'Butta via il risultato' }] }],
+      });
+      const a = choice?.a || 'tab';
+      if (a === 'save' && await salvaCopia(app, result.out, copyName(doc, 'oscurato'))) { st(doc).marks = st(doc).marks.filter((m) => !m.on); redrawAll(app); return; }
+      if (a === 'drop' && await app.ui.confirm('Vuoi davvero buttare via il risultato dell\'oscuramento? Dovrai rifarlo da capo.', { okLabel: 'Butta via', danger: true })) return;
+      await app.openBytes(result.out, { name: copyName(doc, 'oscurato') });
+      app.ui.toast('Il documento oscurato è aperto in una nuova scheda: ricorda di salvarlo.', { kind: 'warning', timeout: 8000 });
+    }
   } else {
     const done = await app.applyEdit('Oscuramento', async () => result.out);
     if (done) {
       st(doc).marks = [];
-      redrawAll(app);
-      await app.ui.dialog({ title: 'Oscuramento completato', okLabel: 'Chiudi', cancelLabel: null, body: h('div', {}, body, h('p', { class: 'muted' }, 'Ricorda di salvare il documento (meglio con «Salva con nome»).')), width: 540 });
+      redrawAll(app); active?.renderResults?.();
+      await app.ui.dialog({ title: 'Oscuramento completato', okLabel: 'Chiudi', cancelLabel: null, body: h('div', {}, body, sizeNote, h('p', { class: 'muted' }, 'Puoi tornare indietro con Annulla finché non chiudi il documento. Ricorda di salvarlo (meglio con «Salva con nome»).')), width: 540 });
     }
   }
 }

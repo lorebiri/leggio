@@ -18,8 +18,9 @@ Test: `test/sicurezza-*.test.js` (`npx vitest run test/sicurezza`).
 | `repair` | Ripara PDF | 1) riscrittura con pdf-lib (ignora la xref); 2) ricostruzione dalle pagine leggibili da pdf.js (immagine + testo invisibile). |
 
 ## Come funziona l'oscuramento
-Per ogni pagina con aree: rendering a 300 dpi senza rotazione e senza annotazioni, riquadri disegnati sul canvas,
-JPEG; il contenuto della pagina viene **sostituito** da quell'immagine più un livello di testo invisibile con le sole
+Per ogni pagina con aree: rendering a 300 dpi (200 oltre 60 pagine) senza rotazione e senza annotazioni, riquadri
+disegnati sul canvas; codifica in scala di grigi a 16 livelli senza perdita (Flate) se la pagina non ha colori né
+mezzitoni (testo: circa 25 KB a pagina), altrimenti JPEG qualità 0,8; il contenuto della pagina viene **sostituito** da quell'immagine più un livello di testo invisibile con le sole
 parole fuori dalle aree (resta ricercabile). Si tolgono annotazioni/campi nelle aree, miniature e dati privati della
 pagina, struttura per l'accessibilità (può contenere il testo), termini nei segnalibri e nelle proprietà; poi gli
 oggetti orfani (`removeUnreachable`: pdf-lib altrimenti riscrive i vecchi contenuti). Infine `verifyRedaction` riapre
@@ -48,3 +49,12 @@ await app.services.analyzeHidden(bytes) // → conteggi
 ```
 Permessi omessi = consentiti. `compress` richiede il browser (canvas). Dall'area conversione ci si aspetta
 `app.services.ocr(bytes, { signal, onProgress }) → bytes` (PDF con testo invisibile).
+
+## Comportamenti chiesti dalla segreteria (secondo giro)
+- A fine oscuramento la copia si salva subito (5 clic: Oscura, Cerca e oscura, Cerca, Applica, Oscura definitivamente).
+  Se la finestra di salvataggio viene chiusa il risultato non si perde: si sceglie tra salvarlo, aprirlo in una scheda
+  o buttarlo via (con conferma). Applicato al documento aperto è una modifica annullabile.
+- «Cerca e oscura» appartiene al documento: il titolo ne riporta il nome e il pannello si chiude cambiando scheda.
+- «Sotto N MB»: casella «Non scendere sotto una qualità leggibile» (minimo 110 punti per pollice, attiva in
+  partenza); sotto 150 punti per pollice il risultato avvisa che le scansioni potrebbero essere poco leggibili e mette
+  in evidenza «Apri il risultato … per controllarlo».

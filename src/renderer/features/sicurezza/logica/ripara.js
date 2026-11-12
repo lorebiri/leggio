@@ -6,7 +6,7 @@
 import { PDFDocument } from '@cantoo/pdf-lib';
 import { removeUnreachable } from './pdfutil.js';
 import { pageWords } from './testo.js';
-import { invisibleTextOps, embedTextFont } from './redazione.js';
+import { invisibleTextOps, embedTextFont, embedPageImage } from './redazione.js';
 
 /** Conta le pagine leggibili con pdf.js. → { pages, ok, error } */
 export async function probeWithPdfjs(pdfjs, bytes, opts = {}) {
@@ -52,7 +52,7 @@ export async function rebuildFromPdfjs(pdfjs, bytes, rasterize, { signal, onProg
         const page = out.addPage([x2 - x1, y2 - y1]);
         page.setMediaBox(x1, y1, x2 - x1, y2 - y1);
         if (p.rotate) page.setRotation({ type: 'degrees', angle: p.rotate });
-        const img = r.kind === 'png' ? await out.embedPng(r.bytes) : await out.embedJpg(r.bytes);
+        const img = await embedPageImage(out, r);
         const ctx = out.context;
         const ops = [`q ${x2 - x1} 0 0 ${y2 - y1} ${x1} ${y1} cm /Im0 Do Q`, invisibleTextOps(font, 'F0', pageWords(tc.items))];
         page.node.set(ctx.obj('Resources'), ctx.obj({ XObject: { Im0: img.ref }, Font: { F0: font.ref } }));

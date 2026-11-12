@@ -2,7 +2,7 @@
 // già oscurata (prodotta dal chiamante: canvas nel browser) e un livello di testo invisibile con le
 // sole parole fuori dalle aree oscurate. Toglie annotazioni e campi nelle aree, miniature e dati
 // privati delle pagine. Logica pura su pdf-lib: nessun DOM.
-import { PDFDict, PDFArray, PDFName, PDFString, PDFHexString, PDFRef, StandardFonts, rgb } from '@cantoo/pdf-lib';
+import { PDFDict, PDFArray, PDFName, PDFString, PDFHexString, PDFRef, PDFRawStream, StandardFonts, rgb } from '@cantoo/pdf-lib';
 import { N, lookupDict, lookupArray, num, removeUnreachable } from './pdfutil.js';
 import { intersects, intersectsAny, normRect } from './testo.js';
 
@@ -105,7 +105,7 @@ export async function redactPage(pdfDoc, pageIndex, { image, view, rects, keepWo
   const ctx = pdfDoc.context;
   const page = pdfDoc.getPage(pageIndex);
   const node = page.node;
-  const img = image.kind === 'png' ? await pdfDoc.embedPng(image.bytes) : await pdfDoc.embedJpg(image.bytes);
+  const img = await embedPageImage(pdfDoc, image);
   const [x1, y1, x2, y2] = view;
   const ops = [`q ${f2(x2 - x1)} 0 0 ${f2(y2 - y1)} ${f2(x1)} ${f2(y1)} cm /LgRedImg Do Q`];
   const res = { XObject: { LgRedImg: img.ref } };
@@ -118,6 +118,16 @@ export async function redactPage(pdfDoc, pageIndex, { image, view, rects, keepWo
   node.set(N('Resources'), ctx.obj(res));
   for (const k of ['Thumb', 'PieceInfo', 'Metadata', 'StructParents', 'Group', 'AA', 'B', 'SeparationInfo']) node.delete(N(k));
   return removeAnnotsInRects(pdfDoc, node, rects);
+}
+
+/** Incorpora l'immagine della pagina: jpeg, png, oppure 'gray4' (scala di grigi a 4 bit già compressa Flate). → { ref } */
+export async function embedPageImage(pdfDoc, image) {
+  if (image.kind === 'gray4') {
+    const ctx = pdfDoc.context;
+    const dict = ctx.obj({ Type: 'XObject', Subtype: 'Image', Width: image.width, Height: image.height, ColorSpace: 'DeviceGray', BitsPerComponent: 4, Filter: 'FlateDecode', Length: image.bytes.length });
+    return { ref: ctx.register(PDFRawStream.of(dict, image.bytes)) };
+  }
+  return image.kind === 'png' ? pdfDoc.embedPng(image.bytes) : pdfDoc.embedJpg(image.bytes);
 }
 
 /** Sostituisce un termine nei titoli dei segnalibri. → numero di titoli modificati */

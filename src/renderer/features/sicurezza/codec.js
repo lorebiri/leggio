@@ -51,7 +51,7 @@ export const browserCodec = {
  * Rende una pagina a ~300 dpi, senza rotazione e senza annotazioni, con i riquadri di oscuramento.
  * → { bytes (JPEG), kind: 'jpeg', view: [x1,y1,x2,y2] }
  */
-export async function renderRedactedPage(pdfjs, pdf, pageIndex, rects, { dpi = 300, color = '#000000', label = '', maxPixels = 36e6, quality = 0.92, signal } = {}) {
+export async function renderRedactedPage(pdfjs, pdf, pageIndex, rects, { dpi = 300, color = '#000000', label = '', maxPixels = 36e6, quality = 0.8, signal } = {}) {
   const page = await pdf.getPage(pageIndex + 1);
   try {
     const base = page.getViewport({ scale: 1, rotation: 0 });
@@ -85,10 +85,9 @@ export async function renderRedactedPage(pdfjs, pdf, pageIndex, rects, { dpi = 3
         ctx.fillText(label, x + bw / 2, y + bh / 2); ctx.restore();
       }
     }
-    const bytes = await toJpeg(canvas, quality);
-    if (!bytes) throw new Error('Impossibile creare l\'immagine della pagina (memoria insufficiente?)');
+    const img = await encodePage(canvas, ctx, w, h, quality);
     canvas.width = canvas.height = 1; // libera subito la memoria
-    return { bytes, kind: 'jpeg', view: page.view.slice() };
+    return { ...img, view: page.view.slice() };
   } finally { page.cleanup(); }
 }
 
@@ -115,4 +114,45 @@ export function measureChars(str, family) {
     out.push(w);
   }
   return out;
+}
+
+async function deflate(u8) {
+  if (typeof CompressionStream === 'undefined') return null;
+  return new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new CompressionStream('deflate'))).arrayBuffer());
+}
+
+/**
+ * Sceglie la codifica più leggera senza perdere leggibilità:
+ *  - pagina senza colori e con pochi mezzitoni (testo, tabelle, timbri neri): scala di grigi a 16 livelli,
+ *    compressione senza perdita (Flate): il testo resta netto e il file è 3-4 volte più leggero del JPEG;
+ *  - altrimenti (foto, scansioni a colori o con sfondi): JPEG.
+ * La sicurezza non cambia: in ogni caso la pagina è un'immagine già oscurata.
+ */
+export async function encodePage(canvas, ctx, w, h, quality = 0.8) {
+  const data = ctx.getImageData(0, 0, w, h).data;
+  const n = w * h;
+  let colored = 0; let mid = 0; let samples = 0;
+  for (let i = 0; i < n; i += 13) {
+    const o = i * 4; const r = data[o]; const g = data[o + 1]; const b = data[o + 2];
+    samples++;
+    if (Math.max(Math.abs(r - g), Math.abs(g - b), Math.abs(r - b)) > 28) colored++;
+    const y = (r * 77 + g * 150 + b * 29) >> 8;
+    if (y > 40 && y < 215) mid++;
+  }
+  if (colored / samples < 0.002 && mid / samples < 0.12) {
+    const rowBytes = (w + 1) >> 1;
+    const g4 = new Uint8Array(rowBytes * h);
+    for (let yy = 0; yy < h; yy++) {
+      for (let x = 0; x < w; x++) {
+        const o = (yy * w + x) * 4;
+        const v = ((data[o] * 77 + data[o + 1] * 150 + data[o + 2] * 29) >> 8) >> 4;
+        g4[yy * rowBytes + (x >> 1)] |= x & 1 ? v : v << 4;
+      }
+    }
+    const z = await deflate(g4);
+    if (z) return { bytes: z, kind: 'gray4', width: w, height: h };
+  }
+  const bytes = await toJpeg(canvas, quality);
+  if (!bytes) throw new Error('Impossibile creare l\'immagine della pagina (memoria insufficiente?)');
+  return { bytes, kind: 'jpeg' };
 }
