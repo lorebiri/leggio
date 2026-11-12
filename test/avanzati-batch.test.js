@@ -1,0 +1,98 @@
+import { describe, it, expect } from 'vitest';
+import * as PDFLib from '@cantoo/pdf-lib';
+import fs from 'node:fs';
+import { OPERAZIONI, tutteLeOperazioni, validaSequenza, eseguiSequenza, nomeUscita, SkipError } from '../src/renderer/features/avanzati/lib/batch-ops.js';
+import { applicaProtocollo, righeTimbro, normalizzaData, contatoreCorrente, avanzaContatore, visivoAPagina, formattaNumero } from '../src/renderer/features/avanzati/lib/protocollo.js';
+
+const fixture = new Uint8Array(fs.readFileSync(new URL('./fixtures/prova.pdf', import.meta.url)));
+const env = (extra = {}) => ({
+  PDFLib, ops: tutteLeOperazioni(extra.esterne || []), ctx: extra.ctx || {},
+  openPdfLib: (b) => PDFLib.PDFDocument.load(b, { ignoreEncryption: true, updateMetadata: false }),
+  savePdfLib: (d) => d.save({ useObjectStreams: true }),
+});
+
+describe('timbro di protocollo', () => {
+  it('compone le righe', () => {
+    const r = righeTimbro({ ente: 'ICCOM-CNR', numero: '42', data: '12/11/2026', direzione: 'entrata', classificazione: '3.2', cifre: 7 });
+    expect(r.map((x) => x.testo)).toEqual(['ICCOM-CNR', 'Prot. n. 0000042 del 12/11/2026', 'In entrata · Class. 3.2']);
+  });
+  it('accetta date in vari formati e rifiuta quelle impossibili', () => {
+    expect(normalizzaData('12.11.26')).toBe('12/11/2026');
+    expect(normalizzaData('2026-11-12')).toBe('12/11/2026');
+    expect(normalizzaData('31/02/2026')).toBeNull();
+    expect(normalizzaData('ieri')).toBeNull();
+  });
+  it('il contatore riparte a ogni anno', () => {
+    const d = new Date(2026, 10, 12);
+    expect(contatoreCorrente(null, d)).toEqual({ anno: 2026, prossimo: 1 });
+    expect(avanzaContatore({ anno: 2026, prossimo: 5 }, '0000005', d)).toEqual({ anno: 2026, prossimo: 6 });
+    expect(avanzaContatore({ anno: 2026, prossimo: 5 }, '120', d)).toEqual({ anno: 2026, prossimo: 121 });
+    expect(contatoreCorrente({ anno: 2025, prossimo: 900 }, d).prossimo).toBe(1);
+    expect(formattaNumero('12', 5)).toBe('00012');
+  });
+  it('converte le coordinate sulle pagine ruotate', async () => {
+    const d = await PDFLib.PDFDocument.create();
+    const p = d.addPage([600, 800]);
+    p.setRotation(PDFLib.degrees(90));
+    // in alto a destra della pagina "come appare" (larga 800, alta 600)
+    const a = visivoAPagina(p, 780, 580);
+    expect(a).toEqual({ x: 20, y: 780, rot: 90 });
+  });
+  it('disegna il timbro e il risultato si riapre', async () => {
+    const d = await PDFLib.PDFDocument.load(fixture);
+    const n = await applicaProtocollo(d, PDFLib, { ente: 'ICCOM-CNR · Sesto Fiorentino', numero: '7', data: '12/11/2026', pagine: 'tutte', direzione: 'uscita' });
+    expect(n).toBe(d.getPageCount());
+    const out = await d.save();
+    expect((await PDFLib.PDFDocument.load(out)).getPageCount()).toBe(n);
+    expect(Buffer.from(out).includes(Buffer.from('Helvetica-Bold'))).toBe(true);
+  });
+});
+
+describe('azioni guidate', () => {
+  it('valida la sequenza (Proteggi per ultima, password lunga)', () => {
+    const ops = tutteLeOperazioni();
+    expect(validaSequenza([], ops)).toMatch(/almeno/);
+    expect(validaSequenza([{ op: 'proteggi', params: { password: 'abcd' } }, { op: 'ruota', params: {} }], ops)).toMatch(/ultima/);
+    expect(validaSequenza([{ op: 'proteggi', params: { password: 'ab' } }], ops)).toMatch(/4 caratteri/);
+    expect(validaSequenza([{ op: 'inesistente' }], ops)).toMatch(/non è disponibile/);
+    expect(validaSequenza([{ op: 'ruota', params: { angolo: '90' } }, { op: 'numeri', params: {} }], ops)).toBeNull();
+  });
+
+  it('esegue rotazione, numeri, filigrana, metadati, protocollo e protezione', async () => {
+    const passi = [
+      { op: 'ruota', params: { angolo: '90', pagine: 'tutte' } },
+      { op: 'numeri', params: { formato: 'Pagina {n} di {tot}', posizione: 'basso-centro', size: 10, inizio: 1 } },
+      { op: 'filigrana', params: { testo: 'COPIA', opacita: 20, colore: '#b42318' } },
+      { op: 'metadati', params: {} },
+      { op: 'protocollo', params: { ente: 'ICCOM', numero: '0010', data: '12/11/2026', posizione: 'alto-destra' } },
+      { op: 'proteggi', params: { password: 'segreta1', stampa: true } },
+    ];
+    const ctx = { index: 2 };
+    const out = await eseguiSequenza(fixture, passi, env({ ctx }));
+    expect(ctx.note).toBe('Prot. n. 0012');
+    await expect(PDFLib.PDFDocument.load(out)).rejects.toThrow(/encrypt/i);
+    const d = await PDFLib.PDFDocument.load(out, { password: 'segreta1' });
+    expect(d.getPage(0).getRotation().angle).toBe(90);
+    expect(d.getTitle()).toBeUndefined();
+  });
+
+  it('usa le operazioni registrate da altre aree', async () => {
+    let chiamata = null;
+    const esterne = [{ id: 'ocr', label: 'Riconosci testo (OCR)', runBytes: async (b, p) => { chiamata = p; return b; } }];
+    const out = await eseguiSequenza(fixture, [{ op: 'ruota', params: { angolo: '180' } }, { op: 'ocr', params: { lingua: 'ita' } }], env({ esterne }));
+    expect(chiamata).toEqual({ lingua: 'ita' });
+    expect((await PDFLib.PDFDocument.load(out)).getPage(0).getRotation().angle).toBe(180);
+  });
+
+  it('salta con un messaggio chiaro i file non PDF o protetti', async () => {
+    await expect(eseguiSequenza(new Uint8Array([1, 2, 3]), [{ op: 'ruota', params: {} }], env())).rejects.toBeInstanceOf(SkipError);
+    const prot = await eseguiSequenza(fixture, [{ op: 'proteggi', params: { password: 'abcd1234' } }], env());
+    await expect(eseguiSequenza(prot, [{ op: 'ruota', params: {} }], env())).rejects.toThrow(/protetto/);
+  });
+
+  it('nomi dei file di uscita', () => {
+    expect(nomeUscita('a.pdf')).toBe('a.pdf');
+    expect(nomeUscita('a.PDF', { modo: 'suffisso' })).toBe('a_elaborato.pdf');
+    expect(OPERAZIONI.every((o) => o.label && o.fields)).toBe(true);
+  });
+});
