@@ -7,7 +7,7 @@ export const KEY_ENTE = 'avanzati.ente';
 
 export const CAMPI_ENTE = [
   { key: 'denominazione', label: 'Denominazione dell\'ente', esempio: 'CNR - Istituto di Chimica dei Composti Organometallici (ICCOM)', match: /(denominazione|ragione.?sociale|^ente$|istituto|amministrazione|stazione.?appaltante)/i },
-  { key: 'sigla', label: 'Sigla (per timbri)', esempio: 'ICCOM-CNR', match: /^sigla$/i },
+  { key: 'sigla', label: 'Sigla o AOO (come nella segnatura di Titulus)', esempio: 'ICCOM-CNR', match: /^sigla$/i },
   { key: 'ufficio', label: 'Ufficio', esempio: 'Ufficio amministrazione e contabilità', match: /(ufficio|struttura|servizio)/i },
   { key: 'indirizzo', label: 'Sede (via e numero)', esempio: 'Via Madonna del Piano 10', match: /(sede|indirizzo|^via$)/i },
   { key: 'cap', label: 'CAP', esempio: '50019', match: /^(cap|c\.a\.p\.?)$/i },

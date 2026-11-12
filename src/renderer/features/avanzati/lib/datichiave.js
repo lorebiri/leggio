@@ -104,3 +104,13 @@ export function riepilogoTesto(d) {
   if (d.durc?.scadenza) r.push(`DURC: scadenza ${d.durc.scadenza.split('-').reverse().join('/')}${d.durc.scaduto ? ' (SCADUTO)' : ''}`);
   return r.join('\n');
 }
+
+/** Riga per Excel dai dati estratti dal testo (documenti PDF non strutturati). campi: da rinomina.analizza */
+export function rigaExcelDaTesto(d, campi = {}) {
+  return {
+    'Tipo documento': campi.tipo || '', Fornitore: campi.soggetto || '', 'P.IVA fornitore': d.piva.map((x) => x.valore).join(' '),
+    Numero: campi.numero || '', Data: campi.data || '', Totale: d.totale ?? '', Scadenza: d.scadenze[0]?.valore || '',
+    IBAN: d.iban.map((x) => x.valore).join(' '), CIG: d.cig.map((x) => x.valore).join(' '), CUP: d.cup.map((x) => x.valore).join(' '),
+    'Scadenza DURC': d.durc?.scadenza || '', 'DURC scaduto': d.durc ? (d.durc.scaduto ? 'sì' : 'no') : '',
+  };
+}

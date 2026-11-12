@@ -3,7 +3,7 @@ import { creaFascicolo } from '../lib/fascicolo.js';
 import { nomeMissione, aggiungiRiepilogo, dividiPerDimensione } from '../lib/missione.js';
 import { raggruppaPerVoce, csvRendiconto, nomeVoce } from '../lib/rendiconto.js';
 import { estraiDati } from '../lib/datichiave.js';
-import { looksLikeP7m, openP7m } from '../lib/cades.js';
+import { looksLikeP7m, openP7m, overallStatus } from '../lib/cades.js';
 import { pageText } from '../lib/textsearch.js';
 import { openPdfJs } from '../../../core/pdf.js';
 import { chooseFiles, chooseFolder, writeOut, isDesktop, destroyPdf } from '../native.js';
@@ -34,7 +34,11 @@ export function praticaMissione(app, deps) {
   const cognome = h('input', { type: 'text', value: pers.cognome || pref.cognome || '', 'aria-label': 'Cognome' });
   const data = h('input', { type: 'date', value: new Date().toISOString().slice(0, 10), 'aria-label': 'Data della missione' });
   const motivo = h('input', { type: 'text', placeholder: 'es. Convegno a Roma, 10–12 novembre', 'aria-label': 'Motivo o destinazione' });
-  const soglia = h('select', { 'aria-label': 'Dimensione massima' }, [['0', 'Nessun limite'], ['5', '5 MB'], ['10', '10 MB (portali)'], ['20', '20 MB'], ['30', '30 MB (PEC)']].map(([v, l]) => h('option', { value: v, selected: String(pref.soglia ?? '10') === v }, l)));
+  // soglia PEC unica in tutta l'app: servizio dell'area sicurezza, altrimenti la sua impostazione
+  const pec = Number((typeof app.services?.sogliaPec === 'function' ? app.services.sogliaPec() : null) ?? app.settings.get('sic.pec.limitMB', 30)) || 30;
+  const voci = [['0', 'Nessun limite'], ['5', '5 MB'], ['10', '10 MB (portali)'], [String(pec), `${pec} MB (PEC, come nelle Impostazioni)`]].filter((x, i, a) => a.findIndex((y) => y[0] === x[0]) === i);
+  const scelta = voci.some((x) => x[0] === String(pref.soglia)) ? String(pref.soglia) : String(pec);
+  const soglia = h('select', { 'aria-label': 'Dimensione massima' }, voci.map(([v, l]) => h('option', { value: v, selected: scelta === v }, l)));
   const riepilogo = h('input', { type: 'checkbox', checked: pref.riepilogo !== false, id: 'av-m-r' });
   const ritaglia = h('input', { type: 'checkbox', checked: pref.ritaglia !== false, id: 'av-m-c' });
   const ocr = h('input', { type: 'checkbox', checked: pref.ocr !== false && !!app.services?.ocr, disabled: !app.services?.ocr, id: 'av-m-o' });
@@ -148,14 +152,36 @@ export function fascicoloConIndice(app, deps) {
   async function crea() {
     if (elenco.items.length < 1) return app.ui.toast('Aggiungi almeno un documento.', { kind: 'warning' });
     app.settings.set('avanzati.fascicolo', { titolo: titolo.value, etichetta: etich.checked, numeri: numeri.checked });
-    const res = await app.ui.withProgress('Creazione del fascicolo', async (p) => {
-      const docs = [];
+    // 1) lettura: firme dei .p7m (per l'indice) e DURC scaduti (avviso prima di unire)
+    const letti = await app.ui.withProgress('Lettura dei documenti', async (p) => {
+      const docs = []; const durc = [];
       for (const [i, it] of elenco.items.entries()) {
         if (p.cancelled) throw new DOMException('Annullato', 'AbortError');
-        p.set(i / elenco.items.length * 0.4, `Lettura di ${it.name}`);
-        try { docs.push({ titolo: it.titolo, bytes: await leggiComePdf(app, it) }); } catch (e) { docs.push({ titolo: it.titolo, bytes: new Uint8Array(0), errore: e.message }); }
+        p.set(i / elenco.items.length, `Lettura di ${it.name}`);
+        try {
+          const raw = await it.read();
+          let titoloVoce = it.titolo;
+          if (isP7mName(it.name) || looksLikeP7m(raw)) {
+            const r = await openP7m(raw).catch(() => null);
+            if (r) { const nomi = r.levels.flatMap((l) => l.signers.map((x) => x.name)); const st = overallStatus(r); if (nomi.length) titoloVoce += ` (firmato digitalmente da ${nomi.join(', ')}${st === 'invalid' ? ' — firma NON valida' : st === 'warning' ? ' — firma da controllare' : ''})`; }
+          }
+          const bytes = await leggiComePdf(app, { ...it, read: async () => raw });
+          let pdf;
+          try { ({ pdf } = await openPdfJs(bytes)); let t = ''; for (let k = 1; k <= Math.min(2, pdf.numPages); k++) { const pg = await pdf.getPage(k); t += pageText((await pg.getTextContent()).items) + '\n'; } const d = estraiDati(t, { durataDurc: Number(app.settings.get('avanzati.durc.giorni', 120)) || 120 }); if (d.durc?.scaduto) durc.push({ titolo: it.titolo, scadenza: d.durc.scadenza }); }
+          catch { /* testo non leggibile: nessun controllo */ } finally { destroyPdf(pdf); }
+          docs.push({ titolo: titoloVoce, bytes });
+        } catch (e) { docs.push({ titolo: it.titolo, bytes: new Uint8Array(0), errore: e.message }); }
       }
-      const r = await creaFascicolo(app.lib.PDFLib, docs, { titolo: titolo.value, sottotitolo: sotto.value, etichetta: etich.checked ? 'Allegato' : '', numeriPagina: numeri.checked, signal: p.signal, onProgress: (f, m) => p.set(0.4 + f * 0.55, m) });
+      return { docs, durc };
+    });
+    if (!letti) return;
+    if (letti.durc.length) {
+      const ok = await app.ui.confirm(`Attenzione: ${letti.durc.length === 1 ? 'c\'è un DURC scaduto' : `ci sono ${letti.durc.length} DURC scaduti`}: ${letti.durc.map((d) => `«${d.titolo}» (scaduto il ${d.scadenza.split('-').reverse().join('/')})`).join('; ')}. Vuoi comunque creare il fascicolo?`, { title: 'DURC scaduto', okLabel: 'Crea comunque' });
+      if (!ok) return;
+    }
+    const res = await app.ui.withProgress('Creazione del fascicolo', async (p) => {
+      const docs = letti.docs;
+      const r = await creaFascicolo(app.lib.PDFLib, docs, { titolo: titolo.value, sottotitolo: sotto.value, etichetta: etich.checked ? 'Allegato' : '', numeriPagina: numeri.checked, signal: p.signal, onProgress: (f, m) => p.set(f * 0.95, m) });
       return { ...r, bytes: await app.lib.savePdfLib(r.pdfDoc) };
     });
     if (!res) return;
