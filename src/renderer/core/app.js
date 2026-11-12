@@ -15,6 +15,7 @@ import { platform, isMac, modKey } from './platform.js';
 import { openPdfLib, savePdfLib, renderPageToCanvas, openPdfJs, verifyPdfBytes, destroyPdf, PDFLib, pdfjs, fontkit } from './pdf.js';
 import { isSignedPdf } from './signature.js';
 import { reorderPdfPages } from './pagetree.js';
+import { printSources } from './print.js';
 import * as ui from './ui.js';
 import { h, toast, dialog, confirm, withProgress, parsePageRanges, formatBytes, escapeHtml, contextMenu } from './ui.js';
 import { icon } from './icons.js';
@@ -882,33 +883,13 @@ export class App {
   closeFind() { this.el.findbar.hidden = true; this.viewer.clearFind(); this.offFind?.(); }
 
   // ---------- stampa ----------
-  async print() {
-    const doc = this.activeDoc;
-    const v = await dialog({ title: 'Stampa', fields: [
-      { name: 'pages', label: 'Pagine', type: 'pages', value: '' },
-      { name: 'quality', label: 'Qualità', type: 'select', value: '150', options: [{ value: '96', label: 'Bozza (più veloce)' }, { value: '150', label: 'Normale' }, { value: '300', label: 'Alta qualità (firme e timbri piccoli)' }], help: 'Copie, fronte/retro e stampante si scelgono nella finestra di stampa che si apre subito dopo.' },
-      { name: 'annots', label: 'Stampa commenti e moduli', type: 'checkbox', value: true },
-    ], okLabel: 'Stampa…', validate: (x) => { try { this.parsePages(x.pages); } catch (e) { return e.message; } } });
-    if (!v) return;
-    const pages = this.parsePages(v.pages);
-    const bytes = await this.currentBytes(doc);
-    const { pdf } = await openPdfJs(bytes, { password: doc.password });
-    const root = document.getElementById('print-root'); root.innerHTML = '';
-    const ok = await withProgress('Preparazione della stampa', async (p) => {
-      for (let k = 0; k < pages.length; k++) {
-        if (p.cancelled) return false;
-        p.set(k / pages.length, `Pagina ${k + 1} di ${pages.length}`);
-        const cv = await renderPageToCanvas(pdf, pages[k], +v.quality / 72, { annotationMode: v.annots ? pdfjs.AnnotationMode.ENABLE_STORAGE : pdfjs.AnnotationMode.DISABLE, background: '#fff' });
-        const img = new Image(); img.src = cv.toDataURL('image/jpeg', 0.92);
-        await img.decode();
-        root.append(h('div', { class: 'print-page' }, img));
-      }
-      return true;
-    });
-    destroyPdf(pdf);
-    if (ok) { document.body.classList.add('printing'); window.print(); document.body.classList.remove('printing'); }
-    root.innerHTML = '';
-  }
+  /** Stampa il documento (stampante, copie, fronte/retro, timbro «COPIA», scelte ricordate). */
+  async print(doc = this.activeDoc) { if (doc) return printSources(this, [doc]); }
+  /**
+   * Stampa più documenti in una volta. sources: Doc aperti, { name, bytes, password } o { path } (app).
+   * opts.preset: stampa senza dialogo con queste scelte (vedi core/printplan.js DEFAULT_PRINT_PRESET).
+   */
+  async printFiles(sources, opts) { return printSources(this, sources, opts); }
 
   // ---------- proprietà ----------
   async showProperties() {
@@ -961,9 +942,24 @@ export class App {
     dialog({ title: 'Scorciatoie da tastiera', cancelLabel: null, okLabel: 'Chiudi', body: h('table', { class: 'props' }, rows.map(([k, l]) => h('tr', {}, h('th', {}, h('kbd', {}, k)), h('td', {}, l)))) });
   }
 
+  async #printManyDialog() {
+    let sources = this.docs.slice();
+    if (sources.length) {
+      const v = await ui.choice({ title: 'Stampa più documenti', message: `Vuoi stampare i ${sources.length} documenti aperti o scegliere altri file?`, buttons: [{ value: 'cancel', label: 'Lascia perdere', left: true }, { value: 'files', label: 'Scegli file…' }, { value: 'open', label: 'Documenti aperti', primary: true }] });
+      if (!v || v === 'cancel') return;
+      if (v === 'files') sources = null;
+    }
+    if (!sources) {
+      const files = await platform.openFiles({ multiple: true, title: 'Scegli i PDF da stampare' }).catch((err) => { this.reportError(err, 'Apertura dei file'); return []; });
+      sources = files.map((f) => ({ name: f.name, bytes: f.bytes }));
+    }
+    if (sources.length) await this.printFiles(sources);
+  }
+
   #registerCoreTools() {
     this.registerTool({ id: 'core-properties', name: 'Proprietà documento', category: 'avanzati', icon: 'info', description: 'Autore, date, formato, protezione', run: () => this.showProperties() });
-    this.registerTool({ id: 'core-print', name: 'Stampa', category: 'vista', icon: 'print', description: 'Stampa pagine scelte con qualità regolabile', run: () => this.print() });
+    this.registerTool({ id: 'core-print', name: 'Stampa', category: 'vista', icon: 'print', keywords: 'stampa stampante copie fronte retro', description: 'Stampante, copie, fronte/retro, pagine scelte, timbro «COPIA» solo sulla stampa', run: () => this.print() });
+    this.registerTool({ id: 'core-print-many', name: 'Stampa più documenti…', category: 'vista', icon: 'print', needsDoc: false, keywords: 'stampa tutti lotto più file schede aperte', description: 'Stampa in una volta i documenti aperti o altri file scelti', run: () => this.#printManyDialog() });
     this.registerTool({ id: 'core-reading', name: 'Modalità lettura', category: 'vista', icon: 'book', description: 'Nasconde barre e pannelli', run: () => this.command('reading-mode') });
     this.registerTool({ id: 'core-two-pages', name: 'Vista a due pagine', category: 'vista', icon: 'book', description: 'Pagine affiancate come un libro', run: () => { const pv = this.viewer.pdfViewer; pv.spreadMode = pv.spreadMode === 2 ? 0 : 2; } });
     this.registerTool({ id: 'core-theme', name: 'Tema chiaro/scuro', category: 'vista', icon: 'moon', needsDoc: false, description: 'Cambia aspetto dell\'app', run: () => this.#cycleTheme() });
