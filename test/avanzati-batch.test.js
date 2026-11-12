@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as PDFLib from '@cantoo/pdf-lib';
 import fs from 'node:fs';
 import { OPERAZIONI, tutteLeOperazioni, validaSequenza, eseguiSequenza, nomeUscita, SkipError, operazioneProteggi, destinazione } from '../src/renderer/features/avanzati/lib/batch-ops.js';
-import { applicaProtocollo, righeTimbro, normalizzaData, contatoreCorrente, avanzaContatore, visivoAPagina, formattaNumero } from '../src/renderer/features/avanzati/lib/protocollo.js';
+import { applicaProtocollo, righeTimbro, normalizzaData, visivoAPagina, formattaNumero } from '../src/renderer/features/avanzati/lib/protocollo.js';
 
 const fixture = new Uint8Array(fs.readFileSync(new URL('./fixtures/prova.pdf', import.meta.url)));
 const protectFinto = async (b, o) => { const d = await PDFLib.PDFDocument.load(b); d.encrypt({ userPassword: o.userPassword, ownerPassword: 'x' }); return d.save(); };
@@ -23,13 +23,9 @@ describe('timbro di protocollo', () => {
     expect(normalizzaData('31/02/2026')).toBeNull();
     expect(normalizzaData('ieri')).toBeNull();
   });
-  it('il contatore riparte a ogni anno', () => {
-    const d = new Date(2026, 10, 12);
-    expect(contatoreCorrente(null, d)).toEqual({ anno: 2026, prossimo: 1 });
-    expect(avanzaContatore({ anno: 2026, prossimo: 5 }, '0000005', d)).toEqual({ anno: 2026, prossimo: 6 });
-    expect(avanzaContatore({ anno: 2026, prossimo: 5 }, '120', d)).toEqual({ anno: 2026, prossimo: 121 });
-    expect(contatoreCorrente({ anno: 2025, prossimo: 900 }, d).prossimo).toBe(1);
+  it('formatta il numero com\'è scritto (nessun contatore)', () => {
     expect(formattaNumero('12', 5)).toBe('00012');
+    expect(formattaNumero('0012345', 0)).toBe('0012345');
   });
   it('converte le coordinate sulle pagine ruotate', async () => {
     const d = await PDFLib.PDFDocument.create();
@@ -59,18 +55,16 @@ describe('azioni guidate', () => {
     expect(validaSequenza([{ op: 'ruota', params: { angolo: '90' } }, { op: 'numeri', params: {} }], ops)).toBeNull();
   });
 
-  it('esegue rotazione, numeri, filigrana, metadati, protocollo e protezione', async () => {
+  it('esegue rotazione, numeri, filigrana, metadati e protezione', async () => {
     const passi = [
       { op: 'ruota', params: { angolo: '90', pagine: 'tutte' } },
       { op: 'numeri', params: { formato: 'Pagina {n} di {tot}', posizione: 'basso-centro', size: 10, inizio: 1 } },
       { op: 'filigrana', params: { testo: 'COPIA', opacita: 20, colore: '#b42318' } },
       { op: 'metadati', params: {} },
-      { op: 'protocollo', params: { ente: 'ICCOM', numero: '0010', data: '12/11/2026', posizione: 'alto-destra' } },
       { op: 'proteggi', params: { password: 'segreta1', stampa: true } },
     ];
     const ctx = { index: 2 };
     const out = await eseguiSequenza(fixture, passi, env({ ctx }));
-    expect(ctx.note).toBe('Prot. n. 0012');
     await expect(PDFLib.PDFDocument.load(out)).rejects.toThrow(/encrypt/i);
     const d = await PDFLib.PDFDocument.load(out, { password: 'segreta1' });
     expect(d.getPage(0).getRotation().angle).toBe(90);

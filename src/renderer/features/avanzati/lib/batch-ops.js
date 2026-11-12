@@ -2,7 +2,7 @@
 // Ogni operazione: { id, label, description, fields (per app.ui.dialog), summary(params), run(pdfDoc, PDFLib, params, ctx) }
 // Le altre aree possono aggiungere operazioni "a byte" con l'evento bus 'batch:operations' (vedi docs/aree/avanzati.md):
 //   app.bus.on('batch:operations', (list) => list.push({ id, label, description, fields, summary, runBytes: async (bytes, params, ctx) => bytes }))
-import { applicaProtocollo, POSIZIONI, DIREZIONI, oggi, testoSicuro, visivoAPagina, dimensioniVisive, formattaNumero } from './protocollo.js';
+import { testoSicuro, visivoAPagina, dimensioniVisive } from './protocollo.js';
 
 export class SkipError extends Error {}
 
@@ -87,25 +87,6 @@ export const OPERAZIONI = [
         const a = visivoAPagina(pg, u, v);
         pg.drawText(t, { x: a.x, y: a.y, size, font, color: hex(PDFLib, p.colore || '#b42318'), opacity: Math.max(0.05, Math.min(0.8, (+p.opacita || 20) / 100)), rotate: PDFLib.degrees(a.rot + (ang * 180) / Math.PI) });
       }
-    },
-  },
-  {
-    id: 'protocollo', label: 'Timbro di protocollo', description: 'Riquadro «Prot. n. … del …» con numerazione progressiva',
-    fields: [
-      { name: 'ente', label: 'Ente o istituto', type: 'text', value: '' },
-      { name: 'ufficio', label: 'Ufficio (facoltativo)', type: 'text', value: '' },
-      { name: 'numero', label: 'Numero del primo file', type: 'text', value: '1', required: true, help: 'Ai file successivi viene dato il numero seguente.' },
-      { name: 'data', label: 'Data', type: 'text', value: oggi() },
-      { name: 'direzione', label: 'Entrata / uscita', type: 'select', value: 'entrata', options: DIREZIONI },
-      { name: 'classificazione', label: 'Classificazione (facoltativa)', type: 'text', value: '' },
-      { name: 'posizione', label: 'Posizione', type: 'select', value: 'alto-destra', options: POSIZIONI },
-    ],
-    summary: (p) => `Protocollo dal n. ${p.numero} del ${p.data}`,
-    async run(doc, PDFLib, p, ctx) {
-      const base = parseInt(String(p.numero).replace(/\D/g, ''), 10);
-      const numero = Number.isFinite(base) ? formattaNumero(base + (ctx?.index || 0), String(p.numero).trim().length > String(base).length ? String(p.numero).trim().length : 0) : p.numero;
-      if (ctx) ctx.note = `Prot. n. ${numero}`;
-      await applicaProtocollo(doc, PDFLib, { ...p, numero, pagine: 'prima' });
     },
   },
   {

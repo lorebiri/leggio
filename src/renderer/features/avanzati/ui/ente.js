@@ -20,7 +20,7 @@ export async function modificaProfiloEnte(app) {
   const p = getEnte(app);
   const v = await app.ui.dialog({
     title: 'Profilo dell\'ente', width: 620,
-    message: 'Dati dell\'istituto da inserire con un clic in moduli, timbri di protocollo e dichiarazioni. Restano solo su questo computer. I tuoi dati personali (nome, codice fiscale…) sono in «I miei dati personali».',
+    message: 'Dati dell\'istituto da inserire con un clic in moduli, segnature su copie di lavoro e dichiarazioni. Restano solo su questo computer. I tuoi dati personali (nome, codice fiscale…) sono in «I miei dati personali».',
     fields: CAMPI_ENTE.map((f) => ({ name: f.key, label: f.label, type: f.area ? 'textarea' : 'text', rows: 3, value: p[f.key] || '', placeholder: f.esempio ? `es. ${f.esempio}` : '' })),
     okLabel: 'Salva', validate: (x) => validaEnte(normalizzaEnte(x))[0] || null,
   });

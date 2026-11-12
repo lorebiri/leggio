@@ -12,7 +12,7 @@ Tutto funziona senza rete (tranne «Crea PDF da pagina web», che scarica la pag
 | `conformity-declaration` | Dichiarazione di conformità all'originale | Testo dell'ufficio (mai inventato), salvato come modello; segnaposto {nome} {qualifica} {data} {luogo} {pagine} {file} {ente}; pagina aggiunta o in calce; spazio firma. |
 | `smart-rename` | Rinomina dal contenuto | Tipo, soggetto, numero, data, scadenza (DURC) dal testo; regola personalizzabile; anche nelle azioni guidate («Nome proposto dal contenuto»). |
 | `open-eml` | Apri messaggio PEC (.eml)… | daticert.xml in chiaro, messaggio originale (postacert.eml), allegati apribili (PDF, .p7m, fatture, .eml annidati). La firma S/MIME del gestore non è verificata. |
-| `protocol-stamp` | Timbro di protocollo | Ente, ufficio, numero (contatore annuale nelle impostazioni), data, entrata/uscita, classificazione, posizione, prima pagina o tutte. Gestisce le pagine ruotate. |
+| `protocol-stamp` | Segnatura su copia di lavoro | Il protocollo ufficiale è in **Titulus**: Leggio non assegna mai numeri (nessun contatore; il vecchio contatore salvato viene azzerato e non usato). Riporta su una copia il numero e la data già assegnati (scritti, incollati o letti dal documento). Aspetto «come Titulus» (striscia verticale rossa sul margine sinistro, `Prot. CNR n. … del … - UOR: …`, «COPIA DI LAVORO») o riquadro. Secondario, non tra gli strumenti rapidi. |
 | `batch` | Azioni guidate | Cartella (anche sottocartelle) o file; sequenze salvabili; scrive in «Elaborati» (mai sugli originali senza conferma); rapporto finale. |
 | `create-from-web` | Crea PDF da pagina web o HTML… | BrowserWindow nascosta, sandbox, senza JavaScript per i file locali, timeout. |
 | `create-from-office` | Crea PDF da Word, Excel, PowerPoint… | LibreOffice (profilo temporaneo separato, timeout, annullabile); su Windows ripiego su Microsoft Office via PowerShell/COM. Se manca, spiega come installarlo. |
@@ -24,6 +24,25 @@ Tutto funziona senza rete (tranne «Crea PDF da pagina web», che scarica la pag
 
 Pannelli: `p7m` (Firme .p7m), `fattura` (Fattura elettronica), `layers` (Livelli). I pannelli `p7m` e `fattura` appartengono al loro documento: passando a un altro documento si torna alle miniature. Impostazione: «riapri i documenti dell'ultima volta» (`avanzati.restoreSession`, attiva).
 
+## Titulus (protocollo informatico del CNR)
+- **Segnatura**: `lib/titulus.js › segnatureTitulus(testo, { modelli, origine, mascheraUor })` / `segnaturaTitulus` →
+  `{ aoo, numero (com'è scritto, con gli zeri), numeroIntero, data (ISO), dataTesto, uor, anno, classifica, fascicolo, testo, origine: 'testo'|'immagine' }`
+  (`numeroOriginale` = `numero`, per compatibilità). Modello predefinito sul formato reale: `Prot. CNR n. 0123456 del 01/10/2026 - UOR: XX000001`,
+  più modelli generici (AOO prima di «Prot.», «Protocollo n°», numero/anno, data prima, testo su più righe). Modelli configurabili nelle
+  Impostazioni (uno per riga, gruppi `(?<numero>)` e `(?<data>)` obbligatori; sensibili alle maiuscole).
+- **Servizi**: `app.services.segnaturaTitulus(testo)` (sincrono, solo testo) e `app.services.leggiSegnaturaTitulus(bytes, { password, signal })`
+  (PDF o .p7m; asincrono): prima il testo della pagina 1, poi la **striscia-immagine** sul margine — `trovaStrisce` (rapporto ≥ 8:1, entro 15 mm
+  dal bordo) → rendering solo di quella zona a ~500 ppi → bianco/nero (rosso = inchiostro, linee lunghe tolte) → OCR (`creaWorkerOcr`, una riga,
+  caratteri limitati) nei due versi (±90°) → `ripulisciOcr` → modelli. La UOR letta dall'immagine si corregge con una maschera
+  (`AA999999` predefinita, da un solo esempio: da verificare). Il documento non viene modificato (si lavora su una copia dei byte).
+  Collaudo: fixture sintetica (striscia rossa come immagine, numero e UOR inventati) e un documento reale protocollato (solo in locale, non nel
+  repository): riconosciuti numero, data e UOR esatti in circa 0,6–0,9 s, file invariato.
+- **Prepara per Titulus** (`prepare-titulus`): per ogni file controlla leggibilità, password, firme (PAdES/CAdES, con verifica dei .p7m), PDF/A
+  (metadati XMP), dimensione (soglia nelle Impostazioni, 30 MB predefinita: da verificare con il limite di Titulus) e nome; converte in PDF/A
+  (`app.services.pdfa`) e riduce (`app.services.compress`) solo i file NON firmati; copie in «Per Titulus» più rapporto PDF e CSV. Nessun
+  collegamento di rete a Titulus.
+- Le Azioni guidate non hanno più l'operazione «protocollo» (numerazione progressiva).
+
 ## Flussi dell'ufficio amministrativo (terzo ciclo)
 
 | id | Nome | Criterio di accettazione (verificato) |
@@ -32,7 +51,7 @@ Pannelli: `p7m` (Firme .p7m), `fattura` (Fattura elettronica), `layers` (Livelli
 | `dossier-index` | Fascicolo con indice | N documenti (anche .p7m e foto) → PDF con pagina/e indice (voce, numero di documento, pagina iniziale), voci cliccabili, un segnalibro per documento, «Allegato n. k» sulla prima pagina, numerazione facoltativa; i file illeggibili non fermano il fascicolo e vengono elencati. |
 | `reporting-package` | Pacchetto per la rendicontazione | Cartella con una sottocartella per voce → `Rendicontazione/Voce_<voce>.pdf` (fascicolo con indice e allegati numerati) e `Riepilogo_rendicontazione.csv` (voce, n. allegato, file, pagine, pagina nel PDF, data, importo, CIG, CUP; «;» e virgola decimale, apribile in Excel; totali per voce). |
 | `publish-ready` | Pronto per la pubblicazione | Pannello a destra, passi in ordine sul documento attivo: oscura dati personali (servizio `oscuraDatiPersonali` se esiste, altrimenti «Cerca e oscura»), `sanitize`, prepara accessibilità, `pdfa`, `controllaAccessibilita`; salva `<nome>_pubblicabile.pdf` e `<nome>_pubblicabile_rapporto.pdf` con esiti, controlli e SHA-256. Ogni passo è annullabile. |
-| `entity-profile`, `insert-entity`, `fill-entity` | Profilo dell'ente | Denominazione, sigla, ufficio, sede, CF, P.IVA (verificata), codice IPA, codice univoco ufficio, PEC, direttore, firmatari. Estende il profilo personale dell'area moduli (completa ente/P.IVA/ufficio se vuoti, non sovrascrive). Un clic: inserimento sulla pagina, compilazione dei campi dei moduli (solo campi dell'ente; il codice fiscale personale resta all'area moduli), proposto nel timbro di protocollo e nella dichiarazione di conformità. Servizi: `app.services.profiloEnte()`, `app.services.profiloCompleto()`. |
+| `entity-profile`, `insert-entity`, `fill-entity` | Profilo dell'ente | Denominazione, sigla, ufficio, sede, CF, P.IVA (verificata), codice IPA, codice univoco ufficio, PEC, direttore, firmatari. Estende il profilo personale dell'area moduli (completa ente/P.IVA/ufficio se vuoti, non sovrascrive). Un clic: inserimento sulla pagina, compilazione dei campi dei moduli (solo campi dell'ente; il codice fiscale personale resta all'area moduli), proposto nella segnatura su copia di lavoro e nella dichiarazione di conformità. Servizi: `app.services.profiloEnte()`, `app.services.profiloCompleto()`. |
 | pannello `dati-chiave` | Dati chiave | CIG, CUP, P.IVA e CF (con carattere di controllo), IBAN (mod 97), totale e importi, scadenze, ognuno con «Copia»; «Copia tutti i dati». DURC: scadenza letta o calcolata (data richiesta + giorni da impostazione, 120 predefiniti, da verificare): rosso se scaduto. |
 
 ## Azioni guidate: formato delle operazioni delle altre aree
@@ -61,7 +80,7 @@ app.bus.on('batch:operations', (list) => list.push({
 `cades.js` (openP7m, overallStatus, innerName, sniff, looksLikeP7m), `fattura.js` (parseFattura, fatturaHtml, nomeProposto, isFattura), `xml.js`, `der.js`,
 `datichiave.js` (estraiDati(testo,{oggi,durataDurc}), partitaIvaValida, codiceFiscaleValido, ibanValido, importo, riepilogoTesto, DURATA_DURC_GIORNI),
 `rinomina.js` (analizza, proponiNome, trovaDate), `mime.js` (parseMime, parseDaticert, attachments, bodyText, summary), `ente.js`, `fascicolo.js` (creaFascicolo),
-`missione.js`, `rendiconto.js`, `registro.js`, `batch-ops.js`, `protocollo.js`, `conformita.js`, `tagger.js`, `textsearch.js`, `report.js`.
+`missione.js`, `rendiconto.js`, `registro.js`, `batch-ops.js`, `protocollo.js` (senza contatore: `contatoreCorrente`/`avanzaContatore` tolte), `titulus.js`, `conformita.js`, `tagger.js`, `textsearch.js`, `report.js`.
 Le firme non cambiano senza avviso nel rapporto del ciclo.
 
 ## Per le altre aree

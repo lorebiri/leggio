@@ -1,8 +1,6 @@
 // Azioni guidate: file → sequenza di operazioni → dove salvare → avanzamento → rapporto finale.
 import { tutteLeOperazioni, validaSequenza, eseguiSequenza, nomeUscita, SkipError, operazioneProteggi, destinazione } from '../lib/batch-ops.js';
 import { chooseFolder, chooseFiles, writeOut, isDesktop, call, fileItem, dirname, basename } from '../native.js';
-import { preferenze as prefProtocollo } from './protocollo.js';
-import { contatoreCorrente } from '../lib/protocollo.js';
 import { nomeDalContenuto } from './coda.js';
 import { nuovoLavoro, registra, daFare, conteggi, lavoroValido, registroCsv, chiaveDi } from '../lib/registro.js';
 
@@ -223,11 +221,6 @@ export function openBatch(app, deps, preset = null) {
     const cc = conteggi(lavoro);
     const registro = await registroDove();
     if (isDesktop()) { if (cc.mancanti) await salva(true); else await call(app, 'job-clear').catch(() => {}); }
-    const prot = passi.find((s) => s.op === 'protocollo');
-    if (prot) {
-      const base = parseInt(String(prot.params.numero).replace(/\D/g, ''), 10);
-      if (Number.isFinite(base) && cc.ok) app.settings.set('avanzati.protocollo.contatore', { anno: new Date().getFullYear(), prossimo: base + lavoro.items.length });
-    }
     mostraRapporto(lavoro, Date.now() - t0, done === undefined || cc.mancanti > 0, registro);
   }
 
@@ -278,10 +271,6 @@ export function openBatch(app, deps, preset = null) {
 function defaultsFor(app, o) {
   const p = {};
   for (const f of o.fields || []) if (f.name && f.type !== 'info') p[f.name] = f.value;
-  if (o.id === 'protocollo') {
-    const pr = prefProtocollo(app);
-    Object.assign(p, { ente: pr.ente, ufficio: pr.ufficio, direzione: pr.direzione, posizione: pr.posizione, numero: String(contatoreCorrente(app.settings.get('avanzati.protocollo.contatore', null)).prossimo) });
-  }
   return p;
 }
 

@@ -1,4 +1,5 @@
-// Timbro di protocollo / segnatura: riquadro con ente, numero, data, entrata/uscita, classificazione.
+// Segnatura su copia di lavoro: riquadro con ente, numero e data di protocollo GIÀ ASSEGNATI da Titulus (il protocollo
+// informatico del CNR), entrata/uscita, classificazione. Leggio non genera numeri di protocollo.
 // Logica pura su pdf-lib (riceve PDFLib come parametro): usabile dall'interfaccia e dall'elaborazione in blocco.
 
 export const POSIZIONI = [
@@ -41,18 +42,6 @@ export function formattaNumero(n, cifre = 7) {
   return /^\d+$/.test(s) && cifre > 0 ? s.padStart(cifre, '0') : s;
 }
 
-/** Contatore annuale: { anno, prossimo }. Al cambio d'anno riparte da 1. */
-export function contatoreCorrente(stato, data = new Date()) {
-  const anno = data.getFullYear();
-  if (!stato || stato.anno !== anno || !(stato.prossimo >= 1)) return { anno, prossimo: 1 };
-  return { anno, prossimo: Math.floor(stato.prossimo) };
-}
-export function avanzaContatore(stato, usato, data = new Date()) {
-  const c = contatoreCorrente(stato, data);
-  const n = parseInt(String(usato).replace(/\D/g, ''), 10);
-  return { anno: c.anno, prossimo: Number.isFinite(n) && n >= c.prossimo ? n + 1 : c.prossimo + 1 };
-}
-
 /** Righe di testo del timbro. */
 export function righeTimbro(o) {
   const righe = [];
@@ -64,6 +53,7 @@ export function righeTimbro(o) {
   if (dir) terza.push(dir);
   if (o.classificazione) terza.push(`Class. ${String(o.classificazione).trim()}`);
   if (terza.length) righe.push({ testo: terza.join(' · ') });
+  if (o.copia) righe.push({ testo: 'Copia di lavoro — originale in Titulus' });
   return righe;
 }
 
@@ -135,7 +125,7 @@ export function disegnaRiquadro(PDFLib, page, { righe, fonts, posizione = 'alto-
   return { u, v, w: bw, h: bh };
 }
 
-/** Applica il timbro di protocollo. opzioni: { ente, ufficio, numero, data, direzione, classificazione, posizione, pagine:'prima'|'tutte', colore, cifre } */
+/** Applica la segnatura (numero e data presi da Titulus). opzioni: { ente, ufficio, numero, data, direzione, classificazione, posizione, pagine:'prima'|'tutte', colore, copia } */
 export async function applicaProtocollo(pdfDoc, PDFLib, o) {
   const fonts = { regular: await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica), bold: await pdfDoc.embedFont(PDFLib.StandardFonts.HelveticaBold) };
   const righe = righeTimbro(o);
@@ -143,5 +133,32 @@ export async function applicaProtocollo(pdfDoc, PDFLib, o) {
   if (!pages.length) throw new Error('Il documento non ha pagine.');
   const target = o.pagine === 'tutte' ? pages : [pages[0]];
   for (const p of target) disegnaRiquadro(PDFLib, p, { righe, fonts, posizione: o.posizione, colore: o.colore });
+  return target.length;
+}
+
+/** Testo della segnatura nel formato di Titulus (CNR): «Prot. CNR n. 0123456 del 01/10/2026 - UOR: XX000001». */
+export function testoStriscia({ aoo = 'CNR', numero, data, uor, copia } = {}) {
+  return `Prot. ${String(aoo || 'CNR').trim()} n. ${String(numero || '').trim()} del ${data || oggi()}${uor ? ` - UOR: ${String(uor).trim()}` : ''}${copia ? ' — COPIA DI LAVORO' : ''}`;
+}
+
+/**
+ * Segnatura «come Titulus»: striscia verticale rossa sul margine sinistro, che si legge dal basso verso l'alto.
+ * Il numero è quello già assegnato da Titulus: Leggio non ne genera. o: { aoo, numero, data, uor, copia, pagine, size }
+ */
+export async function applicaStriscia(pdfDoc, PDFLib, o) {
+  const font = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+  const size = o.size || 9;
+  const testo = testoSicuro(font, testoStriscia(o));
+  const pages = pdfDoc.getPages();
+  if (!pages.length) throw new Error('Il documento non ha pagine.');
+  const target = o.pagine === 'tutte' ? pages : [pages[0]];
+  for (const p of target) {
+    const { h: PH } = dimensioniVisive(p);
+    const w = font.widthOfTextAtSize(testo, size);
+    const v0 = Math.max(12, (PH - w) / 2);
+    // la riga va dal basso verso l'alto: testo ruotato di 90° in senso antiorario, a ~8 mm dal bordo sinistro
+    const a = visivoAPagina(p, 22, v0);
+    p.drawText(testo, { x: a.x, y: a.y, size, font, color: PDFLib.rgb(0.8, 0.07, 0.07), rotate: PDFLib.degrees(a.rot + 90) });
+  }
   return target.length;
 }
