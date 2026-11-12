@@ -232,23 +232,8 @@ export function registerDigital(app, store) {
     run: () => openVerifyPanel(app),
   });
 
-  // ------------------------------------------------------------------ .p7m
-  app.registerTool({
-    id: 'open-p7m', name: 'Apri file firmato .p7m', category: 'moduli', icon: 'open', needsDoc: false,
-    description: 'Verifica la firma di un file .p7m e apre il PDF contenuto', keywords: 'p7m cades busta apri verifica firmato pdf.p7m',
-    async run() {
-      if (!isDesktop()) return desktopOnly(app, 'Apri file firmato .p7m');
-      const f = (await app.platform.openFiles({ filters: [{ name: 'File firmati (.p7m)', extensions: ['p7m', 'p7s'] }], raw: true }))?.[0];
-      if (f) await openP7m(app, f);
-    },
-  });
-  app.bus.on('files:dropped-nonpdf', async ({ files }) => {
-    for (const file of files || []) {
-      if (!/\.p7m$/i.test(file.name)) continue;
-      if (!isDesktop()) { desktopOnly(app, 'Apri file firmato .p7m'); return; }
-      try { await openP7m(app, { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) }); } catch (e) { app.reportError(e, 'File .p7m'); }
-    }
-  });
+  // I file .p7m (apertura, trascinamento, verifica) sono gestiti dall'area «avanzati»:
+  // un solo punto d'ingresso evita doppie finestre.
 }
 
 async function openP7m(app, f) {
