@@ -5,13 +5,14 @@ import { openPdfJs } from '../../../core/pdf.js';
 import { icon } from '../../../core/icons.js';
 import { applicaDisposizione, caricaPdf, inserisciDaPdf } from '../logica/struttura.js';
 import { pdfDaImmagini } from '../logica/crea.js';
-import { indiciInTesto, ErroreUtente } from '../logica/util.js';
+import { indiciInTesto, ErroreUtente, intervalli } from '../logica/util.js';
 import { caricaEsterno, preparaImmagine, eImmagine, ePdf, leggiFile, analizzaPagina, mostraErrore, apriRisultato, nomeRisultato, FILTRO_TUTTI } from './comune.js';
 import { apriVeloce } from '../logica/struttura.js';
 import { salva } from '../logica/util.js';
 import { modificaDoc } from './comune.js';
 
 const controllori = new Map(); // doc.id → Organizza
+const biancheMemo = new WeakMap(); // PDFDocumentProxy → Map(indice → bianca?)
 let seq = 1;
 const nuovoId = () => 'i' + seq++;
 
@@ -31,7 +32,8 @@ export function installaOrganizza(app) {
     for (const [id, c] of controllori) c.root.hidden = !(doc && id === doc.id && c.aperto);
   });
   app.bus.on('document:closed', ({ doc }) => { const c = controllori.get(doc.id); if (c) { c.distruggi(); controllori.delete(doc.id); } });
-  app.bus.on('document:changed', ({ doc }) => { const c = controllori.get(doc.id); if (c && c.aperto) c.documentoCambiato(); });
+  // anche a vista chiusa: il modello e i risultati in memoria vanno rifatti alla prossima apertura
+  app.bus.on('document:changed', ({ doc }) => { const c = controllori.get(doc.id); if (!c) return; if (c.aperto) c.documentoCambiato(); else c.obsoleto = true; });
 }
 
 class Organizza {
@@ -56,6 +58,9 @@ class Organizza {
     for (let i = 0; i < this.doc.pageCount; i++) this.items.push({ id: nuovoId(), tipo: 'pagina', indice: i, orig: i, rot: 0 });
     this.storia = []; this.futuro = []; this.modificato = false;
     this.sel.clear(); this.anchor = this.focus = null;
+    // versione del documento a cui si riferiscono modello, miniature e pagine bianche
+    this.versione = { bytes: this.doc.bytes, pdf: this.doc.pdf, n: this.doc.pageCount };
+    this.obsoleto = false;
     this.#caricaDimensioni();
   }
   #istantanea() { return { items: this.items.map((x) => ({ ...x })), sel: [...this.sel] }; }
@@ -156,10 +161,10 @@ class Organizza {
     const v = await this.app.ui.dialog({ title: 'Inserisci da un documento aperto', fields: [
       { name: 'd', label: 'Documento', type: 'select', value: String(altri[0].id), options: altri.map((d) => ({ value: String(d.id), label: `${d.name} (${d.pageCount} pagine)` })) },
       { name: 'p', label: 'Pagine da inserire', type: 'pages', value: '' },
-    ], okLabel: 'Inserisci', validate: (x) => { const d = altri.find((y) => String(y.id) === x.d); try { this.app.ui.parsePageRanges(x.p, d.pageCount); } catch (e) { return e.message; } } });
+    ], okLabel: 'Inserisci', validate: (x) => { const d = altri.find((y) => String(y.id) === x.d); try { intervalli(x.p, d.pageCount); } catch (e) { return e.message; } } });
     if (!v) return;
     const d = altri.find((y) => String(y.id) === v.d);
-    const indici = this.app.ui.parsePageRanges(v.p, d.pageCount);
+    const indici = intervalli(v.p, d.pageCount);
     const bytes = await this.app.currentBytes(d);
     await this.#aggiungiEsterno({ nome: d.name, bytes, password: d.password }, this.#posInserimento('dopo', it), indici);
   }
@@ -230,13 +235,12 @@ class Organizza {
         if (p.cancelled) return false;
         const x = candidati[k];
         p.set(k / candidati.length, `Controllo la pagina ${this.items.indexOf(x) + 1} di ${this.items.length}`);
-        const chiave = this.#chiave(x);
-        let r = this.bianche?.get(chiave);
-        if (r === undefined) {
-          const { pdf, i } = this.#sorgente(x);
-          r = (await analizzaPagina(pdf, i, { scala: 0.3 })).vuota;
-          (this.bianche ||= new Map()).set(chiave, r);
-        }
+        // risultati in memoria legati al documento pdf.js (cioè alla sua versione) e al numero di pagina
+        const { pdf, i } = this.#sorgente(x);
+        let mem = biancheMemo.get(pdf);
+        if (!mem) { mem = new Map(); biancheMemo.set(pdf, mem); }
+        let r = mem.get(i);
+        if (r === undefined) { r = (await analizzaPagina(pdf, i, { scala: 0.35 })).vuota; mem.set(i, r); }
         if (r) trovate.push(x);
       }
       return true;
@@ -248,7 +252,7 @@ class Organizza {
     this.sel = new Set(tutte.map((x) => x.id)); this.render(); this.#scorriA(tutte[0].id);
     const elenco = indiciInTesto(tutte.map((x) => this.items.indexOf(x)));
     if (tutte.length >= this.items.length) return this.app.ui.toast('Tutte le pagine sembrano bianche: non le elimino.', { kind: 'warning' });
-    const v = await this.app.ui.dialog({ title: 'Pagine bianche', message: `Ho trovato ${tutte.length === 1 ? '1 pagina bianca' : tutte.length + ' pagine bianche'}: ${elenco}.\nLe ho selezionate in verde: controllale prima di eliminarle.`, okLabel: tutte.length === 1 ? 'Elimina la pagina' : `Elimina ${tutte.length} pagine`, cancelLabel: 'Lascia solo selezionate' });
+    const v = await this.app.ui.dialog({ title: 'Pagine bianche', message: `Ho trovato ${tutte.length === 1 ? 'una pagina bianca: la ' + elenco : tutte.length + ' pagine bianche: ' + elenco}.\n${tutte.length === 1 ? 'L\'ho evidenziata' : 'Le ho evidenziate'} nella griglia: controlla prima di eliminare. Potrai sempre annullare.`, okLabel: tutte.length === 1 ? 'Elimina la pagina' : `Elimina ${tutte.length} pagine`, cancelLabel: 'Non eliminare' });
     if (v) this.elimina(null, tutte);
   }
 
@@ -292,7 +296,7 @@ class Organizza {
         vecchi.forEach((v, k) => { const c = this.cache.get(v.chiave); if (c) cache.set('p:' + k, { ...c, rotDelta: (c.rotDelta || 0) - v.rot }); });
         const dims = new Map(); vecchi.forEach((v, k) => { const d = this.dimensioni.get(v.chiave); if (d) dims.set('p:' + k, v.rot % 180 ? [d[1], d[0]] : d); });
         for (const [k, c] of this.cache) if (![...cache.values()].some((x) => x.url === c.url)) URL.revokeObjectURL(c.url);
-        this.cache = cache; this.dimensioni = dims; this.bianche = null;
+        this.cache = cache; this.dimensioni = dims;
         this.#ricostruisciModello(); this.render();
       } catch (err) { mostraErrore(this.app, err, 'Organizza pagine'); return false; }
       finally { this.applicando = false; }
@@ -304,7 +308,7 @@ class Organizza {
     if (this.applicando) return;
     if (this.modificato) this.app.ui.toast('Il documento è cambiato: le modifiche non applicate in «Organizza pagine» sono state annullate.', { kind: 'warning', timeout: 7000 });
     for (const c of this.cache.values()) URL.revokeObjectURL(c.url);
-    this.cache.clear(); this.dimensioni.clear(); this.bianche = null; this.coda = [];
+    this.cache.clear(); this.dimensioni.clear(); this.coda = [];
     this.#ricostruisciModello(); this.render();
   }
 
@@ -317,14 +321,25 @@ class Organizza {
     }
     this.aperto = false; this.root.hidden = true;
     window.removeEventListener('keydown', this.onKey, true);
+    document.removeEventListener('click', this.onCmd, true);
     this.app.el.root.classList.remove('pg-org-aperto');
     if (this.barraLaterale) { this.app.el.root.classList.remove('sidebar-closed'); this.barraLaterale = false; }
     return true;
   }
+  #versioneCambiata() {
+    const v = this.versione;
+    return this.obsoleto || !v || v.bytes !== this.doc.bytes || v.pdf !== this.doc.pdf || v.n !== this.doc.pageCount;
+  }
   mostra() {
+    if (this.#versioneCambiata()) {
+      for (const c of this.cache.values()) URL.revokeObjectURL(c.url);
+      this.cache.clear(); this.dimensioni.clear(); this.coda = [];
+      this.#ricostruisciModello();
+    }
     this.aperto = true; this.root.hidden = false;
     if (!this.root.isConnected) this.app.el.main.querySelector('.stage').append(this.root);
     window.addEventListener('keydown', this.onKey, true);
+    document.addEventListener('click', this.onCmd, true);
     this.app.el.root.classList.add('pg-org-aperto');
     // più spazio alla griglia: la barra laterale si richiude e torna com'era alla chiusura
     if (!this.app.el.root.classList.contains('sidebar-closed')) { this.barraLaterale = true; this.app.el.root.classList.add('sidebar-closed'); }
@@ -333,6 +348,7 @@ class Organizza {
   }
   distruggi() {
     window.removeEventListener('keydown', this.onKey, true);
+    document.removeEventListener('click', this.onCmd, true);
     this.io?.disconnect();
     for (const c of this.cache.values()) URL.revokeObjectURL(c.url);
     for (const e of this.esterni.values()) e.pdf?.loadingTask?.destroy();
@@ -428,7 +444,7 @@ class Organizza {
     this.info = h('span', { class: 'pg-org-info' });
     this.zoomIn = h('input', { type: 'range', min: 110, max: 420, step: 10, value: this.zoom, 'aria-label': 'Grandezza miniature' });
     this.zoomIn.addEventListener('input', () => this.#impostaZoom(+this.zoomIn.value));
-    this.btnAnnulla = B('Annulla', 'undo', () => this.annulla(), { title: 'Annulla (Ctrl+Z)' });
+    this.btnAnnulla = B('Annulla', 'undo', () => this.annulla(), { title: 'Annulla l\'ultima modifica fatta in questa griglia (Ctrl+Z). Anche il pulsante Annulla in alto fa lo stesso finché questa vista è aperta.' });
     this.btnRipeti = B('Ripeti', 'redo', () => this.ripeti(), { title: 'Ripeti (Ctrl+Maiusc+Z)' });
     this.btnApplica = h('button', { type: 'button', class: 'btn', onclick: () => this.applica() }, 'Applica');
     this.btnSalva = h('button', { type: 'button', class: 'btn primary', onclick: () => this.applica({ salva: true }), title: 'Applica le modifiche e salva il file (Ctrl+S)' }, 'Salva');
@@ -468,7 +484,9 @@ class Organizza {
     this.grid = h('div', { class: 'pg-org-grid', role: 'listbox', 'aria-multiselectable': 'true', 'aria-label': 'Pagine del documento', tabindex: 0 });
     this.marker = h('div', { class: 'pg-marker', hidden: true });
     this.scroll = h('div', { class: 'pg-org-scroll' }, this.grid, this.marker);
-    this.suggerimento = h('div', { class: 'pg-org-hint' }, 'Clic per selezionare · Ctrl o Maiusc + clic per più pagine · trascina per spostare (anche su un\'altra scheda) · trascina qui PDF e foto dal computer');
+    this.stato = h('strong', { class: 'pg-org-stato' });
+    this.statoModifiche = h('span', { class: 'pg-org-modifiche' });
+    this.suggerimento = h('div', { class: 'pg-org-hint' }, this.stato, this.statoModifiche, h('span', { class: 'pg-org-aiuto' }, 'Clic per selezionare · Ctrl o Maiusc + clic per più pagine · trascina per spostare (anche su un\'altra scheda) · trascina qui PDF e foto dal computer'));
     this.root = h('section', { class: 'pg-org', hidden: true, 'aria-label': 'Organizza pagine' }, bar, this.scroll, this.suggerimento);
     this.root.style.setProperty('--pg-zoom', this.zoom + 'px');
     this.io = new IntersectionObserver((entries) => {
@@ -530,7 +548,11 @@ class Organizza {
     for (const [id, c] of this.cards) if (!vivi.has(id)) { this.io.unobserve(c); c.remove(); this.cards.delete(id); this.visibili?.delete(id); }
     this.grid.append(frag);
     const n = this.items.length, s = this.sel.size;
-    this.info.textContent = `${this.doc.name} · ${n} ${n === 1 ? 'pagina' : 'pagine'}${s ? ` · ${s} ${s === 1 ? 'selezionata' : 'selezionate'}` : ''}${this.modificato ? ' · modifiche da applicare' : ''}`;
+    // il titolo ha larghezza fissa: lo stato della selezione sta nella riga in basso, così la barra non si sposta
+    this.info.textContent = `${this.doc.name} · ${n} ${n === 1 ? 'pagina' : 'pagine'}`;
+    this.info.title = this.doc.name;
+    this.stato.textContent = s ? `${s} ${s === 1 ? 'pagina selezionata' : 'pagine selezionate'}` : 'Nessuna pagina selezionata';
+    this.statoModifiche.textContent = this.modificato ? 'Modifiche non ancora applicate al documento: premi «Applica» o «Salva».' : '';
     this.btnAnnulla.disabled = !this.storia.length; this.btnRipeti.disabled = !this.futuro.length;
     this.btnApplica.disabled = !this.modificato;
     this.root.classList.toggle('modificato', this.modificato);
@@ -599,6 +621,14 @@ class Organizza {
     this.#trascinamento();
     this.#dropFile();
     this.onKey = (e) => this.#tasti(e);
+    this.onCmd = (e) => {
+      const b = e.target.closest?.('[data-cmd="undo"], [data-cmd="redo"]');
+      if (!b || this.root.hidden || !this.app.el.toolbar.contains(b)) return;
+      const undo = b.dataset.cmd === 'undo';
+      if (undo ? !this.storia.length : !this.futuro.length) return; // niente in griglia: vale l'Annulla del documento
+      e.preventDefault(); e.stopPropagation();
+      undo ? this.annulla() : this.ripeti();
+    };
   }
 
   #tasti(e) {

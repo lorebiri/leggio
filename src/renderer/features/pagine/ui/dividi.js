@@ -62,7 +62,7 @@ export async function apriDividi(app) {
       }
     });
     if (!scritti) return;
-    const msg = `Creati ${scritti} file${cartella === '__download__' ? ' (nei download)' : ''}.` + (troppo ? ` Attenzione: ${troppo} ${troppo === 1 ? 'parte supera' : 'parti superano'} comunque il limite perché contengono una sola pagina molto pesante: prova prima a comprimere il PDF.` : '');
+    const msg = `Creati ${scritti} file${cartella === '__download__' ? ' (nei download)' : ''}.` + (troppo ? ` Attenzione: ${troppo} ${troppo === 1 ? 'parte supera comunque il limite perché contiene' : 'parti superano comunque il limite perché contengono'} una sola pagina molto pesante: prova prima a comprimere il PDF.` : '');
     app.ui.toast(msg, { kind: troppo ? 'warning' : 'success', timeout: 9000, action: cartella !== '__download__' ? { label: 'Apri cartella', run: () => app.platform.showInFolder(cartella) } : undefined });
   } catch (err) { mostraErrore(app, err, 'Dividi PDF'); }
 }

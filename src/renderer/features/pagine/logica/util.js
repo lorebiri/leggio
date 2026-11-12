@@ -56,8 +56,19 @@ export function validaIndici(indici, pageCount, { almenoUno = true } = {}) {
 }
 
 /** Converte "1-3, 5, 8-" (anche "pari", "dispari") in indici 0-based ordinati. Vuoto = tutte. */
+/** Rende tollerante la scrittura delle pagine: «da 1 a 3», «pag. 5», «1 e 4», «dalla 7 in poi». */
+export function normalizzaPagine(str) {
+  return String(str || '').toLowerCase()
+    .replace(/\b(?:pagine|pagina|pagg?\.?|pp?\.)\s*/g, '')
+    .replace(/\b(?:dalla|da)\s+(\d+)\s+(?:alla|a)\s+(\d+)/g, '$1-$2')
+    .replace(/\b(?:dalla|da)\s+(\d+)\s+(?:in poi|alla fine)/g, '$1-')
+    .replace(/(\d+)\s+in poi/g, '$1-')
+    .replace(/\s+(?:e|ed)\s+/g, ',')
+    .replace(/\bfino alla\s+(\d+)/g, '1-$1');
+}
+
 export function intervalli(str, pageCount) {
-  const s = (str || '').trim();
+  const s = normalizzaPagine(str).trim();
   if (!s) return [...Array(pageCount).keys()];
   const out = new Set();
   for (const part of s.split(/[,;]+/)) {
@@ -84,7 +95,7 @@ export function intervalli(str, pageCount) {
 
 /** Gruppi di intervalli separati da virgola: "1-3, 4-6, 7" → [[0,1,2],[3,4,5],[6]] (ordine conservato). */
 export function gruppiIntervalli(str, pageCount) {
-  const parti = (str || '').split(/[,;]+/).map((x) => x.trim()).filter(Boolean);
+  const parti = normalizzaPagine(str).split(/[,;]+/).map((x) => x.trim()).filter(Boolean);
   if (!parti.length) throw new ErroreUtente('Scrivi almeno un intervallo, per esempio: 1-3, 4-10');
   return parti.map((p) => intervalli(p, pageCount));
 }

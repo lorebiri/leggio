@@ -78,6 +78,8 @@ export function installaTrascinamento(app) {
   app.bus.on('files:dropped-nonpdf', async ({ files }) => {
     // se la vista Organizza è aperta, i file li gestisce lei
     if (document.querySelector('.pg-org:not([hidden])')) return;
+    // con una finestra aperta i file non devono arrivare al documento dietro
+    if (document.querySelector('#overlay-root .backdrop, .tools-hub')) return;
     const immagini = files.filter((f) => eImmagine(f.name));
     const testi = files.filter((f) => /\.(txt|text)$/i.test(f.name));
     try {

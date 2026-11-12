@@ -18,6 +18,12 @@ describe('intervalli di pagine', () => {
     expect(() => intervalli('abc', 3)).toThrow(/Non capisco/);
     expect(() => intervalli('3-1', 3)).toThrow(/non valido/);
     expect(gruppiIntervalli('1-2, 3', 3)).toEqual([[0, 1], [2]]);
+    // scritture tolleranti (secondo giro della prova d'uso)
+    expect(intervalli('da 1 a 3', 6)).toEqual([0, 1, 2]);
+    expect(intervalli('pag. 5', 6)).toEqual([4]);
+    expect(intervalli('Pagine 2 e 4', 6)).toEqual([1, 3]);
+    expect(intervalli('dalla 5 in poi', 6)).toEqual([4, 5]);
+    expect(intervalli('pp. 1-2; 6', 6)).toEqual([0, 1, 5]);
     expect(indiciInTesto([0, 1, 2, 4, 6, 7])).toBe('1-3, 5, 7-8');
     expect(() => validaIndici([], 3)).toThrow(/almeno una/);
   });
