@@ -243,11 +243,13 @@ export function clonaPagina(doc, page, usati = nomiCampiEsistenti(doc)) {
  * Prepara pagine di un documento sorgente (usa e getta) per essere copiate altrove:
  * campi modulo resi locali, link verso pagine non copiate disattivati, riferimenti superflui tolti.
  * Evita che copyPages trascini con sé pagine e campi di tutto il documento.
+ * → funzione che ripristina i link disattivati (la sorgente resta riutilizzabile).
  */
 export function preparaPerCopia(src, indici) {
   const ctx = src.context;
   const pages = src.getPages();
   const copiate = new Set(indici.map((i) => pages[i].ref.toString()));
+  const ripristini = [];
   for (const i of indici) {
     const p = pages[i];
     materializzaEreditati(p);
@@ -264,12 +266,15 @@ export function preparaPerCopia(src, indici) {
       const action = a.lookupMaybe(N('A'), PDFDict);
       const d = dest || action?.lookup(N('D'));
       if (d instanceof PDFArray && d.get(0) instanceof PDFRef && !copiate.has(d.get(0).toString())) {
-        if (dest) a.delete(N('Dest')); else a.delete(N('A'));
+        const k = dest ? N('Dest') : N('A');
+        ripristini.push([a, k, a.get(k)]);
+        a.delete(k);
       }
       a.delete(N('StructParent'));
     }
     if (widget.length) localizzaCampi(src, widget, { rinomina: false });
   }
+  return () => { for (const [a, k, v] of ripristini) a.set(k, v); };
 }
 
 /**
@@ -279,8 +284,9 @@ export function preparaPerCopia(src, indici) {
  */
 export async function copiaPagineEsterne(doc, src, indici) {
   if (!indici.length) return [];
-  preparaPerCopia(src, indici);
-  const copiate = await doc.copyPages(src, indici);
+  const ripristina = preparaPerCopia(src, indici);
+  let copiate;
+  try { copiate = await doc.copyPages(src, indici); } finally { ripristina(); }
   const ctx = doc.context;
   const usati = nomiCampiEsistenti(doc);
   const nuoviCampi = [];
