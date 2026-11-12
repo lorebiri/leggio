@@ -1,17 +1,12 @@
 // Oscura (Redazione): segna aree, testo selezionato, risultati di ricerca, pagine intere; poi applica
 // un oscuramento VERO (il contenuto sotto viene eliminato) e verifica il risultato.
-import { PDFJS_ASSETS } from '../../core/pdf.js';
 import { MODELLI, buildMatchers, findMatches } from './logica/modelli.js';
-import { buildPageText, rangeRects, pageWords, wordsOutside, wordHit, normRect, padRect } from './logica/testo.js';
-import { redactPage, embedTextFont, finalizeRedaction, redactOutlineTitles, removeStructure } from './logica/redazione.js';
-import { verifyRedaction } from './logica/verifica.js';
-import { sanitize } from './logica/sanifica.js';
-import { renderRedactedPage, viewportRect, measureChars } from './codec.js';
+import { buildPageText, rangeRects, normRect, padRect } from './logica/testo.js';
+import { viewportRect, measureChars } from './codec.js';
+import { applyRedaction, hasImages } from './redigi.js';
 import { setMeasure } from './logica/testo.js';
 setMeasure(measureChars);
-import { st, openForEdit, salvaCopia, copyName, signatureCount, avvisoFirma, boxAvviso } from './comune.js';
-import { N, lookupDict } from './logica/pdfutil.js';
-import { PDFString, PDFHexString } from '@cantoo/pdf-lib';
+import { st, salvaCopia, copyName, signatureCount, avvisoFirma, boxAvviso } from './comune.js';
 
 const DEFAULT_OFF = new Set(['Partita IVA', 'Date']);
 const fmtKB = (n) => (n < 1048576 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1048576).toFixed(1).replace('.', ',') + ' MB');
@@ -249,8 +244,8 @@ export async function openSearchPanel(app) {
         if (i % 5 === 0) p.set(i / doc.pageCount, `Pagina ${i + 1} di ${doc.pageCount}`);
         const page = await doc.pdf.getPage(i + 1);
         const tc = await page.getTextContent();
+        if (!tc.items.some((x) => x.str && x.str.trim())) { if (await hasImages(page, app.lib.pdfjs.OPS)) textless++; page.cleanup(); continue; }
         page.cleanup();
-        if (!tc.items.some((x) => x.str && x.str.trim())) { textless++; continue; }
         const pt = buildPageText(tc.items, tc.styles);
         for (const hit of findMatches(pt.text, matchers)) {
           const rects = rangeRects(pt, hit.start, hit.end);
@@ -287,9 +282,10 @@ export async function openSearchPanel(app) {
 async function runOcr(app) {
   const svc = app.services?.ocr;
   if (typeof svc === 'function') {
-    // contratto atteso (area conversione): ocr(bytes, { signal, onProgress }) → byte PDF con testo invisibile
+    // area conversione: ocr(bytes, { password, progress: { set, signal } }) → byte PDF con testo invisibile
+    const doc = app.activeDoc;
     await app.ui.withProgress('Riconoscimento del testo (OCR)…', async (p) => {
-      await app.applyEdit('Riconoscimento del testo (OCR)', (bytes) => svc(bytes, { signal: p.signal, onProgress: (f, t) => p.set(f, t) }));
+      await app.applyEdit('Riconoscimento del testo (OCR)', (bytes) => svc(bytes, { password: doc.password, progress: p }));
     });
     app.ui.toast('Testo riconosciuto: ora puoi ripetere la ricerca.', { kind: 'success' });
     return;
@@ -324,48 +320,13 @@ async function applyRedactions(app) {
   if (!v) return;
   app.settings.set('sic.redColor', v.color); app.settings.set('sic.redLabel', v.label); app.settings.set('sic.redSanitize', v.sanitize); app.settings.set('sic.redOut', v.out);
   const { pdfjs } = app.lib;
-  const t0 = performance.now();
-  const result = await app.ui.withProgress('Oscuramento in corso…', async (p) => {
-    const pdfDoc = await openForEdit(bytes, doc);
-    const font = await embedTextFont(pdfDoc);
-    const pages = [...byPage.keys()].sort((a, b) => a - b);
-    let removedWords = 0; let annots = 0; let fields = 0;
+    const result = await app.ui.withProgress('Oscuramento in corso…', async (p) => {
     // termini da cercare ovunque nella verifica: risultati della ricerca e testo selezionato,
     // esclusi quelli che l'utente ha deliberatamente lasciato visibili altrove
     const offTexts = new Set(marks(app).filter((m) => !m.on && m.text).map((m) => m.text.toLowerCase()));
     const globalTerms = [...new Set(on.filter((m) => m.text && !offTexts.has(m.text.toLowerCase())).map((m) => m.text))];
-    for (let k = 0; k < pages.length; k++) {
-      if (p.signal.aborted) throw new DOMException('Annullato', 'AbortError');
-      const i = pages[k]; const rects = byPage.get(i);
-      p.set(k / (pages.length + 2), `Pagina ${i + 1} (${k + 1} di ${pages.length})`);
-      const page = await doc.pdf.getPage(i + 1);
-      const tc = await page.getTextContent();
-      page.cleanup();
-      const words = pageWords(tc.items, tc.styles);
-      const keep = wordsOutside(words, rects);
-      removedWords += words.length - keep.length;
-      const img = await renderRedactedPage(pdfjs, doc.pdf, i, rects, { color: v.color, label: v.label.trim(), dpi: pages.length > 60 ? 200 : 300, quality: 0.8, signal: p.signal });
-      const r = await redactPage(pdfDoc, i, { image: img, view: img.view, rects, keepWords: keep, font });
-      annots += r.annots; fields += r.fields;
-    }
-    p.set(pages.length / (pages.length + 2), 'Pulizia del documento…');
-    const replace = (s, rep = '████') => { let o = s; for (const t of globalTerms) o = o.split(t).join(rep); return o; };
-    const outlineChanged = globalTerms.length ? redactOutlineTitles(pdfDoc, replace) : 0;
-    // proprietà del documento: i termini oscurati non devono restare nel titolo o nell'oggetto
-    const info = lookupDict(pdfDoc.context, pdfDoc.context.trailerInfo.Info);
-    if (info && globalTerms.length) for (const [key, val] of info.entries()) {
-      const o = pdfDoc.context.lookup(val);
-      if (o instanceof PDFString || o instanceof PDFHexString) { const s = o.decodeText(); const r = replace(s); if (r !== s) info.set(key, PDFHexString.fromText(r)); }
-    }
-    const structure = removeStructure(pdfDoc);
-    const san = v.sanitize ? sanitize(pdfDoc, {}) : null;
-    if (!v.sanitize && pdfDoc.catalog.get(N('Metadata')) && globalTerms.length) pdfDoc.catalog.delete(N('Metadata'));
-    await finalizeRedaction(pdfDoc);
-    const out = await pdfDoc.save({ useObjectStreams: true });
-    p.set((pages.length + 1) / (pages.length + 2), 'Verifica: controllo che i dati oscurati non siano più presenti…');
-    const marksMap = new Map([...byPage.entries()].map(([i, rs]) => [i, rs]));
-    const ver = await verifyRedaction(pdfjs, out, marksMap, globalTerms, { signal: p.signal, getDocumentOptions: PDFJS_ASSETS });
-    return { out, ver, pages: pages.length, areas: on.length, removedTexts: removedWords, annots, fields, outlineChanged, structure, san, ms: performance.now() - t0 };
+    const r = await applyRedaction({ pdfjs, pdf: doc.pdf, bytes, password: doc.password, byPage, globalTerms, color: v.color, label: v.label.trim(), doSanitize: v.sanitize, signal: p.signal, onProgress: (f, t) => p.set(f, t) });
+    return { ...r, areas: on.length };
   });
   if (!result) return;
   const { h } = app.ui;

@@ -1,6 +1,6 @@
 // Strumento «Rendi ricercabile (OCR)», proposta automatica sulle scansioni e servizio app.services.ocr.
 import { openPdfJs } from '../../core/pdf.js';
-import { LINGUE_OCR, creaWorkerOcr, riconosciPagine, applicaTestoOcr, fontOcrBytes, misuratoreFont, rilevaScansione } from './ocr.js';
+import { LINGUE_OCR, creaWorkerOcr, creaPoolOcr, riconosciPagine, applicaTestoOcr, fontOcrBytes, misuratoreFont, rilevaScansione } from './ocr.js';
 import { messaggioErrore, renderPagina } from './comune.js';
 
 export function haFirmaDigitale(bytes) {
@@ -30,15 +30,19 @@ function lingueDefault(app) {
  * opts: { langs, pages (0-based), skipText=true, deskew=false, dpi=300, password, pdf, progress:{set,signal} }
  * Il risultato dettagliato è in opts.report dopo la chiamata (se passato un oggetto).
  */
+// worker condivisi tra le chiamate (es. azioni guidate file dopo file); chiusi dopo un minuto di inattività
+export const poolOcr = creaPoolOcr();
+
 export async function ocrSuBytes(app, bytes, opts = {}) {
   const own = !opts.pdf;
+  const pool = opts.pool || poolOcr;
   const pdf = opts.pdf || (await openPdfJs(bytes, { password: opts.password })).pdf;
   try {
     const fontWidth = await misuratoreFont();
     const res = await riconosciPagine({
-      pdf, pages: opts.pages, langs: opts.langs || lingueDefault(app), skipText: opts.skipText !== false,
+      pdf, pages: opts.pages, workers: opts.workers, langs: opts.langs || lingueDefault(app), skipText: opts.skipText !== false,
       deskew: !!opts.deskew, dpi: opts.dpi || 300, progress: opts.progress || { set() {}, signal: opts.signal },
-      renderPage: (p, i, s) => renderPagina(p, i, s, { pdfjs: app.lib.pdfjs }), fontWidth,
+      renderPage: (p, i, s) => renderPagina(p, i, s, { pdfjs: app.lib.pdfjs }), fontWidth, pool,
     });
     if (opts.report) Object.assign(opts.report, res);
     // niente da scrivere (pagine bianche o senza testo riconoscibile): il documento resta identico
@@ -54,7 +58,10 @@ export async function ocrSuBytes(app, bytes, opts = {}) {
     }
     await applicaTestoOcr(pdfDoc, app.lib.PDFLib, font, res.pagine);
     return await app.lib.savePdfLib(pdfDoc);
-  } finally { if (own) await pdf.loadingTask.destroy().catch(() => {}); }
+  } finally {
+    pool.rilascia();
+    if (own) await pdf.loadingTask.destroy().catch(() => {});
+  }
 }
 
 async function avviaOcr(app, { proposta = false } = {}) {

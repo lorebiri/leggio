@@ -87,6 +87,10 @@ export const platform = {
   async log(entry) { if (native) return native.invoke('app:log', entry); },
   async openLogs() { if (native) return native.invoke('app:open-logs'); },
   isElectron,
+  /** Stampanti disponibili (solo app): [{ name, displayName, isDefault }]. */
+  async printers() { return native ? native.invoke('app:printers') : []; },
+  /** Stampa la pagina corrente (#print-root) con le opzioni (solo app). → { ok, err } */
+  async print(opts) { if (native) return native.invoke('app:print', opts); window.print(); return { ok: true }; },
   /** Menu nativo «Strumenti»: [{label, items:[{id,label}]}] (solo app). */
   async setToolsMenu(groups) { if (native) return native.invoke('app:tools-menu', groups); },
   /** Recupero automatico su disco (solo app); nel browser recovery.js usa IndexedDB. */
