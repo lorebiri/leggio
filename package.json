@@ -1,0 +1,36 @@
+{
+  "name": "leggio",
+  "productName": "Leggio",
+  "version": "0.1.0",
+  "description": "Leggio — lettore ed editor PDF libero e gratuito per Windows e macOS",
+  "main": "electron/main.cjs",
+  "license": "GPL-3.0-or-later",
+  "author": "Lorenzo Birindelli",
+  "type": "module",
+  "scripts": {
+    "dev": "vite build && electron .",
+    "build:web": "vite build",
+    "start": "electron .",
+    "test": "vitest run",
+    "dist:mac": "vite build && electron-builder --mac",
+    "dist:win": "vite build && electron-builder --win",
+    "preview": "bash scripts-preview.sh"
+  },
+  "dependencies": {
+    "@cantoo/pdf-lib": "^2.11.1",
+    "@pdf-lib/fontkit": "^1.1.1",
+    "@signpdf/placeholder-pdf-lib": "^4.0.0",
+    "@signpdf/signer-p12": "^4.0.0",
+    "@signpdf/signpdf": "^4.0.0",
+    "docx": "^9.15.3",
+    "node-forge": "^1.4.3",
+    "pdfjs-dist": "^6.5.438",
+    "tesseract.js": "^7.0.0"
+  },
+  "devDependencies": {
+    "electron": "^45.3.1",
+    "electron-builder": "^26.18.0",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
+  }
+}
