@@ -15,6 +15,7 @@ Test: `test/sicurezza-*.test.js` (`npx vitest run test/sicurezza`).
 | `metadata` | Proprietà e vista iniziale | Titolo, autore, oggetto, parole chiave, applicazione, produttore, date; pannelli, disposizione, zoom e pagina iniziali, titolo nella barra. XMP riscritto coerente. |
 | `compress` | Riduci dimensioni file | «Sotto N MB» (ricerca binaria su una scala dpi/qualità, MB decimali), livelli, personalizzato; scala di grigi; copia come scelta predefinita; avviso firme. |
 | `attachments` | Allegati (anche pannello laterale) | Elenca, apre (PDF), salva, aggiunge, toglie. Avviso all'apertura «Questo PDF contiene N allegati». |
+| `pec` | Prepara per PEC | Più file (documenti aperti + «Aggiungi file…», anche non PDF). Limite del messaggio nelle Impostazioni (`sic.pec.limitMB`, predefinito 30 MB, da verificare col gestore); allegati ×1,37 (base64) + 150 KB di margine. Comprime l'insieme con la qualità migliore che ottiene il minimo numero di invii, poi divide (first-fit decrescente); file troppo grandi da soli → «Dividi». Firmati non compressi. Salva in una cartella con «Invio N - » davanti al nome. |
 | `repair` | Ripara PDF | 1) riscrittura con pdf-lib (ignora la xref); 2) ricostruzione dalle pagine leggibili da pdf.js (immagine + testo invisibile). |
 
 ## Come funziona l'oscuramento
@@ -58,3 +59,16 @@ Permessi omessi = consentiti. `compress` richiede il browser (canvas). Dall'area
 - «Sotto N MB»: casella «Non scendere sotto una qualità leggibile» (minimo 110 punti per pollice, attiva in
   partenza); sotto 150 punti per pollice il risultato avvisa che le scansioni potrebbero essere poco leggibili e mette
   in evidenza «Apri il risultato … per controllarlo».
+
+## Azioni guidate (`batch:operations`)
+| id | Operazione | Note |
+|---|---|---|
+| `riduci` | Riduci dimensioni file | Livelli o «sotto N MB per file», soglia di leggibilità; file firmati esclusi salvo scelta esplicita. Nota per file: prima → dopo, avvisi. |
+| `proteggi` | Proteggi con password | **Sostituisce** l'omonima delle azioni guidate (che usa `doc.encrypt` del fork e lascia le stringhe in chiaro). Stessi parametri (`password`, `stampa`, `copia`). Chiave AES-256 riusata nel lotto: circa 1,8 s → pochi ms a file; si dimentica dopo 2 minuti. |
+| `sanifica` | Sanifica | Una casella per voce. |
+| `oscura-modelli` | Oscura dati personali | Modelli (CF, IBAN, email, telefono preselezionati) + parole; nessuna conferma uno per uno; **verifica obbligatoria: se fallisce il file non viene salvato** (errore = «Non riuscito»). Pagine scansionate: OCR prima (`app.services.ocr`), oppure file segnalato e non salvato, oppure ignorate (scelta esplicita). Le pagine bianche non contano come scansioni. |
+
+Misura (browser, 1000 file da una pagina con CF, IBAN e 30 righe di testo; catena sanifica → riduci → oscura → proteggi):
+1000 file in 219 s (0,22 s a file), 0 errori, heap JS stabile a ~32 MB (campioni ogni 100 file: 31–33 MB,
+un picco a 86 MB dovuto alla raccolta della memoria). Le operazioni non tengono stato tra un file e l'altro (salvo la
+chiave del lotto): la ripresa dopo un'interruzione la gestisce il motore delle azioni guidate.

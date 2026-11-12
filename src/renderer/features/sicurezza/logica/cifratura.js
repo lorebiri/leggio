@@ -118,6 +118,31 @@ export function encryptDoc(pdfDoc, { userPassword = '', ownerPassword = '', perm
   return { ownerPassword: owner };
 }
 
+// Elaborazione in blocco: derivare le chiavi AES-256 (revisione 6) richiede centinaia di hash SHA-2 in
+// JavaScript (~1-2 s a file). Con la stessa password e gli stessi permessi si può riusare il gestore di
+// sicurezza: chiave del file e voci /O /U /OE /UE /Perms uguali, identificativo del file nuovo e IV casuali
+// per ogni oggetto. Chi conosce la password apre comunque tutti i file del lotto: nessuna perdita di sicurezza.
+const SEC_CACHE = new Map();
+let secTimer = null;
+function encryptDocReusing(pdfDoc, opts) {
+  // la chiave in memoria si dimentica da sola dopo 2 minuti senza file da cifrare
+  clearTimeout(secTimer); secTimer = setTimeout(() => SEC_CACHE.clear(), 120000); secTimer?.unref?.();
+  const key = JSON.stringify([opts.userPassword || '', opts.ownerPassword || '', toLibPermissions(opts.permissions), opts.algorithm || 'AES-256']);
+  const cached = SEC_CACHE.get(key);
+  if (!cached) {
+    const r = encryptDoc(pdfDoc, opts);
+    SEC_CACHE.clear(); // una sola voce: niente password che restano in memoria oltre il lotto corrente
+    SEC_CACHE.set(key, { sec: pdfDoc.context.security, owner: r.ownerPassword });
+    return r;
+  }
+  const sec = Object.create(Object.getPrototypeOf(cached.sec));
+  Object.assign(sec, cached.sec, { context: pdfDoc.context, id: globalThis.crypto.getRandomValues(new Uint8Array(16)) });
+  pdfDoc.context.security = sec.encrypt();
+  return { ownerPassword: cached.owner };
+}
+/** Dimentica le chiavi riusate (da chiamare a fine lotto). */
+export function forgetReusedKeys() { SEC_CACHE.clear(); }
+
 /** Cifra le stringhe di tutti gli oggetti indiretti (rimedio al difetto del fork). → numero di stringhe */
 export function encryptAllStrings(pdfDoc) {
   const ctx = pdfDoc.context; const sec = ctx.security;
@@ -151,7 +176,7 @@ export async function encryptBytes(bytes, opts) {
   if (doc.isEncrypted) throw new Error('Il documento è già cifrato: togli prima la protezione esistente.');
   const flat = await doc.save({ useObjectStreams: false });
   doc = await PDFDocument.load(flat, { updateMetadata: false });
-  const r = encryptDoc(doc, opts);
+  const r = opts?.reuseKey ? encryptDocReusing(doc, opts) : encryptDoc(doc, opts);
   encryptAllStrings(doc);
   const out = await doc.save({ useObjectStreams: false, updateFieldAppearances: false, addDefaultPage: false });
   return Object.assign(out, { ownerPassword: r.ownerPassword });
