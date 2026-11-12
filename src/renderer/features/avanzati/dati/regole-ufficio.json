@@ -1,0 +1,48 @@
+{
+  "versione": "2026-11-12",
+  "nota": "Regole che cambiano nel tempo: ogni voce ha la fonte e la data dell'ultimo controllo. L'ufficio può caricare un file aggiornato dalle Impostazioni.",
+  "sdi": {
+    "giorniEsito": 15,
+    "fonte": "Manuale CNR fatturazione elettronica passiva; DM MEF 24/8/2020 n. 132 (cause di rifiuto)",
+    "aggiornato": "2026-11-12"
+  },
+  "cigCup": {
+    "fonte": "Art. 25 DL 66/2014; DM 55/2013 art. 2-bis (inserito dal DM 132/2020): CIG o CUP mancanti o errati sono causa di rifiuto ammessa",
+    "aggiornato": "2026-11-12"
+  },
+  "splitPayment": {
+    "finoAl": "2029-06-30",
+    "fonte": "Art. 17-ter DPR 633/72; non si applica ai compensi con ritenuta (DL 87/2018); proroga al 30/06/2029 (comunicato MEF n. 77 del 30/6/2026)",
+    "aggiornato": "2026-11-12"
+  },
+  "bolloFatture": {
+    "soglia": 77.47,
+    "importo": 2,
+    "nature": ["N1", "N2", "N2.1", "N2.2", "N3", "N3.1", "N3.2", "N3.3", "N3.4", "N3.5", "N3.6", "N4"],
+    "fonte": "Agenzia delle Entrate, imposta di bollo sulle fatture elettroniche (2 € oltre 77,47 € di importi esenti o non imponibili; campo BolloVirtuale = SI)",
+    "aggiornato": "2026-11-12"
+  },
+  "bolloContratti": {
+    "fasce": [
+      { "fino": 40000, "importo": 0 },
+      { "fino": 150000, "importo": 40 },
+      { "fino": 1000000, "importo": 120 },
+      { "fino": 5000000, "importo": 250 },
+      { "fino": 25000000, "importo": 500 },
+      { "fino": null, "importo": 1000 }
+    ],
+    "codiceTributo": "1573",
+    "fonte": "D.lgs. 36/2023, Allegato I.4, Tabella A (importo massimo con opzioni e rinnovi; a carico dell'appaltatore); F24 ELIDE codice tributo 1573 (Ris. AE 37/E/2023)",
+    "aggiornato": "2026-11-12"
+  },
+  "pagamentiTracciabili": {
+    "spese": ["albergo", "pasto", "taxi", "noleggio"],
+    "fonte": "L. 207/2024 (legge di bilancio 2025), art. 1 c. 81: spese di vitto, alloggio, viaggio con taxi o NCC e noleggio da pagare con mezzi tracciabili per il rimborso; in U-Web va spuntato «Pagamento non tracciabile» se pagate in contanti",
+    "aggiornato": "2026-11-12"
+  },
+  "durc": {
+    "giorniValidita": 120,
+    "fonte": "DM Lavoro 30/1/2015 (validità 120 giorni dalla richiesta): da verificare sulla norma vigente",
+    "aggiornato": "2026-11-12"
+  }
+}
