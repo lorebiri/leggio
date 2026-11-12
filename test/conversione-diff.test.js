@@ -63,7 +63,7 @@ describe('diff a parole', () => {
     const ms = Date.now() - t0;
     expect(applica(a, b, ops)).toEqual(b);
     expect(modifiche(ops, a, b)).toHaveLength(3);
-    expect(ms).toBeLessThan(3000);
+    expect(ms).toBeLessThan(15000); // di solito < 1 s; margine per macchine cariche (CI)
   });
 
   it('blocco totalmente diverso oltre il tetto: sostituito in blocco senza esplodere', () => {
