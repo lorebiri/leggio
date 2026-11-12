@@ -80,6 +80,11 @@ beforeAll(async () => {
     p.node.set(PDFName.of('Contents'), arr);
     complex = await d.save({ useObjectStreams: false });
   }
+  // per il collaudo a mano: LEGGIO_FIXTURES_OUT=cartella npx vitest run test/modifica
+  if (process.env.LEGGIO_FIXTURES_OUT) {
+    const { writeFileSync } = await import('node:fs');
+    for (const [n, b] of Object.entries({ 'modifica-semplice.pdf': simple, 'modifica-word.pdf': type0, 'modifica-complesso.pdf': complex })) writeFileSync(process.env.LEGGIO_FIXTURES_OUT + '/' + n, b);
+  }
 });
 
 function blockWith(tc, needle) {

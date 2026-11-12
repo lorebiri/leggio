@@ -5,7 +5,7 @@ import { rewriteContentStream, fmtNum, toHex, concatStreams } from './contentstr
 import { interpret, effectiveFontSize, showAngle, mul, apply } from './interpreter.js';
 import { removeGlyphs, replaceGlyphRange, placeImage } from './rewrite.js';
 import { loadPage, markSeenCodes, setPageContent, addFontToPage, addXObjectToPage, fontResourceName } from './pdfpage.js';
-import { toLocal, fromLocal, wrapText, diffRange } from './blocks.js';
+import { toLocal, fromLocal, wrapText, diffRange, boxToPage } from './blocks.js';
 import { winAnsiCode } from './fontmodel.js';
 
 const { StandardFonts } = PDFLib;
@@ -224,7 +224,12 @@ export async function editBlock(pdfDoc, pageIndex, block, newText, style = {}, e
     const old = opts.oldText ?? gt.text;
     if (gt.complete && old === gt.text) {
       const r = tryInPlace(A, gt, newText, block);
-      if (r) { setPageContent(A.page, rewriteContentStream(A.parsed, r.replacements)); return { method: 'inplace', fontKind: 'original', warnings }; }
+      if (r) {
+        setPageContent(A.page, rewriteContentStream(A.parsed, r.replacements));
+        const d = diffRange(gt.text, newText);
+        const box = [block.box[0], block.box[1], block.box[2] + Math.max(0, r.delta) + 2, block.box[3]];
+        return { method: 'inplace', fontKind: 'original', warnings, extent: boxToPage(block.angle, box).rect, expect: [newText.slice(d.start, d.newEnd)].filter((t) => t.trim()) };
+      }
     }
   }
 
@@ -255,7 +260,7 @@ export async function editBlock(pdfDoc, pageIndex, block, newText, style = {}, e
   let extra = '';
   if (method === 'cover') extra += coverOps(expandQuad(block, 0.06 * blockSize), opts.bgColor || [1, 1, 1]);
 
-  let fontKind = null;
+  let fontKind = null, extent = block.rect, expect = [];
   if (newText.trim()) {
     const font = await chooseWriterFont(pdfDoc, A.page, want, newText, env, origModel, cache);
     fontKind = font.kind;
@@ -278,10 +283,13 @@ export async function editBlock(pdfDoc, pageIndex, block, newText, style = {}, e
       ln.x = x; ln.y = firstBase - i * lh;
     });
     extra += textOps({ font, size, color, angle: block.angle, lines, justifyWidth: align === 'justify' ? width : 0, underline: style.underline });
+    const xs = lines.flatMap((l) => [l.x, l.x + font.width(l.text, size)]);
+    extent = boxToPage(block.angle, [Math.min(block.box[0], ...xs), Math.min(block.box[1], lines[lines.length - 1].y - 0.3 * size), Math.max(block.box[2], ...xs), Math.max(block.box[3], firstBase + 0.9 * size)]).rect;
+    expect = lines.map((l) => l.text).filter((t) => t.trim());
     if (!single && lines.length > (block.lines?.length || 1)) warnings.push('Il nuovo testo è più lungo dell\'originale e occupa più righe: controlla che non si sovrapponga al testo sottostante.');
   }
   setPageContent(A.page, composeContent(A, replacements, extra));
-  return { method, fontKind, warnings };
+  return { method, fontKind, warnings, extent, expect };
 }
 
 function dominant(entries) {
@@ -383,7 +391,8 @@ export async function addText(pdfDoc, pageIndex, at, text, style = {}, env = {})
   });
   const ops = textOps({ font, size, color: style.color || [0, 0, 0], angle, lines, underline: style.underline });
   setPageContent(A.page, composeContent(A, null, ops));
-  return { fontKind: font.kind, warnings: font.missing.length ? ['Alcuni caratteri non sono disponibili nel font: ' + font.missing.join(' ')] : [], lines: lines.length, height: lines.length * lh, width: boxW };
+  const extent = boxToPage(angle, [lx - 1, ly - lines.length * lh - 0.3 * size, lx + boxW + 1, ly + 1]).rect;
+  return { fontKind: font.kind, warnings: font.missing.length ? ['Alcuni caratteri non sono disponibili nel font: ' + font.missing.join(' ')] : [], lines: lines.length, height: lines.length * lh, width: boxW, extent, expect: lines.map((l) => l.text).filter((t) => t.trim()) };
 }
 
 // ------------------------------------------------------------------ trova e sostituisci
@@ -455,7 +464,7 @@ export async function replaceMatches(pdfDoc, pageIndex, matchRanges, replacement
   const cache = new Map();
   // ogni operatore si può riscrivere una sola volta per passata: occorrenze nello stesso operatore → raggruppate
   const usedOps = new Set();
-  const sorted = [...matchRanges].sort((a, b) => b.start - a.start);
+  const sorted = matchRanges.map((m) => ({ ...m })).sort((a, b) => b.start - a.start);
   for (const m of sorted) {
     const refs = pst.refs.slice(m.start, m.end);
     if (pst.text.slice(m.start, m.end).toLocaleLowerCase('it') !== String(m.text).toLocaleLowerCase('it')) { results.push({ method: 'skipped', warning: 'Il testo è cambiato: ripeti la ricerca.' }); continue; }
@@ -465,7 +474,7 @@ export async function replaceMatches(pdfDoc, pageIndex, matchRanges, replacement
     const sameOp = gl.every((e) => e.si === gl[0].si) && refs.every(Boolean);
     const consecutive = gl.every((e, k) => k === 0 || e.gi === gl[k - 1].gi + 1);
     const ownerOp = s.opIndex;
-    if (opts.mode !== 'overlay' && sameOp && consecutive && !s.inForm && s.font?.supported && !s.font.vertical && s.font.subtype !== 'Type3' && !usedOps.has(ownerOp)) {
+    if (opts.mode !== 'overlay' && opts.mode !== 'cover' && sameOp && consecutive && !s.inForm && s.font?.supported && !s.font.vertical && s.font.subtype !== 'Type3' && !usedOps.has(ownerOp)) {
       const bytes = replacement ? s.font.encode(replacement) : new Uint8Array(0);
       if (bytes) {
         // tutte le occorrenze nello stesso operatore vanno fatte insieme
@@ -482,7 +491,7 @@ export async function replaceMatches(pdfDoc, pageIndex, matchRanges, replacement
     // ripiego: togliere i glifi e scrivere il testo nuovo sopra
     const byShow = new Map();
     for (const e of gl) { if (!byShow.has(e.si)) byShow.set(e.si, new Set()); byShow.get(e.si).add(e.gi); }
-    let cover = false;
+    let cover = opts.mode === 'cover';
     for (const [si, set] of byShow) {
       const sh = A.r.shows[si];
       if (usedOps.has(sh.opIndex) || sh.inForm || !sh.font?.supported) { cover = true; break; }
