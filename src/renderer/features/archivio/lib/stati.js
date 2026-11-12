@@ -49,18 +49,22 @@ export function applica(s, modifica, ora = Date.now()) {
     const v = VOCI_STATO.find((x) => x.id === modifica.imposta);
     if (!v) throw new Error('Stato sconosciuto: ' + modifica.imposta);
     n[v.campo] = v.valore;
-    if (v.id === 'da-protocollare') { delete n.numeroProtocollo; delete n.dataProtocollo; }
+    if (v.id === 'da-protocollare') { delete n.numeroProtocollo; delete n.dataProtocollo; delete n.uorProtocollo; delete n.origineProtocollo; }
   }
   if (modifica.togli) {
     const v = VOCI_STATO.find((x) => x.id === modifica.togli);
     if (v && n[v.campo] === v.valore) delete n[v.campo];
-    if (v?.campo === 'protocollo') { delete n.numeroProtocollo; delete n.dataProtocollo; }
+    if (v?.campo === 'protocollo') { delete n.numeroProtocollo; delete n.dataProtocollo; delete n.uorProtocollo; delete n.origineProtocollo; }
   }
   if (modifica.numeroProtocollo != null) {
     const num = String(modifica.numeroProtocollo).trim().slice(0, 40);
     if (num) { n.numeroProtocollo = num; n.protocollo = 'fatto'; } else delete n.numeroProtocollo;
   }
   if (modifica.dataProtocollo) n.dataProtocollo = String(modifica.dataProtocollo).slice(0, 10);
+  if (modifica.uorProtocollo != null) { const u = String(modifica.uorProtocollo).trim().slice(0, 40); if (u) n.uorProtocollo = u; else delete n.uorProtocollo; }
+  // origine del numero: 'segnatura' (apposta su una copia con il numero di Titulus), 'documento' (letta), assente = a mano
+  if (modifica.origineProtocollo !== undefined) { if (modifica.origineProtocollo) n.origineProtocollo = String(modifica.origineProtocollo).slice(0, 20); else delete n.origineProtocollo; }
+  else if (modifica.numeroProtocollo != null || modifica.imposta === 'protocollato') delete n.origineProtocollo;
   for (const e of modifica.aggiungiEtichette || []) {
     const c = pulisciEtichetta(e);
     if (c && !n.etichette.some((x) => normalizza(x) === normalizza(c)) && n.etichette.length < MAX_ETICHETTE) n.etichette.push(c);
@@ -81,7 +85,7 @@ export function descrivi(s) {
   if (!s) return [];
   const out = [];
   if (s.protocollo === 'da') out.push({ id: 'da-protocollare', testo: 'Da protocollare (in Titulus)', tipo: 'da' });
-  if (s.protocollo === 'fatto') out.push({ id: 'protocollato', testo: testoProtocollo(s), tipo: 'fatto', titolo: s.origineProtocollo === 'documento' ? `Letto dal documento${s.segnaturaTesto ? ': «' + s.segnaturaTesto + '»' : ''}` : 'Inserito a mano' });
+  if (s.protocollo === 'fatto') out.push({ id: 'protocollato', testo: testoProtocollo(s), tipo: 'fatto', titolo: s.origineProtocollo === 'documento' ? `Letto dal documento${s.segnaturaTesto ? ': «' + s.segnaturaTesto + '»' : ''}` : s.origineProtocollo === 'segnatura' ? 'Numero di Titulus riportato con la segnatura su una copia' : 'Inserito a mano' });
   if (s.firma === 'da') out.push({ id: 'da-firmare', testo: 'Da firmare', tipo: 'da' });
   if (s.firma === 'fatto') out.push({ id: 'firmato', testo: 'Firmato', tipo: 'fatto' });
   if (s.pagamento === 'da') out.push({ id: 'da-pagare', testo: 'Da pagare', tipo: 'da' });
@@ -100,6 +104,7 @@ export function testoProtocollo(s) {
   if (s.dataProtocollo) t += ` del ${dataIt(s.dataProtocollo)}`;
   if (s.uorProtocollo) t += `, UOR ${s.uorProtocollo}`;
   if (s.origineProtocollo === 'documento') t += ' — letto dal documento';
+  else if (s.origineProtocollo === 'segnatura') t += ' — segnatura apposta su una copia';
   return t;
 }
 
@@ -139,6 +144,28 @@ export function leggiElencoProtocolli(testo) {
   return out;
 }
 
+/**
+ * Modifica di stato da un evento «archivio:stato» di un'altra area. Forme accettate:
+ * { modifica: { imposta, numeroProtocollo, dataProtocollo, uorProtocollo? }, origine: 'segnatura'|'lettura' }
+ * oppure { stato: 'protocollato'|id di VOCI_STATO, numero, data, uor }. → modifica per applica() o null
+ */
+export function modificaDaEvento(ev) {
+  if (!ev || typeof ev !== 'object') return null;
+  const m = ev.modifica && typeof ev.modifica === 'object' ? ev.modifica : {};
+  const numero = m.numeroProtocollo ?? ev.numero;
+  const imposta = m.imposta || ev.stato || (numero ? 'protocollato' : null);
+  if (!imposta || !VOCI_STATO.some((v) => v.id === imposta)) return null;
+  const out = { imposta };
+  if (numero != null && String(numero).trim()) out.numeroProtocollo = String(numero).trim();
+  const data = m.dataProtocollo ?? ev.data;
+  if (data) out.dataProtocollo = /^\d{4}-\d{2}-\d{2}/.test(String(data)) ? String(data).slice(0, 10) : dataDaTesto(String(data)) || undefined;
+  if (!out.dataProtocollo) delete out.dataProtocollo;
+  const uor = m.uorProtocollo ?? ev.uor;
+  if (uor) out.uorProtocollo = String(uor).trim();
+  if (imposta === 'protocollato' && out.numeroProtocollo) out.origineProtocollo = ev.origine === 'lettura' ? 'documento' : 'segnatura';
+  return out;
+}
+
 /** Valida e ripulisce uno stato arrivato da un file importato. → stato o null */
 export function ripulisci(s) {
   if (!s || typeof s !== 'object') return null;
@@ -150,6 +177,8 @@ export function ripulisci(s) {
   if (s.archiviato === true || s.archiviato === 'sì' || s.archiviato === 'si') n.archiviato = true;
   if (s.numeroProtocollo) { n.numeroProtocollo = String(s.numeroProtocollo).slice(0, 40); n.protocollo = 'fatto'; }
   if (s.dataProtocollo && /^\d{4}-\d{2}-\d{2}$/.test(s.dataProtocollo)) n.dataProtocollo = s.dataProtocollo;
+  if (s.uorProtocollo) n.uorProtocollo = String(s.uorProtocollo).slice(0, 40);
+  if (['segnatura', 'documento'].includes(s.origineProtocollo)) n.origineProtocollo = s.origineProtocollo;
   const et = Array.isArray(s.etichette) ? s.etichette : typeof s.etichette === 'string' ? s.etichette.split(/[|,]/) : [];
   const pul = [...new Set(et.map(pulisciEtichetta).filter(Boolean))].slice(0, MAX_ETICHETTE);
   if (pul.length) n.etichette = pul;

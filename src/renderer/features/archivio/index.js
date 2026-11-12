@@ -98,6 +98,13 @@ export default function register(app) {
     tHome = setTimeout(() => { home.querySelector('.ar-home')?.remove(); inserisciOggi(); }, 800);
   });
 
+  // ---------- stati chiesti da altre aree e lettura dello stato (vedi docs/aree/archivio.md) ----------
+  // L'area avanzati emette «archivio:stato» quando appone o legge una segnatura: va confermato in modo SINCRONO.
+  app.bus.on('archivio:stato', (ev) => { try { A.riceviStato(ev); } catch (e) { console.error(e); } });
+  app.services = app.services || {};
+  /** app.services.statoArchivio(path) → Promise<{ protocollato, numero, data, uor, origine, stati, … } | null> */
+  app.services.statoArchivio = (path) => A.statoArchivio(path);
+
   // ---------- documenti nuovi arrivati nelle cartelle ----------
   A.on((tipo, d) => {
     if (tipo !== 'nuovi' || !d?.n) return;

@@ -10,7 +10,7 @@ export const COLONNE_REGISTRO = [
   { id: 'protocollo', titolo: 'N. protocollo', val: (r) => (r.stato?.protocollo === 'fatto' ? r.stato.numeroProtocollo || '' : '') },
   { id: 'data_protocollo', titolo: 'Data protocollo', tipo: 'data', val: (r) => (r.stato?.protocollo === 'fatto' ? r.stato.dataProtocollo || '' : '') },
   { id: 'uor', titolo: 'UOR', val: (r) => (r.stato?.protocollo === 'fatto' ? r.stato.uorProtocollo || '' : '') },
-  { id: 'origine_protocollo', titolo: 'Origine protocollo', val: (r) => (r.stato?.protocollo !== 'fatto' ? '' : r.stato.origineProtocollo === 'documento' ? 'letto dal documento' : 'inserito a mano') },
+  { id: 'origine_protocollo', titolo: 'Origine protocollo', val: (r) => (r.stato?.protocollo !== 'fatto' ? '' : r.stato.origineProtocollo === 'documento' ? 'letto dal documento' : r.stato.origineProtocollo === 'segnatura' ? 'segnatura su copia' : 'inserito a mano') },
   { id: 'data', titolo: 'Data', tipo: 'data', val: (r) => r.data || '' },
   { id: 'numero', titolo: 'Numero', val: (r) => r.numero || '' },
   { id: 'fornitore', titolo: 'Fornitore', val: (r) => r.fornitore || '' },

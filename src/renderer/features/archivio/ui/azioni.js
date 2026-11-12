@@ -149,10 +149,8 @@ export async function azioniGuidate(app, A, righe) {
   const pdf = righe.filter((r) => (r.ext === 'pdf' || (r.contenuto === 'fattura' && isDesktop())) && !r.offline);
   const altri = righe.length - pdf.length;
   if (!pdf.length) return app.ui.toast('Le azioni guidate lavorano sui PDF e sulle fatture elettroniche: tra i documenti scelti non ce ne sono (o la cartella non è raggiungibile).', { kind: 'warning', timeout: 7000 });
-  // il timbro di protocollo numera i file in automatico: all'ICCOM il protocollo lo fa Titulus,
-  // Leggio non deve generare numeri. Dall'archivio quindi non si offre (né nelle sequenze).
-  const ops = operazioni(app).filter((o) => o.id !== 'protocollo');
-  const sequenze = (app.settings.get('avanzati.sequenze', null) || []).filter((s) => !(s.passi || []).some((p) => p.op === 'protocollo'));
+  const ops = operazioni(app);
+  const sequenze = app.settings.get('avanzati.sequenze', null) || [];
   const scelte = [
     ...sequenze.map((s, i) => ({ value: 'seq:' + i, label: 'Sequenza salvata: ' + s.nome })),
     ...ops.map((o) => ({ value: 'op:' + o.id, label: o.label })),
@@ -293,9 +291,9 @@ async function leggiFattura(A, r) {
 export async function fatturaInPdf(app, A, r) {
   const { f, xml } = await leggiFattura(A, r);
   if (typeof app.services?.fatturaPdf === 'function') {
-    const out = await app.services.fatturaPdf(xml, { nome: r.nome });
-    const bytes = out?.bytes || out;
-    if (bytes instanceof Uint8Array) return { bytes, nome: out?.nome || nomeFatturaPdf(f) };
+    const out = await app.services.fatturaPdf(xml);
+    const bytes = out instanceof Uint8Array ? out : out?.bytes;
+    if (bytes instanceof Uint8Array) return { bytes, nome: nomeFatturaPdf(f) };
   }
   if (!isDesktop()) throw new Error('La conversione delle fatture in PDF funziona nell\'app desktop.');
   const res = await app.platform.invokeFeature('avanzati:html-to-pdf', { html: fatturaDocument(f, { nomeFile: r.nome }), pageSize: 'A4', margins: 0 });

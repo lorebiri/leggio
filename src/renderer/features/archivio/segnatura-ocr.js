@@ -1,7 +1,7 @@
-// Lettura della striscia di segnatura (immagine) con un OCR mirato: solo il riquadro della striscia
-// sulla pagina 1, raddrizzato. Prima si prova il servizio dell'area avanzati
-// (app.services.segnaturaTitulus, modello configurabile); se non c'è o non trova nulla, il ripiego:
-// disegno del solo riquadro con pdf.js + Tesseract (app.services.creaWorkerOcr dell'area conversione).
+// Lettura della striscia di segnatura (immagine) con un OCR mirato. Prima il servizio dell'area avanzati
+// app.services.leggiSegnaturaTitulus(bytes) (PDF e .p7m; legge da sola la striscia; modelli configurabili);
+// se manca, il ripiego dell'archivio: disegno del solo riquadro con pdf.js + Tesseract
+// (app.services.creaWorkerOcr dell'area conversione) + modello generico.
 // Leggere non modifica nulla: il file (anche firmato) resta identico.
 import { openPdfJs, destroyPdf } from '../../core/pdf.js';
 import { segnaturaGenerica, normalizzaSegnatura } from './lib/segnatura.js';
@@ -11,17 +11,17 @@ export class LettoreSegnature {
 
   get disponibile() {
     const sv = this.app.services || {};
-    return typeof sv.segnaturaTitulus === 'function' || typeof sv.creaWorkerOcr === 'function';
+    return typeof sv.leggiSegnaturaTitulus === 'function' || typeof sv.creaWorkerOcr === 'function';
   }
 
   /** → { numero, data, aoo, uor, testo, fonte } oppure null */
   async leggi(bytes, striscia) {
     const sv = this.app.services || {};
-    if (typeof sv.segnaturaTitulus === 'function') {
+    if (typeof sv.leggiSegnaturaTitulus === 'function') {
       try {
-        const r = normalizzaSegnatura(await sv.segnaturaTitulus({ bytes, pagina: 1, area: striscia.bbox, verticale: striscia.verticale, lato: striscia.lato }));
-        if (r) return { ...r, fonte: 'striscia (modello)' };
-      } catch (e) { this.app.log?.('warn', 'archivio: segnaturaTitulus non riuscita', { e: e?.message }); }
+        const r = normalizzaSegnatura(await sv.leggiSegnaturaTitulus(bytes));
+        return r ? { ...r, fonte: 'striscia (servizio Titulus)' } : null;
+      } catch (e) { this.app.log?.('warn', 'archivio: leggiSegnaturaTitulus non riuscita', { e: e?.message }); }
     }
     if (typeof sv.creaWorkerOcr !== 'function') return null;
     const immagini = await this.#ritaglia(bytes, striscia);

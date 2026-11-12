@@ -8,6 +8,7 @@ import { datiDaTesto, VERSIONE_ESTRAZIONE, CODICI_ENTE_PREDEFINITI } from './lib
 import { IMPOSTAZIONI_PREDEFINITE } from './lib/scadenze.js';
 import { oggiIso } from './lib/testo.js';
 import { segnaturaGenerica, normalizzaSegnatura } from './lib/segnatura.js';
+import { modificaDaEvento } from './lib/stati.js';
 import { LettoreSegnature } from './segnatura-ocr.js';
 
 /** Versione della lettura delle strisce di segnatura: se cambia, le strisce non lette si riprovano. */
@@ -48,7 +49,74 @@ export class Archivio {
 
   on(fn) { this.ascoltatori.add(fn); return () => this.ascoltatori.delete(fn); }
   emit(tipo, dati = {}) { for (const f of this.ascoltatori) { try { f(tipo, dati); } catch (e) { console.error(e); } } }
-  #cambiato() { this.versione++; this.emit('cambiato'); }
+  #cambiato() { this.versione++; this.emit('cambiato'); this.#aggiornaNoti(); }
+
+  // ---------------- stato richiesto da altre aree (evento «archivio:stato») ----------------
+  /** Elenco sincrono di percorsi e impronte indicizzati (per confermare subito gli eventi). */
+  #aggiornaNoti() {
+    clearTimeout(this.timerNoti);
+    this.timerNoti = setTimeout(async () => {
+      try { const n = await this.motore.call('noti'); this.noti = { ids: new Set(n.ids), impronte: new Set(n.impronte) }; } catch { /* */ }
+      this.#applicaInAttesa();
+    }, 300);
+  }
+  #dentroCartelle(p) {
+    const k = idDa(p, this.ci);
+    return this.cartelle.some((c) => { const r = idDa(c.percorso, this.ci).replace(/[\\/]+$/, ''); return k.startsWith(r + '/') || k.startsWith(r + '\\'); });
+  }
+  /**
+   * Evento dell'area avanzati (segnatura apposta su una copia, o letta aprendo un documento):
+   * { path (file ORIGINALE, anche .xml/.p7m), impronta?, modifica: { imposta, numeroProtocollo, dataProtocollo }, origine, ricevuto }
+   * oppure in forma semplice { path, stato, numero, data, uor }. Si conferma in modo SINCRONO con ev.ricevuto = true
+   * se il documento è nell'archivio (o in una cartella collegata: in quel caso lo stato si applica appena indicizzato).
+   */
+  riceviStato(ev) {
+    if (!ev || ev.ricevuto) return false;
+    const id = ev.path ? idDa(ev.path, this.ci) : null;
+    const noto = (id && this.noti?.ids.has(id)) || (ev.impronta && this.noti?.impronte.has(ev.impronta));
+    if (!noto && !(ev.path && this.#dentroCartelle(ev.path))) return false;
+    const modifica = modificaDaEvento(ev);
+    if (!modifica) return false;
+    ev.ricevuto = true;
+    this.inAttesa ??= [];
+    this.inAttesa.push({ id, impronta: ev.impronta || null, modifica, tentativi: 0 });
+    if (noto) this.#applicaInAttesa();
+    else this.aggiorna({ motivo: 'stato', silenzioso: true }).catch(() => {}); // file non ancora indicizzato
+    return true;
+  }
+  async #applicaInAttesa() {
+    if (!this.inAttesa?.length || this.applicando) return;
+    this.applicando = true;
+    try {
+      const resto = [];
+      for (const x of this.inAttesa.splice(0)) {
+        const noto = (x.id && this.noti?.ids.has(x.id)) || (x.impronta && this.noti?.impronte.has(x.impronta));
+        if (!noto) { if (++x.tentativi < 5) resto.push(x); continue; }
+        try {
+          const r = await this.motore.call('cambia-stato', { ids: x.id && this.noti.ids.has(x.id) ? [x.id] : [], impronte: x.impronta ? [x.impronta] : [], modifica: x.modifica, ora: Date.now() });
+          await this.store.statiScrivi(r.json);
+          this.versione++; this.emit('cambiato');
+        } catch (e) { this.app.log?.('warn', 'archivio: stato da evento non applicato', { e: e.message }); }
+      }
+      this.inAttesa.push(...resto);
+    } finally { this.applicando = false; }
+  }
+
+  /** Lettura per le altre aree: stato d'ufficio (con protocollo) del documento con quel percorso, o null. */
+  async statoArchivio(path) {
+    if (!path) return null;
+    const id = idDa(path, this.ci);
+    const [r] = await this.motore.call('righe', { ids: [id] });
+    if (!r) return null;
+    const s = r.stato || {};
+    return {
+      nome: r.nome, path: r.path, impronta: r.impronta, tipo: r.tipo, stati: (r.chips || []).map((c) => c.id),
+      protocollato: s.protocollo === 'fatto', daProtocollare: s.protocollo === 'da',
+      numero: s.protocollo === 'fatto' ? s.numeroProtocollo || '' : '', data: s.protocollo === 'fatto' ? s.dataProtocollo || '' : '',
+      uor: s.uorProtocollo || '', origine: s.protocollo === 'fatto' ? s.origineProtocollo || 'utente' : '',
+      etichette: s.etichette || [], nota: s.nota || '',
+    };
+  }
 
   get attivo() { return this.cartelle.length > 0; }
   impostazioni() {

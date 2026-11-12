@@ -78,7 +78,8 @@ mai numeri di protocollo**: nessun contatore, nessun numero «successivo».
   una **coda a parte a bassa priorità** dopo l'indicizzazione del testo: un documento alla volta, nei momenti
   liberi, in pausa se riparte l'indicizzazione, annullabile, ripresa al riavvio. Nel frattempo il documento è
   «Protocollo: da leggere». Lettura: prima `app.services.segnaturaTitulus` dell'area avanzati (modello
-  configurabile), altrimenti il ripiego dell'archivio: si disegna solo il riquadro della striscia con pdf.js, lo si
+  configurabile; oggi `app.services.leggiSegnaturaTitulus(bytes)`, che legge da sola testo e striscia di PDF e
+  .p7m), altrimenti il ripiego dell'archivio: si disegna solo il riquadro della striscia con pdf.js, lo si
   raddrizza (con le annotazioni: la striscia può essere un timbro) e lo si passa a Tesseract (`app.services.creaWorkerOcr`, modalità riga singola), poi il modello generico (`lib/segnatura.js`;
   nell'UOR le I lette come 1 vengono corrette). Leggere non modifica nulla: i file firmati restano identici.
 - **Numero inserito dall'utente**: «Cambia stato… › Protocollato (Titulus)»: per un documento si scrive o incolla
@@ -209,6 +210,8 @@ L'indice contiene il **testo dei documenti, compresi dati personali** (codici fi
 | File reale protocollato da Titulus (solo prova locale, non nel repository) | striscia trovata (pagina 1, margine sinistro); il ripiego OCR legge numero, data e UOR esatti in 0,9 s. Due correzioni nate da questo file: la striscia va disegnata **con le annotazioni** (nel file reale non compariva senza) e Tesseract va usato in modalità «riga singola» |
 | 18 fatture XML copiate in una cartella collegata | rilevate da sole in **3,6 s** (fs.watch), avviso «18 documenti nuovi», presenti in «Oggi» |
 | Fatture in PDF in blocco, 18 XML | 18 PDF in «Elaborati», 73 s sotto carico |
+| Coda delle segnature con `leggiSegnaturaTitulus` (archivio di prova di 400 file) | 31 strisce su 31 lette, numeri, date e UOR esatti, ~1,1 s l'una sotto carico |
+| Evento `archivio:stato` su una fattura XML; evento su un file fuori dall'archivio | confermato (`ricevuto = true`) e stato «Protocollato (Titulus) n. … — segnatura apposta su una copia»; fuori dall'archivio `ricevuto` resta `false` |
 | Stampa di 17 XML selezionati | impaginati e passati a «Stampa più documenti» (dialogo aperto, stampa non lanciata) |
 
 ## Misure (12/11/2026, MacBook Apple Silicon 8 GB, Electron 45, app vera comandata via DevTools)
@@ -264,12 +267,24 @@ vere 1–2 MB). Documenti reali più pesanti e cartelle di rete aumenteranno i t
 - Esportazione Excel/CSV e dialoghi di scelta cartella non cliccati nell'app (dialoghi nativi): il file .xlsx è
   verificato nei test (`unzip -t`, contenuto dei fogli), non aperto in Excel.
 
+## Per le altre aree
+- **Evento `archivio:stato`** (lo emette l'area avanzati quando appone la segnatura di Titulus su una copia o la
+  legge aprendo un documento): `{ path (file ORIGINALE, anche .xml o .p7m), impronta?, modifica: { imposta,
+  numeroProtocollo, dataProtocollo, uorProtocollo? }, origine: 'segnatura'|'lettura', ricevuto: false }`, oppure in
+  forma semplice `{ path, stato, numero, data, uor }`. Se il documento è nell'archivio (per percorso o impronta) o
+  sta in una cartella collegata, l'archivio imposta `ricevuto = true` **in modo sincrono** e applica lo stato
+  (origine mostrata: «segnatura apposta su una copia» o «letto dal documento»); un file non ancora indicizzato viene
+  indicizzato subito e lo stato si applica appena c'è. Altrimenti `ricevuto` resta `false` e Leggio dice di farlo
+  a mano. Mappatura: `lib/stati.js › modificaDaEvento`.
+- **`app.services.statoArchivio(path)`** → `Promise<{ nome, path, impronta, tipo, stati, protocollato,
+  daProtocollare, numero, data, uor, origine ('documento'|'segnatura'|'utente'), etichette, nota } | null>`:
+  per esempio la segnatura su copia può proporre il numero di protocollo già noto.
+- Servizi usati: `app.services.leggiSegnaturaTitulus(bytes)` (coda delle segnature), `app.services.segnaturaTitulus(testo)`
+  (testo, durante l'indicizzazione), `app.services.fatturaPdf(bytes)` (fatture XML in PDF, stampa, azioni guidate),
+  `app.printFiles`, `app.services.creaWorkerOcr` (solo ripiego).
+
 ## Richieste al nucleo e ad altre aree
 - Area moduli: «Firma più file» con un elenco di file in ingresso (es. `app.services.firmaFile([{ path, name }])`),
   così si firmano direttamente i selezionati dell'archivio.
-- Area avanzati: `app.services.fatturaPdf(xml) → { bytes, nome }` (oggi l'archivio usa `fatturaDocument` e il canale
-  `avanzati:html-to-pdf`); `app.services.segnaturaTitulus(input)` con `input` = testo **oppure**
-  `{ bytes, pagina, area: [x0,y0,x1,y1] in punti PDF, verticale, lato }`, risultato `{ numero, data, aoo, uor }` o
-  null (anche Promise): l'archivio lo usa già se presente.
 - Azioni guidate (area avanzati): `openBatch(app, deps, { items })` per aprire la finestra con file già scelti;
   oggi l'archivio usa le stesse operazioni e sequenze (`lib/batch-ops.js`) con una finestra propria.

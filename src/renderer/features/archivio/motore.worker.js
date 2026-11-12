@@ -124,8 +124,8 @@ const H = {
   oggi({ impostazioni, ultimaApertura, oggi }) {
     return riepilogoOggi({ records: [...M.rec.values()], stati: M.stati, impostazioni, ultimaApertura, oggi });
   },
-  'cambia-stato'({ ids, modifica, ora }) {
-    const impronte = new Set();
+  'cambia-stato'({ ids = [], impronte: imp0 = [], modifica, ora }) {
+    const impronte = new Set(imp0.filter((x) => /^[a-f0-9]{64}$/.test(x)));
     for (const id of ids) { const r = M.get(id); if (r?.impronta) impronte.add(r.impronta); }
     let n = 0;
     for (const imp of impronte) {
@@ -188,6 +188,8 @@ const H = {
     metti({ ...r, segnatura: segnatura || r.segnatura || null, segnaturaOcr: ocr });
     return true;
   },
+  /** Percorsi (id) e impronte noti: servono al thread dell'interfaccia per rispondere subito agli eventi. */
+  noti() { return { ids: [...M.rec.keys()], impronte: [...perImpronta.keys()] }; },
   info() { return { documenti: M.size, stati: M.stati.size, impronte: perImpronta.size }; },
 };
 

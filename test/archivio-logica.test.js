@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { normalizza, interpretaRicerca, paginaDi, estratto, numeroIt, dataDaTesto, giorniTra, aggiungiGiorni } from '../src/renderer/features/archivio/lib/testo.js';
 import { riconosciTipo, pivaValida, cfValido, trovaCigCup, trovaCodici, trovaImporto, datiDaTesto, datiDaFattura, eScansione, firmePdf, pulisciFornitore } from '../src/renderer/features/archivio/lib/estrai.js';
-import { applica, haStato, descrivi, esportaJson, esportaCsv, importa, unisci, leggiCsv, conSegnatura, leggiElencoProtocolli, testoProtocollo } from '../src/renderer/features/archivio/lib/stati.js';
+import { applica, haStato, descrivi, esportaJson, esportaCsv, importa, unisci, leggiCsv, conSegnatura, leggiElencoProtocolli, testoProtocollo, modificaDaEvento } from '../src/renderer/features/archivio/lib/stati.js';
 import { segnaturaGenerica, normalizzaSegnatura, numeroConfrontabile } from '../src/renderer/features/archivio/lib/segnatura.js';
 import { immaginiDisegnate, strisciaCandidata } from '../src/renderer/features/archivio/lib/striscia.js';
 import { riepilogoOggi, scadenzaDurc, testoGiorni } from '../src/renderer/features/archivio/lib/scadenze.js';
@@ -195,6 +195,19 @@ describe('protocollo (Titulus): Leggio non genera numeri, li legge o li riceve',
     expect(haStato(e, 'protocollato')).toBe(true);
     expect(conSegnatura({ protocollo: 'fatto', numeroProtocollo: '999' }, seg).numeroProtocollo).toBe('999');
     expect(conSegnatura(null, null)).toBe(null);
+  });
+  it('evento «archivio:stato» dell\'area avanzati: due forme, origine indicata', () => {
+    const m1 = modificaDaEvento({ path: '/x/f.xml', modifica: { imposta: 'protocollato', numeroProtocollo: '0123456', dataProtocollo: '2026-10-01' }, origine: 'segnatura', ricevuto: false });
+    expect(m1).toEqual({ imposta: 'protocollato', numeroProtocollo: '0123456', dataProtocollo: '2026-10-01', origineProtocollo: 'segnatura' });
+    const m2 = modificaDaEvento({ path: '/x/f.pdf', stato: 'protocollato', numero: '0000077', data: '01/02/2026', uor: 'XX000001', origine: 'lettura' });
+    expect(m2).toEqual({ imposta: 'protocollato', numeroProtocollo: '0000077', dataProtocollo: '2026-02-01', uorProtocollo: 'XX000001', origineProtocollo: 'documento' });
+    expect(modificaDaEvento({ stato: 'inventato' })).toBe(null);
+    expect(modificaDaEvento(null)).toBe(null);
+    const s = applica({ protocollo: 'da', pagamento: 'da' }, m1, 5);
+    expect(testoProtocollo(s)).toBe('Protocollato (Titulus) n. 0123456 del 01/10/2026 — segnatura apposta su una copia');
+    expect(s.pagamento).toBe('da');
+    // un numero inserito poi a mano toglie l'origine
+    expect(applica(s, { imposta: 'protocollato', numeroProtocollo: '9' }).origineProtocollo).toBeUndefined();
   });
   it('elenco «file → numero» incollato (tabulazioni, frecce, «;», colonne da Excel)', () => {
     const l = leggiElencoProtocolli('Fattura_Alfa_12.pdf\t0012345\t12/11/2026\nDURC Beta.pdf → 0012346\nordine 3.pdf;12347;13.11.2026\nsenza numero.pdf\t\nnota.pdf 0012348 14/11/2026\n');
