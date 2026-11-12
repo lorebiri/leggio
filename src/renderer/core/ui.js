@@ -24,7 +24,7 @@ const layer = () => document.getElementById('overlay-root');
  *            value, options:[{value,label}] | ['a','b'], min, max, step, placeholder, help, required, render(container) }]
  * validate(values) → stringa d'errore o null.
  */
-export function dialog({ title, message, fields = [], okLabel = 'OK', cancelLabel = 'Annulla', danger = false, width, validate, body, onOpen } = {}) {
+export function dialog({ title, message, fields = [], okLabel = 'OK', cancelLabel = 'Lascia perdere', danger = false, width, validate, body, onOpen } = {}) {
   return new Promise((resolve) => {
     const prevFocus = document.activeElement;
     const form = h('form', { class: 'dlg', role: 'dialog', 'aria-modal': 'true', 'aria-label': title || 'Dialogo', style: width ? { width: width + 'px' } : null });
@@ -184,6 +184,8 @@ export function alertDialog(message, title = 'Leggio') { return dialog({ title, 
  */
 export function toast(message, { kind = 'info', timeout = 3800, action } = {}) {
   const root = document.getElementById('toast-root');
+  // lo stesso avviso già visibile (es. «Niente da annullare» due volte): si rinnova invece di raddoppiarlo
+  if (!action) for (const old of root.children) if (!old.classList.contains('closing') && old.dataset.msg === String(message)) { old.__rearm?.(); return old; }
   const t = h('div', { class: 'toast toast-' + kind, role: kind === 'error' ? 'alert' : 'status' },
     h('span', { html: icon(kind === 'error' ? 'warning' : kind === 'success' ? 'check' : 'info', 16) }),
     h('span', { class: 'toast-msg' }, message));
@@ -192,6 +194,7 @@ export function toast(message, { kind = 'info', timeout = 3800, action } = {}) {
     t.append(h('button', { class: 'btn small', onclick: () => { action.run(); close(); } }, action.label));
   }
   t.append(h('button', { class: 'toast-x', 'aria-label': 'Chiudi avviso', title: 'Chiudi', onclick: () => close(), html: icon('close', 14) }));
+  t.dataset.msg = String(message);
   root.append(t);
   let timer = null; let closed = false;
   const close = () => { if (closed) return; closed = true; clearTimeout(timer); t.classList.add('closing'); setTimeout(() => t.remove(), 200); };
@@ -199,6 +202,7 @@ export function toast(message, { kind = 'info', timeout = 3800, action } = {}) {
   t.addEventListener('mouseenter', () => clearTimeout(timer));
   t.addEventListener('mouseleave', arm);
   arm();
+  t.__rearm = arm;
   // compatibilità: chi chiamava t.remove() continua a funzionare
   return t;
 }
@@ -239,7 +243,7 @@ export function progress(title, { cancellable = true } = {}) {
   const box = h('div', { class: 'dlg progress-dlg', role: 'dialog', 'aria-label': title },
     h('header', { class: 'dlg-head' }, h('h2', {}, title)),
     h('div', { class: 'dlg-body' }, h('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': 100 }, bar), text),
-    cancellable ? h('footer', { class: 'dlg-foot' }, h('button', { class: 'btn', onclick: () => { ctrl.abort(); text.textContent = 'Annullamento…'; } }, 'Annulla')) : null);
+    cancellable ? h('footer', { class: 'dlg-foot' }, h('button', { class: 'btn', onclick: () => { ctrl.abort(); text.textContent = 'Interruzione…'; } }, 'Interrompi')) : null);
   const back = h('div', { class: 'backdrop' }, box);
   layer().append(back);
   return {
@@ -259,7 +263,7 @@ export async function withProgress(title, fn, opts) {
   const p = progress(title, opts);
   try { return await fn(p); }
   catch (err) {
-    if (p.cancelled || err?.name === 'AbortError') { toast('Operazione annullata'); return undefined; }
+    if (p.cancelled || err?.name === 'AbortError') { toast('Operazione interrotta'); return undefined; }
     throw err;
   } finally { p.close(); }
 }
