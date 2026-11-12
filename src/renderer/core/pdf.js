@@ -17,20 +17,57 @@ export const PDFJS_ASSETS = {
   iccUrl: base + 'pdfjs/iccs/',
 };
 
-/** Apre i byte con pdf.js. onPassword(reason) → Promise<string|null> (reason 1 = richiesta, 2 = errata). */
-export async function openPdfJs(bytes, { password, onPassword } = {}) {
-  const task = pdfjs.getDocument({ data: bytes.slice(), password, ...PDFJS_ASSETS, enableXfa: true, isEvalSupported: false });
+/** Opzioni di sicurezza comuni: niente eval, niente scripting, niente rete. */
+export const PDFJS_SAFE = { isEvalSupported: false, enableXfa: true, stopAtErrors: false };
+
+/**
+ * Apre i byte con pdf.js. onPassword(reason) → Promise<string|null> (reason 1 = richiesta, 2 = errata).
+ * opts.onProgress({loaded,total}), opts.signal (AbortSignal) per annullare.
+ * pdf.js trasferisce il buffer al worker (lo "stacca"): gli si passa sempre una copia, così
+ * i byte del documento restano utilizzabili.
+ */
+export async function openPdfJs(bytes, { password, onPassword, onProgress, signal } = {}) {
+  if (signal?.aborted) throw abortError();
+  const task = pdfjs.getDocument({ data: bytes.slice(), password, ...PDFJS_ASSETS, ...PDFJS_SAFE });
   let usedPassword = password;
-  if (onPassword) {
-    task.onPassword = async (update, reason) => {
-      const pw = await onPassword(reason);
-      if (pw == null) { task.destroy(); return; }
-      usedPassword = pw;
-      update(pw);
-    };
+  let cancelled = false;
+  let rejectCancel;
+  const cancelP = new Promise((_, rej) => { rejectCancel = rej; });
+  cancelP.catch(() => {});
+  const cancel = (err) => { if (cancelled) return; cancelled = true; rejectCancel(err); Promise.resolve(task.destroy()).catch(() => {}); };
+  const onAbort = () => cancel(abortError());
+  signal?.addEventListener('abort', onAbort, { once: true });
+  if (onProgress) task.onProgress = (p) => { try { onProgress(p); } catch { /* solo interfaccia */ } };
+  task.onPassword = async (update, reason) => {
+    if (!onPassword) { const e = new Error(reason === 2 ? 'Password errata' : 'Il documento richiede una password'); e.name = 'PasswordException'; cancel(e); return; }
+    let pw = null;
+    try { pw = await onPassword(reason); } catch { pw = null; }
+    if (pw == null) { const e = new Error('Password non inserita'); e.name = 'PasswordException'; cancel(e); return; }
+    usedPassword = pw;
+    update(pw);
+  };
+  try {
+    const pdf = await Promise.race([task.promise, cancelP]);
+    return { pdf, password: usedPassword };
+  } catch (err) {
+    if (!cancelled) Promise.resolve(task.destroy()).catch(() => {});
+    throw err;
+  } finally {
+    signal?.removeEventListener('abort', onAbort);
   }
-  const pdf = await task.promise;
-  return { pdf, password: usedPassword };
+}
+
+function abortError() { const e = new Error('Apertura annullata'); e.name = 'AbortError'; return e; }
+
+/** Verifica che i byte siano un PDF leggibile (apertura + prima pagina). Lancia un errore se no. */
+export async function verifyPdfBytes(bytes, password) {
+  const { pdf } = await openPdfJs(bytes, { password });
+  try {
+    if (!pdf.numPages) throw new Error('Il file non contiene pagine');
+    const page = await pdf.getPage(1);
+    page.cleanup();
+    return pdf.numPages;
+  } finally { pdf.destroy(); }
 }
 
 /** Apre i byte con pdf-lib (versione @cantoo con supporto cifratura). */

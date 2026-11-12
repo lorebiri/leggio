@@ -69,4 +69,32 @@ export const platform = {
   },
   on(channel, fn) { return native ? native.on(channel, fn) : () => {}; },
   download,
+
+  // ----- robustezza (vedi docs/ROBUSTEZZA.md) -----
+  /** Archivio su disco per la cronologia Annulla (solo app). → {put, get, drop, clear} | null */
+  historyBackend() {
+    if (!native) return null;
+    return {
+      put: (bytes) => native.invoke('app:history-put', bytes),
+      get: (key) => native.invoke('app:history-get', key),
+      drop: (keys) => native.invoke('app:history-drop', keys),
+      clear: () => native.invoke('app:history-clear'),
+    };
+  },
+  /** {total, free, diskFree} in byte (solo app) o null. */
+  async memoryInfo() { return native ? native.invoke('app:memory') : null; },
+  /** Registro locale (file ruotato nel main). Nel browser: solo console. */
+  async log(entry) { if (native) return native.invoke('app:log', entry); },
+  async openLogs() { if (native) return native.invoke('app:open-logs'); },
+  /** Recupero automatico su disco (solo app); nel browser recovery.js usa IndexedDB. */
+  recoveryBackend() {
+    if (!native) return null;
+    return {
+      list: () => native.invoke('app:recovery-list'),
+      write: (meta, bytes) => native.invoke('app:recovery-write', { meta, bytes }),
+      read: (session, id) => native.invoke('app:recovery-read', { session, id }),
+      remove: (id) => native.invoke('app:recovery-remove', { id }),
+      discard: (session) => native.invoke('app:recovery-discard', { session }),
+    };
+  },
 };

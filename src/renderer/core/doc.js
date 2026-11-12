@@ -1,9 +1,15 @@
-// Modello di documento aperto: byte correnti, proxy pdf.js, cronologia annulla/ripeti.
+// Modello di documento aperto: byte correnti, proxy pdf.js, cronologia annulla/ripeti,
+// coda seriale delle operazioni.
 import { openPdfJs } from './pdf.js';
+import { History } from './history.js';
+import { TaskQueue } from './queue.js';
 
 let nextId = 1;
-const MAX_HISTORY = 40;
-const MAX_HISTORY_BYTES = 600 * 1024 * 1024;
+
+/** Opzioni globali della cronologia (impostate dall'App in base a memoria e piattaforma). */
+export const historyConfig = {
+  makeHistory: (doc) => new History(),
+};
 
 export class Doc {
   constructor({ name, path, bytes, password }) {
@@ -13,47 +19,83 @@ export class Doc {
     this.bytes = bytes;          // Uint8Array: lo stato salvabile del documento
     this.password = password;    // password di apertura (se cifrato)
     this.pdf = null;             // PDFDocumentProxy di pdf.js
-    this.undoStack = [];         // [{label, bytes}]
-    this.redoStack = [];
-    this.dirty = false;
     this.viewState = null;       // {scale, page, scrollTop} per cambio scheda
     this.formsDirty = false;     // moduli compilati non ancora integrati nei byte
+    this.formsRev = 0;           // cresce a ogni modifica dei campi a schermo
     this.data = {};              // spazio per le feature (es. data.annotations)
+    this.version = 0;            // identifica lo stato dei byte; cambia a ogni modifica/annulla
+    this.savedVersion = 0;       // versione presente su disco (dirty = version !== savedVersion)
+    this.closed = false;
+    this.history = historyConfig.makeHistory(this);
+    this.queue = new TaskQueue();
+    this.#versions = 0;
   }
+  #versions;
 
-  async load(onPassword) {
-    const { pdf, password } = await openPdfJs(this.bytes, { password: this.password, onPassword });
-    if (this.pdf) this.pdf.destroy();
-    this.pdf = pdf;
+  get dirty() { return this.version !== this.savedVersion; }
+  set dirty(v) {
+    // compatibilità: doc.dirty = false segna come salvato, true come modificato
+    if (v) { if (!this.dirty) this.savedVersion = -1; } else this.savedVersion = this.version;
+  }
+  get busy() { return this.queue.busy; }
+
+  /** Voci della cronologia (sola lettura: {label, size, where}). */
+  get undoStack() { return this.history.undoStack; }
+  get redoStack() { return this.history.redoStack; }
+
+  /** Apre (o riapre) i byte correnti con pdf.js e sostituisce il proxy. */
+  async load(onPassword, opts = {}) {
+    const { pdf, password } = await openPdfJs(this.bytes, { password: this.password, onPassword, ...opts });
+    const old = this.setPdf(pdf);
     this.password = password;
+    old?.destroy();
     return pdf;
   }
 
+  /** Apre byte candidati senza toccare lo stato: serve a verificare una modifica prima di accettarla. */
+  async openCandidate(bytes) {
+    const { pdf } = await openPdfJs(bytes, { password: this.password });
+    if (!pdf.numPages) { pdf.destroy(); throw new Error('Il risultato non contiene pagine'); }
+    return pdf;
+  }
+
+  /** Imposta il proxy pdf.js e restituisce il precedente (da distruggere dopo aver aggiornato la vista). */
+  setPdf(pdf) { const old = this.pdf; this.pdf = pdf; return old; }
+
   get pageCount() { return this.pdf?.numPages || 0; }
 
-  #trim() {
-    while (this.undoStack.length > MAX_HISTORY) this.undoStack.shift();
-    let total = this.undoStack.reduce((s, e) => s + e.bytes.length, 0);
-    while (total > MAX_HISTORY_BYTES && this.undoStack.length > 1) total -= this.undoStack.shift().bytes.length;
-  }
+  #newVersion() { return ++this.#versions; }
 
-  /** Registra nuovi byte come modifica annullabile. */
+  /** Registra nuovi byte come modifica annullabile. I byte nuovi valgono subito; la promessa si risolve quando la copia per Annulla è al sicuro. */
   commit(label, newBytes) {
-    this.undoStack.push({ label, bytes: this.bytes });
-    this.#trim();
-    this.redoStack = [];
+    const prev = this.bytes, prevVersion = this.version;
     this.bytes = newBytes;
-    this.dirty = true;
+    this.version = this.#newVersion();
+    return this.history.push(label, prevVersion, prev);
   }
-  undo() {
-    const e = this.undoStack.pop(); if (!e) return null;
-    this.redoStack.push({ label: e.label, bytes: this.bytes });
-    this.bytes = e.bytes; this.dirty = true; return e.label;
+  /** → Promise<label|null> */
+  async undo() {
+    const r = await this.history.undo(this.version, this.bytes);
+    if (!r) return null;
+    this.bytes = r.bytes; this.version = r.version; return r.label;
   }
-  redo() {
-    const e = this.redoStack.pop(); if (!e) return null;
-    this.undoStack.push({ label: e.label, bytes: this.bytes });
-    this.bytes = e.bytes; this.dirty = true; return e.label;
+  async redo() {
+    const r = await this.history.redo(this.version, this.bytes);
+    if (!r) return null;
+    this.bytes = r.bytes; this.version = r.version; return r.label;
   }
-  destroy() { this.pdf?.destroy(); this.pdf = null; }
+  /** Segna lo stato corrente come salvato. */
+  markSaved() { this.savedVersion = this.version; }
+  /** Per i salvataggi che sostituiscono i byte (save hook) senza voce di cronologia. */
+  replaceBytes(bytes) { this.bytes = bytes; }
+
+  destroy() {
+    this.closed = true;
+    this.queue.close();
+    try { this.pdf?.destroy(); } catch { /* già distrutto */ }
+    this.pdf = null;
+    this.history.clear().catch(() => {});
+    this.bytes = new Uint8Array(0);
+    this.data = {};
+  }
 }
