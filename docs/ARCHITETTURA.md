@@ -106,3 +106,23 @@ Id riservati usati dalla schermata iniziale (se l'area li implementa, usare **es
   per `standardFontDataUrl` (`fileURLToPath(...).replace(/\\/g, '/')`): con i percorsi «D:\…» di Windows pdf.js fallisce.
 - Niente script `.sh` eseguiti direttamente: su Windows usare `it.skipIf(process.platform === 'win32')`.
 - Niente soglie di tempo strette nei test unitari: le macchine della CI sono lente; le misure vanno negli script di benchmark.
+
+## Collaudo nell'app Electron: una porta per area
+Quando più persone o agenti collaudano insieme, ognuno usa una propria porta di debug e una propria cartella dati,
+e chiude solo il processo che ha avviato (mai «tutti gli Electron sulla porta X»):
+
+| Area | Anteprima web | Debug Electron |
+|---|---|---|
+| pagine | 5201 | 9401 |
+| commenti | 5202 | 9402 |
+| moduli | 5203 | 9403 |
+| conversione | 5204 | 9404 |
+| sicurezza | 5205 | 9405 |
+| modifica | 5206 | 9406 |
+| robustezza | 5207 | 9407 |
+| avanzati | 5208 | 9408 |
+| archivio | 5209 | 9409 |
+| estetica | 5210 | 9410 |
+| coordinatore | 5199 | 9400 |
+
+Cartella dati: `LEGGIO_USER_DATA=~/Developer/leggio-out/<area>/ud`.
