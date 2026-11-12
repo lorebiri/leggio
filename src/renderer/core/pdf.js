@@ -48,6 +48,7 @@ export async function openPdfJs(bytes, { password, onPassword, onProgress, signa
   };
   try {
     const pdf = await Promise.race([task.promise, cancelP]);
+    ensureDestroy(pdf);
     return { pdf, password: usedPassword };
   } catch (err) {
     if (!cancelled) Promise.resolve(task.destroy()).catch(() => {});
@@ -55,6 +56,19 @@ export async function openPdfJs(bytes, { password, onPassword, onProgress, signa
   } finally {
     signal?.removeEventListener('abort', onAbort);
   }
+}
+
+/**
+ * pdf.js 6 non ha più PDFDocumentProxy.destroy(): si libera la memoria (worker compreso) con
+ * loadingTask.destroy(). Il nucleo e le aree chiamano pdf.destroy(): lo si ripristina qui,
+ * altrimenti ogni riapertura lascerebbe il documento precedente in memoria.
+ */
+export function ensureDestroy(pdf) {
+  const proto = pdf && Object.getPrototypeOf(pdf);
+  if (proto && typeof proto.destroy !== 'function') {
+    Object.defineProperty(proto, 'destroy', { configurable: true, writable: true, value() { return this.loadingTask?.destroy(); } });
+  }
+  return pdf;
 }
 
 function abortError() { const e = new Error('Apertura annullata'); e.name = 'AbortError'; return e; }

@@ -3,7 +3,8 @@
 import { Bus } from './bus.js';
 import { Doc, historyConfig } from './doc.js';
 import { History, DiskStore, memoryBudget, diskBudget, MB } from './history.js';
-import { precheck, describeOpenError, MAX_PDF_BYTES, cleanIpcMessage } from './errors.js';
+import { precheck, describeOpenError, MAX_PDF_BYTES, cleanIpcMessage, sniff } from './errors.js';
+import { repairPdf } from './repair.js';
 import { installGuards, log } from './guard.js';
 import { Recovery } from './recovery.js';
 import { Viewer, isTyping } from './viewer.js';
@@ -115,7 +116,7 @@ export class App {
   }
 
   /** Apre byte come nuova scheda. opts: { name, path, dirty } */
-  async openBytes(bytes, { name, path, dirty = false } = {}) {
+  async openBytes(bytes, { name, path, dirty = false, _repaired = false } = {}) {
     const existing = path && this.docs.find((d) => d.path === path);
     if (existing) { this.activate(existing); return existing; }
     const displayName = name || 'Senza titolo.pdf';
@@ -139,10 +140,22 @@ export class App {
       if (!doc.pageCount) throw new Error('Il documento non contiene pagine leggibili');
     } catch (err) {
       doc.destroy();
+      clearTimeout(timer); prog?.close();
       if (err?.name === 'AbortError') { toast('Apertura annullata'); return null; }
-      if (err?.name === 'PasswordException' && /non inserita/.test(err.message)) { toast('Apertura annullata'); return null; }
-      log('warn', 'apertura non riuscita', { name: doc.name, size: bytes.length, error: String(err?.message || err) });
-      this.#openFailed(describeOpenError(err, bytes, doc.name), doc.name);
+      if (err?.name === 'PasswordException') { if (/non inserita/.test(err.message)) toast('Apertura annullata'); else this.#openFailed(describeOpenError(err, bytes, displayName), displayName); return null; }
+      log('warn', 'apertura non riuscita', { name: displayName, size: bytes.length, error: String(err?.message || err) });
+      // ultimo tentativo: riparazione (file troncati, xref/trailer mancanti)
+      const kind = sniff(bytes).kind;
+      if (!_repaired && (kind === 'pdf' || kind === 'pdf-offset')) {
+        const rep = await repairPdf(bytes);
+        if (rep) {
+          log('info', 'file riparato', { name: displayName, pages: rep.pages });
+          const fixed = await this.openBytes(rep.bytes, { name: displayName.replace(/(\.pdf)?$/i, ' (riparato).pdf'), dirty: true, _repaired: true });
+          if (fixed) dialog({ title: 'Documento riparato', message: `«${displayName}» era danneggiato e non poteva essere letto così com'è. Leggio ne ha recuperato ${fixed.pageCount} ${fixed.pageCount === 1 ? 'pagina' : 'pagine'}: controlla che il contenuto sia completo e salvalo con un nuovo nome. L'originale non è stato modificato.`, cancelLabel: null, okLabel: 'Ho capito' });
+          return fixed;
+        }
+      }
+      this.#openFailed(describeOpenError(err, bytes, displayName), displayName);
       return null;
     } finally { clearTimeout(timer); prog?.close(); }
     if (dirty) doc.dirty = true;
