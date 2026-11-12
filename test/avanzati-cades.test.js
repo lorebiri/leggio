@@ -6,7 +6,8 @@ import { parseDer, octets } from '../src/renderer/features/avanzati/lib/der.js';
 let keys, cert;
 const PDF = new TextEncoder().encode('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n');
 
-function makeCert(cn, serialNumber) {
+const QC = forge.asn1.toDer(forge.asn1.create(forge.asn1.Class.UNIVERSAL, forge.asn1.Type.SEQUENCE, true, [forge.asn1.create(forge.asn1.Class.UNIVERSAL, forge.asn1.Type.SEQUENCE, true, [forge.asn1.create(forge.asn1.Class.UNIVERSAL, forge.asn1.Type.OID, false, forge.asn1.oidToDer('0.4.0.1862.1.1').getBytes())])])).getBytes();
+function makeCert(cn, serialNumber, qualified = true) {
   const c = forge.pki.createCertificate();
   c.publicKey = keys.publicKey;
   c.serialNumber = '0a1b2c';
@@ -14,6 +15,7 @@ function makeCert(cn, serialNumber) {
   c.validity.notAfter = new Date(Date.UTC(2035, 0, 1));
   const attrs = [{ name: 'commonName', value: cn }, { name: 'countryName', value: 'IT' }, { name: 'organizationName', value: 'CNR' }, { type: '2.5.4.5', value: serialNumber }];
   c.setSubject(attrs);
+  if (qualified) c.setExtensions([{ id: '1.3.6.1.5.5.7.1.3', value: QC }]);
   c.setIssuer([{ name: 'commonName', value: 'Certificatore di prova' }, { name: 'organizationName', value: 'Prova S.p.A.' }]);
   c.sign(keys.privateKey, forge.md.sha256.create());
   return c;
@@ -56,7 +58,18 @@ describe('CAdES / .p7m', () => {
     expect(s.integrity).toBe('valid');
     expect(s.certValidAtSigning).toBe(true);
     expect(s.signingTime.toISOString()).toBe('2026-11-10T09:30:00.000Z');
+    expect(s.certificate.qualified).toBe(true);
     expect(overallStatus(r)).toBe('valid');
+  });
+
+  it('un certificato non qualificato dà esito «da controllare», non verde', async () => {
+    const saved = cert; cert = makeCert('PINCO PALLINO', 'X', false);
+    try {
+      const r = await openP7m(sign(PDF));
+      expect(r.levels[0].signers[0].integrity).toBe('valid');
+      expect(r.levels[0].signers[0].certificate.qualified).toBe(false);
+      expect(overallStatus(r)).toBe('warning');
+    } finally { cert = saved; }
   });
 
   it('segnala come non valido un file alterato di un byte', async () => {

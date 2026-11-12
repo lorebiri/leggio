@@ -80,10 +80,14 @@ function createSplit(app) {
 
   // --- scorrimento sincronizzato (per pagina + posizione nella pagina) ---
   let lock = false;
+  // posizione calcolata dai riquadri delle pagine (il numero di pagina di pdf.js si aggiorna in ritardo)
   const pos = (pv, cont) => {
-    const n = pv.currentPageNumber; const div = pv.getPageView(n - 1)?.div;
-    if (!div) return null;
-    return { n, frac: (cont.scrollTop - div.offsetTop) / Math.max(1, div.offsetHeight) };
+    const n = pv.pagesCount || 0; if (!n) return null;
+    const top = cont.scrollTop;
+    let lo = 0; let hi = n - 1;
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; const d = pv.getPageView(mid)?.div; if (d && d.offsetTop <= top) lo = mid; else hi = mid - 1; }
+    const div = pv.getPageView(lo)?.div; if (!div) return null;
+    return { n: lo + 1, frac: Math.max(0, (top - div.offsetTop) / Math.max(1, div.offsetHeight)) };
   };
   const apply = (pv, cont, p) => {
     const n = Math.min(p.n, pv.pagesCount || 1);

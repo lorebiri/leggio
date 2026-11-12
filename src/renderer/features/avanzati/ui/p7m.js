@@ -39,7 +39,11 @@ export async function openSignedFile(app, { bytes, name, path = null }, deps) {
   const inner = innerName(name, result.kind);
   if (result.kind === 'pdf') {
     const doc = await app.openBytes(result.content, { name: inner });
-    if (!doc) return;
+    if (!doc) {
+      // il PDF contenuto non si apre (danneggiato o alterato): mostriamo comunque l'esito della firma
+      showSignaturePane(app, info, deps);
+      return;
+    }
     doc.data.p7m = info;
     app.sidebar.show('p7m');
     toastEsito(app, stato);
@@ -75,7 +79,7 @@ export function signatureView(app, info, { compact = false } = {}) {
     }
     const card = (s, contro) => {
       n++;
-      const ok = s.integrity === 'valid' && s.certValidAtSigning !== false; const bad = s.integrity === 'invalid';
+      const ok = s.integrity === 'valid' && s.certValidAtSigning !== false && s.certificate?.qualified; const bad = s.integrity === 'invalid';
       const rows = righeFirmatario(s).slice(compact ? 1 : 0);
       const el = h('div', { class: 'av-sig-card ' + (bad ? 'bad' : ok ? 'ok' : 'warn') },
         h('div', { class: 'av-sig-name' }, `${contro ? 'Controfirma: ' : ''}${s.name}`, r.levels.length > 1 ? h('span', { class: 'av-sig-level' }, ` busta ${li + 1} di ${r.levels.length}`) : null),

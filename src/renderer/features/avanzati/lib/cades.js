@@ -198,7 +198,8 @@ export function overallStatus(result) {
   result.levels.forEach((l) => l.signers.forEach(walk));
   if (!all.length) return result.levels.some((l) => l.kind === 'tsd') ? 'warning' : 'invalid';
   if (all.some((s) => s.integrity === 'invalid')) return 'invalid';
-  if (all.every((s) => s.integrity === 'valid' && s.certValidAtSigning !== false)) return 'valid';
+  // verde solo con certificato qualificato (eIDAS): un certificato qualunque può essere stato creato da chiunque
+  if (all.every((s) => s.integrity === 'valid' && s.certValidAtSigning !== false && s.certificate?.qualified)) return 'valid';
   return 'warning';
 }
 
@@ -271,11 +272,11 @@ export function innerName(name, kind) {
 
 function parseSignedData(bytes) {
   let root;
-  try { root = parseDer(bytes); } catch (e) { throw new Error('Il file non è una busta firmata valida (' + (e instanceof Asn1Error ? e.message : 'formato sconosciuto') + ').'); }
+  try { root = parseDer(bytes); } catch (e) { throw new Error(e instanceof Asn1Error ? 'il file è incompleto o danneggiato, oppure non è un file firmato.' : 'il formato del file non è riconosciuto.'); }
   const b = bytes;
-  if (!root.children || child(root, 0)?.tag !== 6 || oid(b, child(root, 0)) !== OID.signedData) throw new Error('Il file non contiene una firma CAdES (PKCS#7 SignedData).');
+  if (!root.children || child(root, 0)?.tag !== 6 || oid(b, child(root, 0)) !== OID.signedData) throw new Error('il file non contiene una firma digitale CAdES (.p7m).');
   const sd = child(child(root, 1), 0);
-  if (!sd?.children) throw new Error('Busta firmata vuota o danneggiata.');
+  if (!sd?.children) throw new Error('la busta firmata è vuota o danneggiata.');
   let k = 0;
   k++; // version
   const digestAlgs = child(sd, k++);
@@ -293,7 +294,7 @@ function parseSignedData(bytes) {
   }
   void digestAlgs;
   const signers = (signerSet?.children || []).map((si) => parseSignerInfo(b, si, certs));
-  if (!signers.length) throw new Error('Nella busta non ci sono firme.');
+  if (!signers.length) throw new Error('nella busta non ci sono firme.');
   return { content: contentBytes, eType, certs, signers };
 }
 

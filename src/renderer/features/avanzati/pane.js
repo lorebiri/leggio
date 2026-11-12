@@ -17,12 +17,14 @@ export function openPane(app, { title, subtitle = '', onClose, id = '' }) {
   stage.append(el);
   const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('.backdrop')) { e.stopPropagation(); api.close(); } };
   document.addEventListener('keydown', onKey, true);
+  // quando si apre o si attiva un documento, lo spazio di lavoro lascia il posto al documento
+  const offs = [app.bus.on('document:loaded', () => api.close()), app.bus.on('document:activated', () => api.close())];
   const api = {
     el, body, actions, id,
     setTitle(t, sub) { head.querySelector('h2').textContent = t; if (sub != null) { let s = head.querySelector('.av-pane-sub'); if (!s) { s = h('div', { class: 'av-pane-sub' }); head.querySelector('.av-pane-titles').append(s); } s.textContent = sub; } },
     close(silent) {
       if (!el.isConnected) return;
-      el.remove(); document.removeEventListener('keydown', onKey, true);
+      el.remove(); document.removeEventListener('keydown', onKey, true); offs.forEach((o) => o());
       if (current === api) current = null;
       if (!silent || silent === true) onClose?.();
     },

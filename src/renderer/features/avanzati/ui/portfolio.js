@@ -13,13 +13,23 @@ export function containsAscii(bytes, word, limit = bytes.length) {
   return false;
 }
 
+/** Allegati del documento (pdf.js v6: Map senza contenuto, che si legge a parte; versioni precedenti: oggetto con content). */
+export async function listAttachments(pdf) {
+  const att = await pdf.getAttachments().catch(() => null);
+  if (!att) return [];
+  const entries = att instanceof Map ? [...att.entries()] : Object.entries(att);
+  return entries.map(([id, a]) => ({
+    id, filename: a.filename || id, description: a.description || '',
+    async getContent() { if (a.content) return a.content; return typeof pdf.getAttachmentContent === 'function' ? pdf.getAttachmentContent(id) : null; },
+  }));
+}
+
 export async function isPortfolio(doc) {
   let pageMode = null;
   try { pageMode = await doc.pdf.getPageMode(); } catch {}
   const marker = containsAscii(doc.bytes, '/Collection');
   if (!marker && pageMode !== 'UseAttachments') return 0;
-  const att = await doc.pdf.getAttachments().catch(() => null);
-  const n = att ? Object.keys(att).length : 0;
+  const n = (await listAttachments(doc.pdf)).length;
   return marker || n ? n : 0;
 }
 
@@ -37,8 +47,8 @@ export function setupPortfolio(app, deps) {
 export async function showPortfolio(app, deps) {
   const { h } = app.ui;
   const doc = app.activeDoc;
-  const att = await doc.pdf.getAttachments().catch(() => null);
-  const entries = att ? Object.values(att) : [];
+  const entries = await listAttachments(doc.pdf);
+  for (const e of entries) { try { e.content = await e.getContent(); } catch { e.content = null; } }
   const pane = deps.openPane(app, { title: 'File del portfolio', subtitle: doc.name, id: 'portfolio' });
   if (!entries.length) {
     pane.body.append(h('div', { class: 'av-narrow' }, h('p', {}, 'Questo documento non contiene file inclusi.'), h('p', { class: 'av-note' }, 'Un portfolio PDF è una raccolta di più file (PDF, Word, immagini…) dentro un unico PDF.')));

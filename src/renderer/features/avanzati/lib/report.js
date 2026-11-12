@@ -2,8 +2,8 @@
 import { testoSicuro } from './protocollo.js';
 
 export const ESITI = {
-  valid: { titolo: 'Firma valida', spiega: 'Il documento non è stato modificato dopo la firma e il certificato era in corso di validità alla data della firma.' },
-  warning: { titolo: 'Firma integra, da controllare', spiega: 'Non tutte le verifiche sono state possibili: leggi i dettagli di ogni firma.' },
+  valid: { titolo: 'Firma valida', spiega: 'Il documento non è stato modificato dopo la firma; il certificato è qualificato ed era in corso di validità alla data della firma.' },
+  warning: { titolo: 'Firma integra, da controllare', spiega: 'Il documento non risulta modificato, ma non tutto è verificabile (per esempio il certificato non è dichiarato qualificato o manca la data della firma): leggi i dettagli.' },
   invalid: { titolo: 'Firma NON valida', spiega: 'Almeno una firma non corrisponde: il documento potrebbe essere stato modificato dopo la firma.' },
 };
 export const LIMITI = 'Leggio lavora senza Internet: non controlla la revoca dei certificati (CRL/OCSP) né l\'elenco ufficiale dei certificatori accreditati. Per un controllo completo usa anche il verificatore del tuo prestatore di firma.';
@@ -110,7 +110,7 @@ export async function rapportoPdf(PDFLib, result, info) {
     const walk = (s, contro) => {
       n++;
       y -= 4;
-      text(`${contro ? 'Controfirma' : 'Firma'} ${n}${result.levels.length > 1 ? ` (busta ${li + 1} di ${result.levels.length})` : ''}`, { f: bold, s: 11.5, gap: 6, c: colori[s.integrity === 'valid' && s.certValidAtSigning !== false ? 'valid' : s.integrity === 'invalid' ? 'invalid' : 'warning'] });
+      text(`${contro ? 'Controfirma' : 'Firma'} ${n}${result.levels.length > 1 ? ` (busta ${li + 1} di ${result.levels.length})` : ''}`, { f: bold, s: 11.5, gap: 6, c: colori[s.integrity === 'valid' && s.certValidAtSigning !== false && s.certificate?.qualified ? 'valid' : s.integrity === 'invalid' ? 'invalid' : 'warning'] });
       for (const [k, v] of righeFirmatario(s)) row(k, v);
       s.counterSigners?.forEach((cs) => walk(cs, true));
     };
