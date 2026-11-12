@@ -1,6 +1,7 @@
 // Icone SVG a tratto (24x24, stroke currentColor). Le feature possono aggiungerne con registerIcon.
 const P = {
   open: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  saveAs: '<path d="M5 3h9l3 3v5"/><path d="M5 3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6"/><path d="M7 3v5h7"/><path d="M14.5 20.5l1-3.5 5-5a1.4 1.4 0 0 1 2 2l-5 5z"/>',
   save: '<path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M7 3v5h8V3M7 21v-7h10v7"/>',
   print: '<path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2"/><path d="M6 14h12v7H6z"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',

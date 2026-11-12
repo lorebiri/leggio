@@ -34,6 +34,9 @@ const norm = (p) => (process.platform === 'win32' || isMac ? path.normalize(p).t
 const grantFile = (p) => { if (p) grantedFiles.add(norm(p)); };
 const grantFolder = (p) => { if (p) grantedFolders.add(norm(p)); };
 const canWrite = (p) => grantedFiles.has(norm(p));
+// file non PDF (es. .p7m) che l'utente ha aperto dal sistema: il renderer può leggerli, non sovrascriverli
+const grantedReads = new Set();
+const grantRead = (p) => { if (p) grantedReads.add(norm(p)); };
 
 // ---------- file recenti ----------
 const recentFile = () => path.join(app.getPath('userData'), 'recenti.json');
@@ -73,8 +76,10 @@ function readPdf(p) {
 function send(channel, payload) { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload); }
 function notify(kind, message, title) { send('app:notify', { kind, message, title }); }
 
+// Accetta qualunque file esistente passato dal sistema (doppio clic, «Apri con», trascinamento sull'icona,
+// riga di comando): è il renderer a decidere, in base ai gestori registrati (app.registerOpener).
 function sendOpen(paths) {
-  const files = paths.filter((p) => typeof p === 'string' && /\.pdf$/i.test(p) && fs.existsSync(p));
+  const files = paths.filter((p) => { try { return typeof p === 'string' && !p.startsWith('-') && path.isAbsolute(p) && fs.statSync(p).isFile(); } catch { return false; } });
   if (!files.length) return;
   if (mainWindow && mainWindow.webContents && !mainWindow.webContents.isLoading()) {
     for (const p of files) openInRenderer(p);
@@ -89,7 +94,7 @@ function openInRenderer(p) {
   try {
     const st = fs.statSync(p);
     if (st.size > V.MAX_BYTES) throw new Error(`«${path.basename(p)}» supera i 2 GB: Leggio non può aprirlo.`);
-    grantFile(p);
+    if (/\.pdf$/i.test(p)) grantFile(p); else grantRead(p);
     send('app:open-file', { path: p, name: path.basename(p) });
   }
   catch (err) { L('warn', 'apertura non riuscita', { p, error: err.message }); notify('error', err.message, 'Impossibile aprire il documento'); }
@@ -370,8 +375,9 @@ function registerCoreIpc() {
   });
   handle('file:read', async (_e, p) => {
     const target = V.absPath(p);
-    if (!/\.pdf$/i.test(target)) throw new V.IpcValidationError('Si possono riaprire solo file PDF.');
-    return readPdf(target);
+    if (/\.pdf$/i.test(target)) return readPdf(target);
+    if (!grantedReads.has(norm(target))) throw new V.IpcValidationError('Si possono riaprire solo file PDF o file aperti dall\'utente.');
+    return { path: target, name: path.basename(target), bytes: readFileChecked(target) };
   });
   handle('file:recent', () => readRecent());
   handle('file:show-in-folder', (_e, p) => shell.showItemInFolder(V.absPath(p)));

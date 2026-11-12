@@ -86,6 +86,9 @@ export const platform = {
   /** Registro locale (file ruotato nel main). Nel browser: solo console. */
   async log(entry) { if (native) return native.invoke('app:log', entry); },
   async openLogs() { if (native) return native.invoke('app:open-logs'); },
+  isElectron,
+  /** Menu nativo «Strumenti»: [{label, items:[{id,label}]}] (solo app). */
+  async setToolsMenu(groups) { if (native) return native.invoke('app:tools-menu', groups); },
   /** Recupero automatico su disco (solo app); nel browser recovery.js usa IndexedDB. */
   recoveryBackend() {
     if (!native) return null;

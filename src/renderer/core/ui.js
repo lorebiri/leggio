@@ -178,16 +178,57 @@ export function prompt(label, value = '', { title = '', type = 'text', okLabel =
 }
 export function alertDialog(message, title = 'Leggio') { return dialog({ title, message, cancelLabel: null }); }
 
-/** Notifica temporanea. kind: info|success|error|warning. action: {label, run} */
+/**
+ * Notifica temporanea. kind: info|success|error|warning. action: {label, run}
+ * Con un'azione (es. «Annulla») resta almeno 10 secondi; il tempo si ferma mentre il mouse è sopra.
+ */
 export function toast(message, { kind = 'info', timeout = 3800, action } = {}) {
   const root = document.getElementById('toast-root');
   const t = h('div', { class: 'toast toast-' + kind, role: kind === 'error' ? 'alert' : 'status' },
     h('span', { html: icon(kind === 'error' ? 'warning' : kind === 'success' ? 'check' : 'info', 16) }),
     h('span', { class: 'toast-msg' }, message));
-  if (action) t.append(h('button', { class: 'btn small', onclick: () => { action.run(); t.remove(); } }, action.label));
+  if (action) {
+    timeout = Math.max(timeout, 10000);
+    t.append(h('button', { class: 'btn small', onclick: () => { action.run(); close(); } }, action.label));
+  }
+  t.append(h('button', { class: 'toast-x', 'aria-label': 'Chiudi avviso', title: 'Chiudi', onclick: () => close(), html: icon('close', 14) }));
   root.append(t);
-  setTimeout(() => { t.classList.add('closing'); setTimeout(() => t.remove(), 200); }, timeout);
+  let timer = null; let closed = false;
+  const close = () => { if (closed) return; closed = true; clearTimeout(timer); t.classList.add('closing'); setTimeout(() => t.remove(), 200); };
+  const arm = () => { clearTimeout(timer); timer = setTimeout(close, timeout); };
+  t.addEventListener('mouseenter', () => clearTimeout(timer));
+  t.addEventListener('mouseleave', arm);
+  arm();
+  // compatibilità: chi chiamava t.remove() continua a funzionare
   return t;
+}
+
+/**
+ * Domanda con pulsanti a parole (es. «Salva / Non salvare / Annulla»). → value del pulsante, o null (Esc).
+ * buttons: [{ value, label, primary, danger, left }] nell'ordine in cui appaiono.
+ */
+export function choice({ title, message, body, buttons, width } = {}) {
+  return new Promise((resolve) => {
+    const prevFocus = document.activeElement;
+    const box = h('div', { class: 'dlg', role: 'alertdialog', 'aria-modal': 'true', 'aria-label': title || 'Domanda', style: width ? { width: width + 'px' } : null });
+    const content = h('div', { class: 'dlg-body' });
+    if (message) content.append(h('p', { class: 'dlg-msg' }, message));
+    if (body) content.append(typeof body === 'function' ? body() : body);
+    const foot = h('footer', { class: 'dlg-foot' });
+    let primary = null;
+    for (const b of buttons || [{ value: 'ok', label: 'OK', primary: true }]) {
+      const el = h('button', { type: 'button', class: 'btn' + (b.primary ? ' primary' : '') + (b.danger ? ' danger' : '') + (b.left ? ' spacer-left' : ''), onclick: () => done(b.value) }, b.label);
+      if (b.primary) primary = el;
+      foot.append(el);
+    }
+    box.append(h('header', { class: 'dlg-head' }, h('h2', {}, title || ''), h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Chiudi', onclick: () => done(null), html: icon('close') })), content, foot);
+    const back = h('div', { class: 'backdrop' }, box);
+    function done(v) { back.remove(); document.removeEventListener('keydown', onKey, true); prevFocus?.focus?.(); resolve(v); }
+    function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); done(null); } }
+    document.addEventListener('keydown', onKey, true);
+    layer().append(back);
+    (primary || foot.querySelector('button'))?.focus();
+  });
 }
 
 /** Barra di avanzamento modale annullabile. → { set(frac 0..1, testo), cancelled, signal, close() } */
@@ -226,12 +267,15 @@ export async function withProgress(title, fn, opts) {
 /** Menu contestuale. items: [{label, icon, run, disabled, danger} | '-'] */
 export function contextMenu(x, y, items) {
   document.querySelectorAll('.ctx-menu').forEach((m) => m.remove());
+  // #overlay-root può essere ingrandito (zoom dell'interfaccia): le coordinate vanno divise per lo zoom
+  const z = parseFloat(getComputedStyle(layer()).zoom) || 1;
+  x /= z; y /= z;
   const menu = h('div', { class: 'ctx-menu', role: 'menu', style: { left: x + 'px', top: y + 'px' } },
     items.map((it) => it === '-' ? h('hr') : h('button', { role: 'menuitem', class: it.danger ? 'danger' : '', disabled: it.disabled, onclick: () => { menu.remove(); it.run?.(); } }, it.icon ? h('span', { html: icon(it.icon, 16) }) : h('span'), it.label, it.hint ? h('kbd', {}, it.hint) : null)));
   layer().append(menu);
   const r = menu.getBoundingClientRect();
-  if (r.right > innerWidth) menu.style.left = Math.max(4, innerWidth - r.width - 4) + 'px';
-  if (r.bottom > innerHeight) menu.style.top = Math.max(4, innerHeight - r.height - 4) + 'px';
+  if (r.right > innerWidth) menu.style.left = Math.max(4, (innerWidth - r.width) / z - 4) + 'px';
+  if (r.bottom > innerHeight) menu.style.top = Math.max(4, (innerHeight - r.height) / z - 4) + 'px';
   const close = (e) => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('mousedown', close, true); } };
   setTimeout(() => document.addEventListener('mousedown', close, true));
   menu.querySelector('button:not([disabled])')?.focus();

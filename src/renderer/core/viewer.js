@@ -45,7 +45,7 @@ export class Viewer {
 
   #initView() {
     const vs = this.doc?.viewState;
-    if (vs) { this.pdfViewer.currentScaleValue = vs.scale; if (vs.page) this.pdfViewer.currentPageNumber = vs.page; if (vs.scrollTop != null) setTimeout(() => (this.container.scrollTop = vs.scrollTop)); }
+    if (vs && vs.scale) { this.pdfViewer.currentScaleValue = vs.scale; if (vs.page) this.pdfViewer.currentPageNumber = vs.page; if (vs.scrollTop != null) setTimeout(() => (this.container.scrollTop = vs.scrollTop)); }
     else this.pdfViewer.currentScaleValue = this.app.settings.get('defaultZoom', 'auto');
     this.app.bus.emit('viewer:pagesinit', { doc: this.doc });
   }
@@ -71,6 +71,8 @@ export class Viewer {
     return ov;
   }
 
+  /** La pagina i è già disegnata (renderingState FINISHED)? */
+  isRendered(pageIndex) { return this.pdfViewer.getPageView(pageIndex)?.renderingState === 3; }
   getPageDiv(pageIndex) { return this.pdfViewer.getPageView(pageIndex)?.div || null; }
   /** PageViewport corrente (scala+rotazione): convertToPdfPoint / convertToViewportPoint. */
   getViewport(pageIndex) { return this.pdfViewer.getPageView(pageIndex)?.viewport || null; }
@@ -104,7 +106,7 @@ export class Viewer {
     await this.setDocument(this.doc);
   }
   saveViewState() {
-    if (!this.doc || !this.pdfViewer.pdfDocument) return;
+    if (!this.doc || !this.pdfViewer.pdfDocument || this.pdfViewer.currentScaleValue == null) return;
     this.doc.viewState = { scale: this.pdfViewer.currentScaleValue, page: this.pdfViewer.currentPageNumber, scrollTop: this.container.scrollTop };
   }
 

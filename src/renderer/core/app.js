@@ -9,10 +9,11 @@ import { installGuards, log } from './guard.js';
 import { Recovery } from './recovery.js';
 import { Viewer, isTyping } from './viewer.js';
 import { Sidebar, thumbnailsPanel, outlinePanel } from './sidebar.js';
-import { ToolRegistry } from './tools.js';
+import { ToolRegistry, CATEGORIES } from './tools.js';
 import { Settings } from './settings.js';
 import { platform, isMac, modKey } from './platform.js';
-import { openPdfLib, savePdfLib, renderPageToCanvas, openPdfJs, verifyPdfBytes, destroyPdf, PDFLib, pdfjs } from './pdf.js';
+import { openPdfLib, savePdfLib, renderPageToCanvas, openPdfJs, verifyPdfBytes, destroyPdf, PDFLib, pdfjs, fontkit } from './pdf.js';
+import { isSignedPdf } from './signature.js';
 import * as ui from './ui.js';
 import { h, toast, dialog, confirm, withProgress, parsePageRanges, formatBytes, escapeHtml } from './ui.js';
 import { icon } from './icons.js';
@@ -23,7 +24,8 @@ export class App {
     this.settings = new Settings(this.bus);
     this.platform = platform;
     this.ui = ui;
-    this.lib = { PDFLib, pdfjs, openPdfLib, savePdfLib, renderPageToCanvas };
+    this.lib = { PDFLib, pdfjs, fontkit, openPdfLib, savePdfLib, renderPageToCanvas };
+    this.openers = [];
     this.docs = [];
     this.activeDoc = null;
     this.saveHooks = [];
@@ -31,6 +33,7 @@ export class App {
     installGuards(this);
     this.#setupHistory();
     this.el = this.#buildShell(root);
+    this.#applyUiPrefs();
     this.viewer = new Viewer(this, this.el.viewerContainer);
     this.sidebar = new Sidebar(this, this.el.rail, this.el.sideBody);
     this.tools = new ToolRegistry(this);
@@ -40,7 +43,7 @@ export class App {
     this.#wireCommands();
     this.#wireDragDrop();
     this.#applyTheme();
-    this.bus.on('tools:changed', () => this.#renderQuickTools());
+    this.bus.on('tools:changed', () => this.#scheduleToolsChanged());
     this.bus.on('page:changed', () => this.#updateNav());
     this.bus.on('viewer:scale', () => this.#updateNav());
     this.bus.on('viewer:pagesinit', () => this.#updateNav());
@@ -55,6 +58,37 @@ export class App {
   registerTool(def) { this.tools.register(def); }
   registerPanel(def) { this.sidebar.registerPanel(def); }
   registerPageAction(def) { this.sidebar.registerPageAction(def); }
+  /**
+   * Gestore per aprire file che non sono PDF (es. .p7m, .xml): dialogo Apri, trascinamento,
+   * doppio clic nel Finder/Esplora risorse, «Apri con».
+   * def: { id, name, extensions: ['p7m', 'tsd'], open(file:{path,name,bytes}, app) }
+   */
+  registerOpener(def) {
+    if (!def?.open || !Array.isArray(def.extensions) || !def.extensions.length) throw new Error('registerOpener: servono extensions e open()');
+    const exts = def.extensions.map((e) => String(e).toLowerCase().replace(/^\./, '')).filter((e) => e && e !== 'pdf');
+    this.openers.push({ ...def, extensions: exts });
+  }
+  /** Gestore registrato per il nome di file (in base all'ultima estensione), o null. */
+  openerFor(name) {
+    const ext = String(name || '').toLowerCase().match(/\.([a-z0-9]+)$/)?.[1];
+    return (ext && this.openers.find((o) => o.extensions.includes(ext))) || null;
+  }
+  /** Apre un file qualunque {path, name, bytes}: gestori registrati, poi PDF. */
+  async openFile(file) {
+    const op = this.openerFor(file.name);
+    if (op) {
+      try { return await op.open(file, this); } catch (err) { this.reportError(err, `Impossibile aprire «${file.name}»`); return null; }
+    }
+    return this.openBytes(file.bytes, { name: file.name, path: /\.pdf$/i.test(file.name) ? file.path : null });
+  }
+
+  /** Il documento contiene firme digitali (campo firma con valore)? Risultato memorizzato per versione. */
+  isSigned(doc = this.activeDoc) {
+    if (!doc) return false;
+    if (doc.data.__signedVersion !== doc.version) { doc.data.__signed = isSignedPdf(doc.bytes); doc.data.__signedVersion = doc.version; }
+    return doc.data.__signed;
+  }
+
   /** fn(bytes, doc) → bytes: trasformazioni applicate al momento del salvataggio. */
   registerSaveHook(fn) { this.saveHooks.push(fn); }
 
@@ -76,8 +110,9 @@ export class App {
    * essere accettato: se non è un PDF leggibile, il documento resta com'era.
    * NB: non chiamare applyEdit/undo/save dello stesso documento dall'interno di fn (attenderebbe sé stessa).
    */
-  async applyEdit(label, fn, doc = this.activeDoc) {
+  async applyEdit(label, fn, doc = this.activeDoc, { signatureWarning = true } = {}) {
     if (!doc) throw new Error('Nessun documento aperto');
+    if (signatureWarning && !(await this.#confirmSignedEdit(doc))) return false;
     return this.#exclusive(doc, label, async () => {
       const before = await this.currentBytes(doc);
       const after = await fn(before, doc);
@@ -99,13 +134,37 @@ export class App {
   }
 
   /** Come applyEdit ma con un PDFDocument di pdf-lib già aperto: fn(pdfDoc, PDFLib, doc). */
-  async editWithPdfLib(label, fn, doc = this.activeDoc) {
+  async editWithPdfLib(label, fn, doc = this.activeDoc, opts) {
     return this.applyEdit(label, async (bytes) => {
       const pdfDoc = await openPdfLib(bytes, doc.password);
       const r = await fn(pdfDoc, PDFLib, doc);
       if (r === false) return null;
       return savePdfLib(pdfDoc);
-    }, doc);
+    }, doc, opts);
+  }
+
+  /**
+   * Prima modifica a un documento firmato: avvisa una volta per documento.
+   * «Lavora su una copia» toglie il percorso (il salvataggio chiederà un nuovo nome: l'originale firmato resta intatto).
+   */
+  async #confirmSignedEdit(doc) {
+    if (doc.data.__signatureAck || !this.isSigned(doc)) return true;
+    const v = await ui.choice({
+      title: 'Documento firmato digitalmente',
+      message: `«${doc.name}» contiene una firma digitale. Modificarlo annulla la validità della firma. Vuoi lavorare su una copia, così il file firmato resta intatto?`,
+      buttons: [{ value: 'cancel', label: 'Annulla' }, { value: 'anyway', label: 'Modifica questo file' }, { value: 'copy', label: 'Lavora su una copia', primary: true }],
+    });
+    if (!v || v === 'cancel') return false;
+    doc.data.__signatureAck = true;
+    if (v === 'copy') {
+      doc.path = null;
+      doc.name = doc.name.replace(/(\.pdf)?$/i, '_copia.pdf');
+      doc.dirty = true;
+      this.#renderTabs(); this.#updateTitle();
+      toast(`Stai lavorando su «${doc.name}»: al salvataggio sceglierai dove metterla.`, { timeout: 8000 });
+    }
+    this.bus.emit('document:signature-warning', { doc, choice: v });
+    return true;
   }
 
   /** Esegue fn nella coda del documento (operazioni serializzate). Utile alle feature per operazioni lunghe che leggono e poi modificano. */
@@ -173,15 +232,19 @@ export class App {
   }
 
   async openDialog() {
+    const exts = [...new Set(this.openers.flatMap((o) => o.extensions))];
+    const filters = exts.length
+      ? [{ name: 'Documenti PDF e file firmati', extensions: ['pdf', ...exts] }, { name: 'Documenti PDF', extensions: ['pdf'] }, { name: 'Tutti i file', extensions: ['*'] }]
+      : [{ name: 'Documenti PDF', extensions: ['pdf'] }];
     let files;
-    try { files = await platform.openFiles({ multiple: true }); }
+    try { files = await platform.openFiles({ multiple: true, filters }); }
     catch (err) { this.#openFailed(cleanIpcMessage(err?.message || err), 'file'); return; }
-    for (const f of files) await this.openBytes(f.bytes, f);
+    for (const f of files) await this.openFile(f);
   }
 
   /** Apre un percorso (solo app desktop), es. dai recenti. */
   async openPath(p) {
-    try { const f = await platform.readFile(p); if (f) return this.openBytes(f.bytes, f); }
+    try { const f = await platform.readFile(p); if (f) return this.openFile(f); }
     catch (err) { this.#openFailed(cleanIpcMessage(err?.message || err), p.split(/[\\/]/).pop()); }
     return null;
   }
@@ -211,9 +274,13 @@ export class App {
     }
     if (doc.dirty || doc.formsDirty) {
       if (this.activeDoc !== doc) this.activate(doc);
-      const v = await dialog({ title: 'Modifiche non salvate', message: `Vuoi salvare le modifiche a «${doc.name}» prima di chiudere?`, fields: [{ name: 'a', type: 'radio', value: 'save', options: [{ value: 'save', label: 'Salva' }, { value: 'discard', label: 'Non salvare' }] }], okLabel: 'Continua' });
-      if (!v || doc.closed) return false;
-      if (v.a === 'save' && !(await this.save(doc))) return false;
+      const v = await ui.choice({
+        title: 'Modifiche non salvate',
+        message: `Vuoi salvare le modifiche a «${doc.name}» prima di chiudere?`,
+        buttons: [{ value: 'discard', label: 'Non salvare', left: true }, { value: 'cancel', label: 'Annulla' }, { value: 'save', label: 'Salva', primary: true }],
+      });
+      if (!v || v === 'cancel' || doc.closed) return false;
+      if (v === 'save' && !(await this.save(doc))) return false;
     }
     await doc.queue.idle();
     if (doc.closed) return true;
@@ -375,6 +442,7 @@ export class App {
 
   #updateTitle() {
     const d = this.activeDoc;
+    if (this.el) this.#updateNav();
     platform.setTitle(d ? `${d.dirty || d.formsDirty ? '• ' : ''}${d.name} — Leggio` : 'Leggio');
   }
 
@@ -384,25 +452,31 @@ export class App {
     const titlebar = h('div', { class: 'titlebar' + (isMac ? ' mac' : '') },
       h('div', { class: 'brand' }, h('span', { class: 'brand-mark', html: logoSvg() }), h('span', {}, 'Leggio')),
       tabs);
-    const btn = (ic, label, cmd, extra = {}) => h('button', { class: 'icon-btn', title: label, 'aria-label': label, 'data-cmd': cmd, html: icon(ic), ...extra });
+    // short = etichetta visibile sotto l'icona (Impostazioni › Etichette nella barra)
+    const btn = (ic, label, cmd, extra = {}, short) => {
+      const b = h('button', { class: 'icon-btn' + (short ? ' has-label' : ''), title: label, 'aria-label': label, 'data-cmd': cmd, html: icon(ic), ...extra });
+      if (extra.class && short) b.classList.add('has-label');
+      if (short) b.append(h('span', { class: 'tb-label', 'aria-hidden': 'true' }, short));
+      return b;
+    };
     const pageInput = h('input', { class: 'page-input', type: 'text', inputmode: 'numeric', 'aria-label': 'Numero di pagina' });
     const pageTotal = h('span', { class: 'page-total' }, '/ 0');
     const zoomSel = h('select', { class: 'zoom-select', 'aria-label': 'Zoom' },
       [['auto', 'Automatico'], ['page-fit', 'Pagina intera'], ['page-width', 'Larghezza pagina'], ['page-actual', 'Dimensioni reali'], ['0.5', '50%'], ['0.75', '75%'], ['1', '100%'], ['1.25', '125%'], ['1.5', '150%'], ['2', '200%'], ['3', '300%'], ['4', '400%'], ['custom', '']].map(([v, l]) => h('option', { value: v, hidden: v === 'custom' }, l)));
     const quick = h('div', { class: 'quick-tools' });
     const toolbar = h('div', { class: 'toolbar', role: 'toolbar', 'aria-label': 'Barra degli strumenti' },
-      h('div', { class: 'tb-group' }, btn('open', `Apri (${modKey}O)`, 'open'), btn('save', `Salva (${modKey}S)`, 'save', { class: 'icon-btn needs-doc' }), btn('print', `Stampa (${modKey}P)`, 'print', { class: 'icon-btn needs-doc' })),
+      h('div', { class: 'tb-group' }, btn('open', `Apri (${modKey}O)`, 'open', {}, 'Apri'), btn('save', `Salva (${modKey}S)`, 'save', { class: 'icon-btn needs-doc' }, 'Salva'), btn('saveAs', `Salva con nome (${modKey}⇧S)`, 'save-as', { class: 'icon-btn needs-doc' }, 'Salva con nome'), btn('print', `Stampa (${modKey}P)`, 'print', { class: 'icon-btn needs-doc' }, 'Stampa')),
       h('div', { class: 'tb-sep' }),
-      h('div', { class: 'tb-group needs-doc' }, btn('undo', `Annulla (${modKey}Z)`, 'undo'), btn('redo', 'Ripeti', 'redo')),
+      h('div', { class: 'tb-group needs-doc' }, btn('undo', `Annulla (${modKey}Z)`, 'undo', {}, 'Annulla'), btn('redo', `Ripeti (${isMac ? '⌘⇧Z' : 'Ctrl+Y'})`, 'redo', {}, 'Ripeti')),
       h('div', { class: 'tb-sep' }),
-      h('div', { class: 'tb-group needs-doc' }, btn('pointer', 'Selezione testo (V)', 'mode-select', { class: 'icon-btn mode-btn active' }), btn('hand', 'Mano (H, o tieni premuto Spazio)', 'mode-hand', { class: 'icon-btn mode-btn' })),
+      h('div', { class: 'tb-group needs-doc' }, btn('pointer', 'Selezione testo (V)', 'mode-select', { class: 'icon-btn mode-btn active' }, 'Seleziona'), btn('hand', 'Mano: trascina la pagina (H, o tieni premuto Spazio)', 'mode-hand', { class: 'icon-btn mode-btn' }, 'Mano')),
       h('div', { class: 'tb-group needs-doc nav' }, btn('chevronUp', 'Pagina precedente', 'prev-page'), pageInput, pageTotal, btn('chevronDown', 'Pagina successiva', 'next-page')),
-      h('div', { class: 'tb-group needs-doc' }, btn('minus', 'Riduci', 'zoom-out'), zoomSel, btn('plus', 'Ingrandisci', 'zoom-in'), btn('rotate', `Ruota vista (${modKey}R)`, 'rotate-view')),
+      h('div', { class: 'tb-group needs-doc' }, btn('minus', 'Riduci', 'zoom-out'), zoomSel, btn('plus', 'Ingrandisci', 'zoom-in'), btn('rotate', `Ruota la visualizzazione (non modifica il file) (${modKey}R)`, 'rotate-view')),
       h('div', { class: 'tb-spacer' }),
       quick,
-      h('div', { class: 'tb-group' }, btn('search', `Trova (${modKey}F)`, 'find', { class: 'icon-btn needs-doc' }),
+      h('div', { class: 'tb-group' }, btn('search', `Trova (${modKey}F)`, 'find', { class: 'icon-btn needs-doc' }, 'Trova'),
         h('button', { class: 'btn tools-btn', 'data-cmd': 'tools', title: `Tutti gli strumenti (${modKey}K)`, html: icon('tools', 16) + '<span>Strumenti</span>' }),
-        btn('settings', 'Impostazioni', 'settings')));
+        btn('settings', 'Impostazioni', 'settings', {}, 'Impostazioni')));
     const toolOptions = h('div', { class: 'tool-options', hidden: true, role: 'toolbar', 'aria-label': 'Opzioni strumento' });
     const findbar = h('div', { class: 'findbar', hidden: true, role: 'search' });
     const rail = h('nav', { class: 'rail', 'aria-label': 'Pannelli' });
@@ -430,9 +504,10 @@ export class App {
   #renderTabs() {
     const t = this.el.tabs; t.innerHTML = '';
     for (const d of this.docs) {
-      const tab = h('div', { class: 'tab' + (d === this.activeDoc ? ' active' : ''), role: 'tab', 'aria-selected': String(d === this.activeDoc), title: d.path || d.name, tabindex: 0 },
-        h('span', { class: 'tab-name' }, (d.dirty || d.formsDirty ? '• ' : '') + d.name),
-        h('button', { class: 'tab-close', 'aria-label': 'Chiudi ' + d.name, onclick: (e) => { e.stopPropagation(); this.closeDoc(d); }, html: icon('close', 13) }));
+      const unsaved = d.dirty || d.formsDirty;
+      const tab = h('div', { class: 'tab' + (d === this.activeDoc ? ' active' : '') + (unsaved ? ' dirty' : ''), role: 'tab', 'aria-selected': String(d === this.activeDoc), title: (d.path || d.name) + (unsaved ? ' — modifiche non salvate' : ''), tabindex: 0 },
+        h('span', { class: 'tab-name' }, d.name),
+        h('button', { class: 'tab-close', title: 'Chiudi ' + d.name, 'aria-label': 'Chiudi ' + d.name, onclick: (e) => { e.stopPropagation(); this.closeDoc(d); }, html: icon('close', 13) }));
       tab.addEventListener('click', () => this.activate(d));
       tab.addEventListener('auxclick', (e) => { if (e.button === 1) this.closeDoc(d); });
       tab.addEventListener('keydown', (e) => { if (e.key === 'Enter') this.activate(d); });
@@ -442,8 +517,11 @@ export class App {
   }
 
   async #renderHome() {
-    const home = this.el.home; home.innerHTML = '';
-    const recent = await platform.recent();
+    const token = (this.homeToken = (this.homeToken || 0) + 1);
+    const home = this.el.home;
+    const recent = await platform.recent().catch(() => []);
+    if (token !== this.homeToken) return; // nel frattempo è partito un altro disegno
+    home.innerHTML = '';
     const featured = ['create-pdf', 'merge', 'compress', 'ocr', 'sign', 'protect', 'redact', 'convert-word', 'compare', 'fill-sign', 'organize'];
     const quick = featured.map((id) => this.tools.get(id)).filter(Boolean);
     home.append(h('div', { class: 'home-inner' },
@@ -459,6 +537,20 @@ export class App {
         h('div', { class: 'home-tools' }, quick.map((t) => h('button', { class: 'home-tool', onclick: () => this.tools.run(t.id) }, h('span', { class: 'hub-ico', html: icon(t.icon || 'tools', 22) }), h('strong', {}, t.name), h('small', {}, t.description || ''))))) : null,
       recent.length ? h('section', { class: 'home-sec' }, h('h2', {}, 'Recenti'),
         h('ul', { class: 'recent' }, recent.slice(0, 8).map((p) => h('li', {}, h('button', { class: 'recent-item', onclick: () => this.openPath(p) }, h('span', { html: icon('file', 16) }), h('span', { class: 'recent-name' }, p.split(/[\\/]/).pop()), h('small', {}, p)))))) : null));
+  }
+
+  #scheduleToolsChanged() {
+    if (this.toolsTimer) return;
+    this.toolsTimer = setTimeout(() => { this.toolsTimer = null; this.#renderQuickTools(); this.#syncToolsMenu(); }, 0);
+  }
+  /** Menu nativo «Strumenti» (app desktop): categorie e nomi (con il nome Acrobat se c'è). */
+  #syncToolsMenu() {
+    if (!platform.isElectron) return;
+    const groups = CATEGORIES.map(([cat, label]) => ({
+      label,
+      items: this.tools.list().filter((t) => t.category === cat && !t.hidden).map((t) => ({ id: t.id, label: t.acrobatName && t.acrobatName !== t.name ? `${t.name} (${t.acrobatName})` : t.name })),
+    })).filter((g) => g.items.length);
+    platform.setToolsMenu(groups).catch(() => {});
   }
 
   #renderQuickTools() {
@@ -479,7 +571,33 @@ export class App {
     const match = [...sel.options].find((o) => o.value === sv);
     if (match) sel.value = sv;
     else { const c = sel.querySelector('option[value=custom]'); c.textContent = Math.round((pv.currentScale || 1) * 100) + '%'; sel.value = 'custom'; }
-    this.el.status.textContent = d ? `${d.busy ? `In corso: ${d.queue.current}… · ` : ''}${d.pageCount} pagine · ${formatBytes(d.bytes.length)}${d.path ? ' · ' + d.path : ''}` : '';
+    const st = this.el.status; st.textContent = '';
+    if (d) {
+      if (d.dirty || d.formsDirty) st.append(h('span', { class: 'status-dirty' }, 'Modifiche non salvate ·'));
+      st.append(`${d.busy ? `In corso: ${d.queue.current}… · ` : ''}${d.pageCount} pagine · ${formatBytes(d.bytes.length)}${(d.bytes.length < 64 * MB ? this.isSigned(d) : d.data.__signed) ? ' · firmato digitalmente' : ''}${d.password ? ' · protetto da password' : ''}${d.path ? ' · ' + d.path : ''}`);
+    }
+  }
+
+  /** Preferenze di leggibilità: { large?: bool, zoom?: number, labels?: bool }. Ricordate nelle impostazioni. */
+  setUiPrefs({ large, zoom, labels } = {}) {
+    if (large != null) this.settings.set('uiLarge', !!large);
+    if (zoom != null) this.settings.set('uiZoom', zoom);
+    if (labels != null) this.settings.set('toolbarLabels', !!labels);
+    this.#applyUiPrefs();
+    const z = this.uiZoom;
+    toast(`Interfaccia al ${Math.round(z * 100)}%${this.settings.get('uiLarge', false) ? ' (caratteri e pulsanti grandi)' : ''}`);
+  }
+  /** Fattore di zoom dell'interfaccia effettivo (non quello della pagina). */
+  get uiZoom() {
+    const z = Number(this.settings.get('uiZoom', 1)) || 1;
+    return this.settings.get('uiLarge', false) ? Math.max(1.25, z) : z;
+  }
+  #applyUiPrefs() {
+    const root = document.documentElement;
+    const large = !!this.settings.get('uiLarge', false);
+    root.classList.toggle('ui-large', large);
+    root.style.setProperty('--ui-zoom', String(this.uiZoom));
+    this.el.root.classList.toggle('tb-labels', this.settings.get('toolbarLabels', true) !== false);
   }
 
   #applyTheme() {
@@ -503,9 +621,13 @@ export class App {
       'mode-hand': () => { this.tools.deactivate(); v.setMode('hand'); this.#modeButtons('mode-hand'); },
       settings: () => this.showSettings(), shortcuts: () => this.showShortcuts(),
       'open-logs': () => platform.openLogs(),
+      'toggle-large-ui': () => this.setUiPrefs({ large: !this.settings.get('uiLarge', false) }),
+      'ui-zoom-in': () => this.setUiPrefs({ zoom: stepZoom(this.settings.get('uiZoom', 1), +1) }),
+      'ui-zoom-out': () => this.setUiPrefs({ zoom: stepZoom(this.settings.get('uiZoom', 1), -1) }),
+      'ui-zoom-reset': () => this.setUiPrefs({ zoom: 1, large: false }),
     };
     if (id.startsWith('tool:')) return this.tools.run(id.slice(5));
-    const needsDoc = !['open', 'tools', 'settings', 'shortcuts', 'toggle-theme', 'open-logs'].includes(id);
+    const needsDoc = !['open', 'tools', 'settings', 'shortcuts', 'toggle-theme', 'open-logs', 'toggle-large-ui', 'ui-zoom-in', 'ui-zoom-out', 'ui-zoom-reset'].includes(id);
     if (needsDoc && !this.activeDoc) return;
     if (['undo', 'redo', 'save', 'save-as', 'print'].includes(id) && this.activeDoc?.busy) {
       toast(`Attendi: «${this.activeDoc.queue.current}» è ancora in corso`, { kind: 'warning' });
@@ -530,7 +652,8 @@ export class App {
     platform.on('app:open-file', (f) => { if (f?.bytes) this.openBytes(f.bytes, f); else if (f?.path) this.openPath(f.path); });
     platform.on('app:open-recovery', () => { this.recovery?.offer(true); });
     platform.on('app:before-close', async () => {
-      for (const d of [...this.docs]) if (!(await this.closeDoc(d))) return;
+      this.bus.emit('app:quitting', { docs: [...this.docs] });
+      for (const d of [...this.docs]) if (!(await this.closeDoc(d))) { this.bus.emit('app:quit-cancelled'); return; }
       await this.recovery?.cleanExit();
       window.leggio.invoke('app:confirm-close');
     });
@@ -544,6 +667,7 @@ export class App {
       if (mod && !window.leggio) {
         // nel browser i menu nativi non esistono: replichiamo le scorciatoie principali
         const k = e.key.toLowerCase();
+        if (e.shiftKey && ['+', '=', '-', '_'].includes(k)) { e.preventDefault(); this.command(k === '-' || k === '_' ? 'ui-zoom-out' : 'ui-zoom-in'); return; }
         const m = { o: 'open', s: e.shiftKey ? 'save-as' : 'save', p: 'print', f: 'find', k: 'tools', z: e.shiftKey ? 'redo' : 'undo', y: 'redo', w: 'close-tab', '+': 'zoom-in', '=': 'zoom-in', '-': 'zoom-out', '0': 'zoom-reset' }[k];
         if (m) { e.preventDefault(); this.command(m); return; }
       }
@@ -565,8 +689,15 @@ export class App {
       if (!e.dataTransfer.files.length) return;
       e.preventDefault(); root.classList.remove('dragging');
       const files = [...e.dataTransfer.files];
-      const pdfs = files.filter((f) => /\.pdf$/i.test(f.name) || f.type === 'application/pdf');
-      const others = files.filter((f) => !pdfs.includes(f));
+      const handled = files.filter((f) => this.openerFor(f.name));
+      const pdfs = files.filter((f) => !handled.includes(f) && (/\.pdf$/i.test(f.name) || f.type === 'application/pdf'));
+      const others = files.filter((f) => !pdfs.includes(f) && !handled.includes(f));
+      for (const f of handled) {
+        let path = null;
+        try { path = window.leggio?.pathForFile?.(f) || null; } catch { path = null; }
+        try { await this.openFile({ path, name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) }); }
+        catch (err) { this.reportError(err, `Impossibile aprire «${f.name}»`); }
+      }
       for (const f of pdfs) {
         if (f.size > MAX_PDF_BYTES) { this.#openFailed(precheck({ length: f.size }, f.name), f.name); continue; }
         let path = null;
@@ -607,7 +738,7 @@ export class App {
     const doc = this.activeDoc;
     const v = await dialog({ title: 'Stampa', fields: [
       { name: 'pages', label: 'Pagine', type: 'pages', value: '' },
-      { name: 'quality', label: 'Qualità', type: 'select', value: '150', options: [{ value: '96', label: 'Bozza (96 dpi)' }, { value: '150', label: 'Normale (150 dpi)' }, { value: '300', label: 'Alta (300 dpi)' }] },
+      { name: 'quality', label: 'Qualità', type: 'select', value: '150', options: [{ value: '96', label: 'Bozza (più veloce)' }, { value: '150', label: 'Normale' }, { value: '300', label: 'Alta qualità (firme e timbri piccoli)' }], help: 'Copie, fronte/retro e stampante si scelgono nella finestra di stampa che si apre subito dopo.' },
       { name: 'annots', label: 'Stampa commenti e moduli', type: 'checkbox', value: true },
     ], okLabel: 'Stampa…', validate: (x) => { try { this.parsePages(x.pages); } catch (e) { return e.message; } } });
     if (!v) return;
@@ -663,16 +794,21 @@ export class App {
       { name: 'theme', label: 'Tema', type: 'select', value: s.get('theme', 'system'), options: [{ value: 'system', label: 'Come il sistema' }, { value: 'light', label: 'Chiaro' }, { value: 'dark', label: 'Scuro' }] },
       { name: 'defaultZoom', label: 'Zoom all\'apertura', type: 'select', value: s.get('defaultZoom', 'auto'), options: [{ value: 'auto', label: 'Automatico' }, { value: 'page-width', label: 'Larghezza pagina' }, { value: 'page-fit', label: 'Pagina intera' }, { value: '1', label: '100%' }] },
       { name: 'author', label: 'Nome autore (per commenti e firme)', type: 'text', value: s.get('author', '') },
+      { name: 'uiLarge', label: 'Caratteri e pulsanti grandi', type: 'checkbox', value: s.get('uiLarge', false), help: 'Ingrandisce testi, pulsanti e finestre (non la pagina). Anche da Vista › Caratteri e pulsanti grandi.' },
+      { name: 'uiZoom', label: 'Dimensione dell\'interfaccia', type: 'select', value: String(s.get('uiZoom', 1)), options: UI_ZOOMS.map((z) => ({ value: String(z), label: Math.round(z * 100) + '%' })) },
+      { name: 'toolbarLabels', label: 'Mostra i nomi sotto le icone della barra', type: 'checkbox', value: s.get('toolbarLabels', true) },
       ...extra.map((x) => ({ ...x.field, name: x.key, value: s.get(x.key, x.field.value) })),
     ] });
     if (!v) return;
+    v.uiZoom = Number(v.uiZoom) || 1;
     for (const [k, val] of Object.entries(v)) s.set(k, val);
     this.#applyTheme();
+    this.#applyUiPrefs();
   }
 
   showShortcuts() {
     const m = modKey;
-    const rows = [[`${m}O`, 'Apri'], [`${m}S`, 'Salva'], [`${m}⇧S`, 'Salva con nome'], [`${m}P`, 'Stampa'], [`${m}F`, 'Trova'], [`${m}K`, 'Tutti gli strumenti'], [`${m}Z`, 'Annulla'], [`${m}+ / ${m}−`, 'Zoom'], [`${m}0`, 'Dimensioni reali'], [`${m}1 / ${m}2`, 'Adatta larghezza / pagina'], [`${m}R`, 'Ruota vista'], [`${m}L`, 'Modalità lettura'], ['F4', 'Barra laterale'], ['V / H', 'Selezione / Mano'], ['Spazio (tenuto)', 'Trascina la pagina'], ['Esc', 'Chiudi strumento']];
+    const rows = [[`${m}O`, 'Apri'], [`${m}S`, 'Salva'], [`${m}⇧S`, 'Salva con nome'], [`${m}P`, 'Stampa'], [`${m}F`, 'Trova'], [`${m}K`, 'Tutti gli strumenti'], [`${m}Z`, 'Annulla'], [`${m}+ / ${m}−`, 'Zoom'], [`${m}0`, 'Dimensioni reali'], [`${m}1 / ${m}2`, 'Adatta larghezza / pagina'], [`${m}R`, 'Ruota la visualizzazione (non modifica il file)'], [`${m}⇧+ / ${m}⇧−`, 'Ingrandisci / riduci l\'interfaccia'], [`${m}L`, 'Modalità lettura'], ['F4', 'Barra laterale'], ['V / H', 'Selezione / Mano'], ['Spazio (tenuto)', 'Trascina la pagina'], ['Esc', 'Chiudi strumento']];
     for (const t of this.tools.list()) if (t.shortcut) rows.push([t.shortcut.toUpperCase(), t.name]);
     dialog({ title: 'Scorciatoie da tastiera', cancelLabel: null, okLabel: 'Chiudi', body: h('table', { class: 'props' }, rows.map(([k, l]) => h('tr', {}, h('th', {}, h('kbd', {}, k)), h('td', {}, l)))) });
   }
@@ -697,4 +833,11 @@ export function copyDocLevel(src, dst) {
 function logoSvg(size = 22) {
   // leggio stilizzato: un foglio inclinato su un'asta
   return `<svg width="${size}" height="${size}" viewBox="0 0 32 32" aria-hidden="true"><rect x="5" y="3" width="22" height="17" rx="3" transform="rotate(-6 16 11)" fill="var(--accent)"/><path d="M10 9.5h11M10 13.5h8" stroke="var(--accent-ink)" stroke-width="2" stroke-linecap="round" transform="rotate(-6 16 11)"/><path d="M16 20v8M11 29h10" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>`;
+}
+
+const UI_ZOOMS = [0.9, 1, 1.1, 1.25, 1.4, 1.6];
+function stepZoom(cur, dir) {
+  const i = UI_ZOOMS.findIndex((z) => z >= cur - 0.001);
+  const k = Math.max(0, Math.min(UI_ZOOMS.length - 1, (i < 0 ? UI_ZOOMS.length - 1 : i) + dir));
+  return UI_ZOOMS[k];
 }

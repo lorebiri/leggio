@@ -301,3 +301,5 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 15
 .hub-acro { color: var(--muted); font-weight: 400; }
 .recovery-list { margin: 8px 0 12px; padding-left: 18px; } .recovery-list li { margin: 4px 0; }
 .dlg-foot .btn.spacer-left { margin-right: auto; }
+.toast-x { border: 0; background: none; color: inherit; opacity: .7; display: flex; align-items: center; justify-content: center; min-width: 28px; min-height: 28px; border-radius: 6px; cursor: pointer; }
+.toast-x:hover { opacity: 1; background: color-mix(in srgb, var(--bg) 15%, transparent); }
