@@ -1,6 +1,4 @@
-// «Dati per Titulus»: i campi da incollare nella maschera di registrazione di Titulus (oggetto proposto, mittente,
-// P.IVA, data e numero del documento, CIG/CUP, importo), ognuno con «Copia». Leggio non si collega a Titulus.
-// Più: collegamento con l'archivio (evento «archivio:stato») e proposta «Segna come protocollato» se il documento
+// Collegamento con l'archivio (evento «archivio:stato») e proposta «Segna come protocollato» se il documento
 // porta già la segnatura di Titulus.
 import { datiPerTitulus, testoDatiTitulus } from '../lib/titulus.js';
 import { estraiDati } from '../lib/datichiave.js';
@@ -49,34 +47,5 @@ export function registerDatiTitulus(app) {
     }, 1200);
   });
 
-  app.registerPanel({
-    id: 'dati-titulus', title: 'Dati per Titulus', icon: 'stamp', order: 62,
-    render(c) {
-      const { h } = app.ui;
-      const doc = app.activeDoc;
-      const wrap = h('div', { class: 'pad av-side' }, h('p', { class: 'av-note' }, 'Lettura del documento…'));
-      c.append(wrap);
-      let vivo = true;
-      (async () => {
-        let campi;
-        try {
-          if (doc.data.fattura) campi = datiPerTitulus({ fattura: doc.data.fattura.f, firma: doc.data.fattura.firma });
-          else {
-            const t = await testo(doc);
-            campi = datiPerTitulus({ dati: estraiDati(t), analisi: analizza(t, doc.name), firma: doc.data.p7m, nomeFile: doc.name });
-          }
-        } catch { campi = []; }
-        if (!vivo) return;
-        const s = doc.data.segnaturaTitulus;
-        wrap.replaceChildren(
-          h('p', { class: 'av-note' }, 'Campi pronti da incollare nella registrazione di Titulus. Controllali: sono letti dal documento.'),
-          h('div', { class: 'av-btn-col' }, h('button', { class: 'btn primary', disabled: !campi.length, onclick: () => copia(app, testoDatiTitulus(campi)) }, 'Copia tutto')),
-          ...(campi.length ? campi.map((x) => h('div', { class: 'av-box' }, h('div', { class: 'av-note' }, x.etichetta),
-            h('div', { class: 'av-row' }, h('span', { class: 'av-grow', style: { overflowWrap: 'anywhere', fontWeight: x.chiave === 'oggetto' ? 600 : 400 } }, x.valore),
-              h('button', { class: 'btn small', 'aria-label': `Copia ${x.etichetta}`, onclick: () => copia(app, x.valore) }, 'Copia')))) : [h('p', {}, 'Non ho trovato dati da proporre in questo documento.')]),
-          s ? h('div', { class: 'av-box' }, h('h3', {}, 'Già protocollato'), h('p', {}, `Segnatura di Titulus n. ${s.numero} del ${s.data.split('-').reverse().join('/')}${s.uor ? ` (UOR ${s.uor})` : ''}.`)) : null);
-      })();
-      return () => { vivo = false; };
-    },
-  });
+  // i dati da copiare per Titulus sono nel riquadro «Controlli» (ui/controlli.js)
 }

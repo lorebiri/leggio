@@ -40,7 +40,7 @@ export async function openFattura(app, bytes, name, { firma = null, path = null 
           if (firma) doc.data.p7m = firma;
           app.sidebar.show('fattura');
           const avvisi = f.corpi.flatMap((c) => c.avvisi.filter((a) => a.livello !== 'info'));
-          if (avvisi.length) app.ui.toast(`Controlla la fattura: ${avvisi[0].testo}${avvisi.length > 1 ? ` (e altri ${avvisi.length - 1} avvisi nel pannello)` : ''}`, { kind: 'warning', timeout: 9000 });
+          if (avvisi.length) app.ui.toast(avvisi.length === 1 ? 'C\'è un controllo da vedere su questa fattura.' : `Ci sono ${avvisi.length} controlli da vedere su questa fattura.`, { kind: 'warning', timeout: 9000, action: { label: 'Apri «Controlli»', run: () => app.sidebar.show('controlli') } });
           return doc;
         }
       }

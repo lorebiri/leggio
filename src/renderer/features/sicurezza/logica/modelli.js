@@ -89,7 +89,7 @@ export const MODELLI = [
   { id: 'nascita', label: 'Luogo e data di nascita', esempio: 'nato a Pisa il 10/12/1985', res: [
     // «nato/a a Pisa (PI) il 10/12/1985»: si oscurano luogo e data, non «nato a»
     new RegExp(`(?<=\\bnat[oa]\\s+a\\s+)[A-ZÀ-Ü][\\p{L}'’.-]*(?:\\s+[\\p{L}'’.-]+){0,4}?(?:\\s*\\([A-Z]{2}\\))?,?\\s+(?:il\\s+)?${DATA}`, 'giu'),
-    new RegExp(`(?<=\\bnat[oa]\\s+(?:il\\s+)?)${DATA}`, 'giu'),
+    new RegExp(`(?<=\\bnat[oa]\\s+(?:il\\s+)?)${DATA}(?:,?\\s+a\\s+[A-ZÀ-Ü][\\p{L}'’-]*(?:\\s+[A-ZÀ-Ü][\\p{L}'’-]*){0,3}(?:\\s*\\([A-Z]{2}\\))?)?`, 'giu'),
     new RegExp(`(?<=\\bdata\\s+di\\s+nascita\\s*[:.]?\\s*)${DATA}`, 'giu'),
     new RegExp(`(?<=\\bluogo\\s+di\\s+nascita\\s*[:.]?\\s*)[A-ZÀ-Ü][\\p{L}'’.-]*(?:\\s+[A-ZÀ-Ü][\\p{L}'’.-]*){0,3}(?:\\s*\\([A-Z]{2}\\))?`, 'gu'),
   ] },
@@ -167,7 +167,7 @@ export function findMatches(text, matchers, { limit = 50000 } = {}) {
         const a = r.index; const b = r.index + r[0].length;
         if (guardie.get(m.id).some(([x, y]) => a < y && x < b)) continue;
       }
-      hits.push({ start: r.index, end: r.index + r[0].length, text: r[0], matcher: m.label });
+      hits.push({ start: r.index, end: r.index + r[0].length, text: r[0], matcher: m.label, before: text.slice(Math.max(0, r.index - 60), r.index) });
     }
   }
   hits.sort((a, b) => a.start - b.start || b.end - a.end);

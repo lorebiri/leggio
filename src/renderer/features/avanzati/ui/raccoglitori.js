@@ -1,12 +1,13 @@
 // Flussi che raccolgono più file in un PDF: «Pratica di missione», «Fascicolo con indice», «Pacchetto per la rendicontazione».
 import { creaFascicolo } from '../lib/fascicolo.js';
-import { nomeMissione, aggiungiRiepilogo, dividiPerDimensione } from '../lib/missione.js';
+import { nomeMissione, aggiungiRiepilogo, dividiPerDimensione, classificaGiustificativo, nomeGiustificativo } from '../lib/missione.js';
+import { regoleUfficio } from './controlli.js';
 import { raggruppaPerVoce, csvRendiconto, nomeVoce } from '../lib/rendiconto.js';
 import { estraiDati } from '../lib/datichiave.js';
 import { looksLikeP7m, openP7m, overallStatus } from '../lib/cades.js';
 import { pageText } from '../lib/textsearch.js';
 import { openPdfJs } from '../../../core/pdf.js';
-import { chooseFiles, chooseFolder, writeOut, isDesktop, destroyPdf } from '../native.js';
+import { chooseFiles, chooseFolder, writeOut, isDesktop, destroyPdf, call } from '../native.js';
 import { elencoFile, bloccaDrop } from './elenco.js';
 import { preparaImmagine, aggiungiPaginaImmagine, immagineComePdf, isImmagine, ESTENSIONI_IMMAGINI } from './immagini.js';
 
@@ -42,6 +43,7 @@ export function praticaMissione(app, deps) {
   const riepilogo = h('input', { type: 'checkbox', checked: pref.riepilogo !== false, id: 'av-m-r' });
   const ritaglia = h('input', { type: 'checkbox', checked: pref.ritaglia !== false, id: 'av-m-c' });
   const ocr = h('input', { type: 'checkbox', checked: pref.ocr !== false && !!app.services?.ocr, disabled: !app.services?.ocr, id: 'av-m-o' });
+  const perSpesa = h('input', { type: 'checkbox', checked: !!pref.perSpesa, id: 'av-m-u' });
   const campo = (l, el) => h('div', { class: 'field' }, h('label', {}, l), el);
   pane.actions.append(h('button', { class: 'btn primary', onclick: () => crea() }, 'Crea la pratica'));
   pane.body.append(h('div', { class: 'av-batch' },
@@ -56,12 +58,13 @@ export function praticaMissione(app, deps) {
       campo('Dimensione massima del PDF', soglia),
       h('label', { class: 'chk', for: 'av-m-r' }, riepilogo, 'Pagina di riepilogo dei giustificativi in testa'),
       h('label', { class: 'chk', for: 'av-m-c' }, ritaglia, 'Ritaglia i margini bianchi delle foto e delle scansioni'),
-      h('label', { class: 'chk', for: 'av-m-o' }, ocr, app.services?.ocr ? 'Rendi ricercabile il testo (OCR)' : 'OCR non disponibile in questa versione'))));
+      h('label', { class: 'chk', for: 'av-m-o' }, ocr, app.services?.ocr ? 'Rendi ricercabile il testo (OCR)' : 'OCR non disponibile in questa versione'),
+      h('label', { class: 'chk', for: 'av-m-u' }, perSpesa, 'Anche un file per ogni spesa, da allegare in U-Web'))));
 
   async function crea() {
     if (!elenco.items.length) return app.ui.toast('Aggiungi prima il modulo e i giustificativi.', { kind: 'warning' });
     const max = (+soglia.value || 0) * MB;
-    app.settings.set('avanzati.missione', { cognome: cognome.value, soglia: soglia.value, riepilogo: riepilogo.checked, ritaglia: ritaglia.checked, ocr: ocr.checked });
+    app.settings.set('avanzati.missione', { cognome: cognome.value, soglia: soglia.value, riepilogo: riepilogo.checked, ritaglia: ritaglia.checked, ocr: ocr.checked, perSpesa: perSpesa.checked });
     const nome = nomeMissione(cognome.value, data.value);
     const { PDFLib } = app.lib;
     const problemi = [];
@@ -119,6 +122,7 @@ export function praticaMissione(app, deps) {
         return;
       }
     }
+    if (perSpesa.checked) await giustificativiUweb(app, elenco.items, { ritaglia: ritaglia.checked, ocr: ocr.checked });
     const doc = await app.openBytes(res.bytes, { name: nome });
     if (doc) { app.ui.toast(`Pratica pronta: ${res.pagine} pagine, ${mb(res.bytes.length)}.`, { kind: 'success' }); await app.save(doc, { as: true }); }
   }
@@ -261,4 +265,54 @@ export function pacchettoRendicontazione(app, deps) {
     app.ui.dialog({ title: 'Pacchetto creato', message: `${prodotti.length} PDF (uno per voce) e il riepilogo «Riepilogo_rendicontazione.csv»${isDesktop() && state.folder ? ' nella sottocartella «Rendicontazione»' : ' scaricati'}. Gli importi rilevati automaticamente vanno verificati.`, okLabel: isDesktop() && state.folder ? 'Mostra nella cartella' : 'Chiudi', cancelLabel: isDesktop() && state.folder ? 'Chiudi' : null })
       .then((r) => { if (r && isDesktop() && ok[0]) app.platform.showInFolder(ok[0]); });
   }
+}
+
+// ---------------------------------------------------------------- giustificativi per U-Web (dentro la Pratica di missione)
+/**
+ * Un file per ogni spesa, con nome «nn_data_tipo_importo.pdf» e il tipo di allegato proposto per U-Web.
+ * Leggio propone soltanto: tipo, importo e pagamento vanno confermati in U-Web; il rimborso lo calcola U-Web.
+ */
+async function giustificativiUweb(app, items, { ritaglia, ocr }) {
+  const { h } = app.ui;
+  const R = regoleUfficio(app);
+  let dest = null;
+  if (isDesktop()) { try { dest = await call(app, 'choose-folder', { title: 'Dove salvare i giustificativi per U-Web' }); } catch { dest = null; } if (!dest) return; }
+  const righe = await app.ui.withProgress('Giustificativi per U-Web', async (p) => {
+    const out = []; let n = 0;
+    for (const [i, it] of items.entries()) {
+      if (p.cancelled) throw new DOMException('Annullato', 'AbortError');
+      p.set(i / items.length, `Lettura di ${it.name}`);
+      try {
+        const raw = await it.read();
+        const isPdf = new TextDecoder('latin1').decode(raw.subarray(0, 1024)).includes('%PDF-');
+        let bytes = isPdf ? raw : await immagineComePdf(app, raw, it.name, { rot: it.rot || 0, ritaglia });
+        let testo = await testoPdf(bytes);
+        if (!testo.trim() && ocr && app.services?.ocr) { bytes = await app.services.ocr(bytes, { progress: { set() {}, signal: p.signal, get cancelled() { return p.cancelled; } } }); testo = await testoPdf(bytes); }
+        const c = classificaGiustificativo(testo, { regolePagamenti: R.pagamentiTracciabili });
+        // il modulo di missione (PDF di più pagine senza importo) non è un giustificativo
+        if (isPdf && c.importo == null && /missione|autorizzazione|richiesta/i.test(testo)) { out.push({ it, saltato: 'sembra il modulo di missione' }); continue; }
+        n++;
+        const nome = nomeGiustificativo(c, n);
+        const dove = await writeOut(app, dest, { sub: 'Giustificativi U-Web', name: nome, bytes });
+        out.push({ it, c, nome, dove });
+      } catch (e) { if (e?.name === 'AbortError') throw e; out.push({ it, saltato: e.message }); }
+    }
+    return out;
+  });
+  if (!righe) return;
+  const contanti = righe.filter((r) => r.c?.contantiDaSegnalare);
+  const euro = (v) => (v == null ? '?' : v.toFixed(2).replace('.', ',') + ' €');
+  await app.ui.dialog({ title: 'Giustificativi per U-Web', width: 720, okLabel: 'Chiudi', cancelLabel: null, body: h('div', {},
+    h('p', {}, `${righe.filter((r) => r.c).length} file pronti${dest ? ' nella cartella «Giustificativi U-Web»' : ''}. Controlla tipo, data e importo prima di inserirli in U-Web: il rimborso lo calcola U-Web.`),
+    contanti.length ? h('div', { class: 'av-controllo avviso' }, h('p', {}, `${contanti.length === 1 ? 'Una spesa sembra pagata' : contanti.length + ' spese sembrano pagate'} in contanti: in U-Web va spuntato «Pagamento non tracciabile».`), h('p', { class: 'av-note' }, 'Fonte: ' + R.pagamentiTracciabili.fonte)) : null,
+    h('table', { class: 'av-tabella' }, h('tr', {}, ...['File', 'Spesa', 'Data', 'Importo', 'Pagamento', 'Tipo di allegato'].map((x) => h('th', {}, x))),
+      righe.map((r) => r.c ? h('tr', {}, h('td', {}, r.nome), h('td', {}, r.c.tipoSpesa), h('td', {}, r.c.data ? r.c.data.split('-').reverse().join('/') : '?'), h('td', {}, euro(r.c.importo)), h('td', { class: r.c.contantiDaSegnalare ? 'av-ko' : '' }, r.c.pagamento), h('td', {}, r.c.tipoAllegato))
+        : h('tr', {}, h('td', {}, r.it.name), h('td', { colspan: 5, class: 'av-note' }, `non preparato: ${r.saltato}`)))),
+    dest && isDesktop() ? h('button', { class: 'btn', onclick: () => app.platform.showInFolder(righe.find((r) => r.dove)?.dove || dest) }, 'Mostra la cartella') : null) });
+}
+
+async function testoPdf(bytes) {
+  let pdf;
+  try { ({ pdf } = await openPdfJs(bytes)); let t = ''; for (let i = 1; i <= Math.min(2, pdf.numPages); i++) { const pg = await pdf.getPage(i); t += pageText((await pg.getTextContent()).items) + '\n'; } return t; }
+  catch { return ''; } finally { destroyPdf(pdf); }
 }

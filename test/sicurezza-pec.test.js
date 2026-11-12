@@ -34,9 +34,13 @@ describe('cifratura in blocco con chiave riusata', () => {
     const FONTS = fileURLToPath(new URL('../node_modules/pdfjs-dist/standard_fonts/', import.meta.url)).replace(/\\/g, '/');
     const prova = new Uint8Array(readFileSync(new URL('./fixtures/prova.pdf', import.meta.url)));
     const opts = { reuseKey: true, userPassword: 'lotto2026', permissions: { copia: false } };
-    const t0 = Date.now(); const a = await encryptBytes(prova, opts); const t1 = Date.now();
-    const b = await encryptBytes(prova, opts); const t2 = Date.now();
-    expect(t2 - t1).toBeLessThan(Math.max(200, (t1 - t0) / 2));
+    const a = await encryptBytes(prova, opts);
+    const b = await encryptBytes(prova, opts);
+    // chiave riusata (niente misure di tempo: inaffidabili sotto carico): voci /O e /U identiche
+    const voce = (x, k) => Buffer.from(x).toString('latin1').match(new RegExp(`/${k}\\s*<([0-9A-Fa-f]+)>`))?.[1];
+    expect(voce(a, 'O')).toBeTruthy();
+    expect(voce(a, 'O')).toBe(voce(b, 'O'));
+    expect(voce(a, 'U')).toBe(voce(b, 'U'));
     for (const x of [a, b]) {
       const t = pdfjs.getDocument({ data: new Uint8Array(x), password: 'lotto2026', standardFontDataUrl: FONTS }); const d = await t.promise;
       expect((await d.getMetadata()).info.Title).toBe('Documento di prova');

@@ -101,3 +101,44 @@ export async function dividiPerDimensione(PDFLib, bytes, maxBytes, { etichetta =
   }
   return out;
 }
+
+// ---------------------------------------------------------------- giustificativi per U-Web
+const TIPI_SPESA = [
+  ['albergo', /\b(hotel|albergo|b\s?&\s?b|bed and breakfast|pernottament|soggiorno|ostello|residence|camera n)/i],
+  ['pasto', /\b(ristorante|trattoria|pizzeria|osteria|bar\b|caffetteria|pranzo|cena|coperto|menu|men[uù] del giorno|tavolo|self.?service)/i],
+  ['taxi', /\b(taxi|radiotaxi|ncc|noleggio con conducente|uber)/i],
+  ['noleggio', /\b(autonoleggio|noleggio auto|car rental|hertz|avis|europcar|sixt)/i],
+  ['treno', /\b(trenitalia|italo|\bfrecc|treno|biglietto ferroviario|ntv)/i],
+  ['aereo', /\b(volo|boarding|carta d['’]imbarco|ita airways|ryanair|easyjet|aeroporto)/i],
+  ['trasporto locale', /\b(metropolitana|autobus|bus|atac|atm|tram)\b/i],
+  ['carburante', /\b(carburante|benzina|gasolio|diesel|rifornimento)/i],
+  ['parcheggio', /\b(parcheggio|parking|sosta)/i],
+  ['convegno', /\b(iscrizione|registration fee|quota di partecipazione|convegno|conference)/i],
+];
+
+/**
+ * Classifica un giustificativo di missione dal testo (OCR). Leggio PROPONE: la persona conferma in U-Web.
+ * → { tipoSpesa, data (ISO|null), importo (number|null), pagamento: 'tracciabile'|'contanti'|'non indicato', tipoAllegato, contantiDaSegnalare }
+ */
+export function classificaGiustificativo(testo, { regolePagamenti = { spese: ['albergo', 'pasto', 'taxi', 'noleggio'] } } = {}) {
+  const t = String(testo || '').replace(/\s+/g, ' ');
+  const tipoSpesa = (TIPI_SPESA.find(([, re]) => re.test(t)) || ['altro'])[0];
+  let pagamento = 'non indicato';
+  if (/\b(carta|bancomat|pos\b|visa|mastercard|maestro|amex|american express|contactless|pagobancomat|apple pay|google pay|satispay|carta di credito|carta di debito|bonifico)/i.test(t)) pagamento = 'tracciabile';
+  else if (/\b(contanti|contante|cash|resto\b|pagato in contanti)/i.test(t)) pagamento = 'contanti';
+  const tot = t.match(/(?:totale|importo|tot\.?|da pagare|pagato|amount|total)\s*(?:euro|eur|€)?\s*:?\s*(?:euro|eur|€)?\s*(\d{1,5}[.,]\d{2})/i) || t.match(/(?:€|eur)\s*(\d{1,5}[.,]\d{2})/i);
+  const importo = tot ? Number(tot[1].replace(',', '.')) : null;
+  const m = t.match(/\b(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})\b/);
+  let data = null;
+  if (m) { let y = +m[3]; if (y < 100) y += 2000; const dt = new Date(Date.UTC(y, +m[2] - 1, +m[1])); if (dt.getUTCDate() === +m[1] && dt.getUTCMonth() === +m[2] - 1) data = dt.toISOString().slice(0, 10); }
+  const tipoAllegato = pagamento === 'tracciabile' ? 'Giustificativo di spesa con indicazione del tipo pagamento'
+    : 'Giustificativo di spesa senza indicazione del tipo pagamento (serve anche l\'«Attestazione del tipo di pagamento»)';
+  const contantiDaSegnalare = pagamento === 'contanti' && regolePagamenti.spese.includes(tipoSpesa);
+  return { tipoSpesa, data, importo, pagamento, tipoAllegato, contantiDaSegnalare };
+}
+
+/** Nome del file per un giustificativo: aaaa-mm-gg_tipo_importo.pdf (con numero progressivo per distinguere). */
+export function nomeGiustificativo(c, n) {
+  const imp = c.importo != null ? '_' + c.importo.toFixed(2).replace('.', ',') + 'EUR' : '';
+  return `${String(n).padStart(2, '0')}_${c.data || 'senza-data'}_${c.tipoSpesa.replace(/\s+/g, '-')}${imp}.pdf`;
+}

@@ -2,6 +2,14 @@
 import { openDecrypted, PasswordError } from './logica/cifratura.js';
 import { countSignatures } from './logica/pdfutil.js';
 
+/** Telefoni ed email del Profilo dell'ente (area avanzati), da non oscurare mai. → predicato hit → bool */
+export function esclusioneEnte(app, datiEnte, isDatoEnte) {
+  let ente = null;
+  try { ente = datiEnte(app.services?.profiloEnte?.() || {}); } catch { /* profilo non disponibile */ }
+  if (!ente || (!ente.emails.size && !ente.phones.size)) return null;
+  return (hit) => isDatoEnte(hit, ente);
+}
+
 export const PDF_FILTER = [{ name: 'Documento PDF', extensions: ['pdf'] }];
 
 /** Stato dell'area per documento (in doc.data). */
