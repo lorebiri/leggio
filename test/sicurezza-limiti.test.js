@@ -105,3 +105,20 @@ describe('documenti cifrati nelle altre funzioni', () => {
     expect(d.numPages).toBe(6); await t.destroy();
   });
 });
+
+describe('immagine della pagina oscurata in scala di grigi a 4 bit', () => {
+  it('si incorpora e pdf.js la legge', async () => {
+    const { deflateSync } = await import('node:zlib');
+    const { redactPage, embedTextFont } = await import('../src/renderer/features/sicurezza/logica/redazione.js');
+    const w = 101; const h = 50; const row = (w + 1) >> 1;
+    const g4 = new Uint8Array(row * h).fill(0xff); g4[0] = 0x0f;
+    const d = await PDFDocument.load(prova);
+    const font = await embedTextFont(d);
+    await redactPage(d, 0, { image: { kind: 'gray4', bytes: new Uint8Array(deflateSync(g4)), width: w, height: h }, view: [0, 0, 595, 842], rects: [[0, 0, 10, 10]], keepWords: [], font });
+    const out = await d.save();
+    const t = pdfjs.getDocument({ data: out, standardFontDataUrl: FONTS }); const doc = await t.promise;
+    const ops = await (await doc.getPage(1)).getOperatorList();
+    expect(ops.fnArray.length).toBeGreaterThan(0);
+    await t.destroy();
+  });
+});
