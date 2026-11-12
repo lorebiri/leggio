@@ -44,7 +44,8 @@ Pannelli: `p7m` (Firme .p7m), `fattura` (Fattura elettronica), `layers` (Livelli
 - Le Azioni guidate non hanno più l'operazione «protocollo» (numerazione progressiva).
 - **Stato d'archivio**: applicando la segnatura su una copia (casella «Segna il documento in archivio…»), o accettando la proposta che compare
   aprendo un documento che porta già la segnatura, si emette
-  `app.bus.emit('archivio:stato', { path, nome, modifica: { imposta: 'protocollato', numeroProtocollo, dataProtocollo /* ISO */ }, origine: 'segnatura'|'lettura' })`.
+  `app.bus.emit('archivio:stato', { path, nome, modifica: { imposta: 'protocollato', numeroProtocollo, dataProtocollo /* ISO */ }, origine: 'segnatura'|'lettura', ricevuto: false })`;
+  l'archivio, se trova il documento, imposta `ricevuto = true` in modo sincrono (altrimenti Leggio dice di cambiare lo stato a mano).
   `path` è il file ORIGINALE (anche per una fattura impaginata da XML o un PDF estratto da .p7m). L'area archivio ascolta l'evento e applica
   la modifica al documento con quel percorso. La segnatura predefinita è la striscia verticale a sinistra (non copre numero e data della fattura).
 - **Dati per Titulus** (pannello `dati-titulus`): oggetto proposto, mittente, P.IVA, numero e data del documento, CIG/CUP, importo, firmatari; «Copia»
