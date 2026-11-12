@@ -6,8 +6,9 @@ import moduli from './moduli/index.js';
 import conversione from './conversione/index.js';
 import sicurezza from './sicurezza/index.js';
 import modifica from './modifica/index.js';
+import aggiornamenti from './aggiornamenti/index.js';
 
-const AREE = { pagine, commenti, moduli, conversione, sicurezza, modifica };
+const AREE = { pagine, commenti, moduli, conversione, sicurezza, modifica, aggiornamenti };
 
 export function registerFeatures(app) {
   for (const [nome, reg] of Object.entries(AREE)) {
