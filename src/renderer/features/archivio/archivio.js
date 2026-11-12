@@ -161,7 +161,7 @@ export class Archivio {
     const t0 = performance.now();
     const av = this.avanzamento = { fase: 'scansione', fatti: 0, totale: 0, letti: 0, riusati: 0, errori: 0, rimossi: 0, corrente: '', inizio: Date.now(), saltati: [] };
     this.emit('avanzamento', av);
-    const daFare = [];
+    const daFare = []; const spariti = [];
     const coda = [...ids];
     const tScan = performance.now();
     while (coda.length || lavoro.extra.size) {
@@ -183,14 +183,15 @@ export class Archivio {
       else this.offline.delete(id + ':parziale');
       const sep = isDesktop() ? sepPercorso() : '/';
       const conf = await this.motore.call('confronta', { cartella: id, base: c.percorso, file: s.file, sep, protetti: (s.illeggibili || []).map((x) => x.rel), parziale: !!s.troncato });
-      if (conf.spariti.length) { await this.motore.call('togli', { ids: conf.spariti }); av.rimossi += conf.spariti.length; }
+      // i documenti spariti si tolgono DOPO la lettura: se sono stati solo spostati o rinominati,
+      // la loro impronta permette di riusare l'estrazione già fatta
+      spariti.push(...conf.spariti);
       for (const f of conf.daLeggere) daFare.push({ c, rel: f[0], size: f[1], mtime: f[2], sep });
     }
     await this.#aggiornaOffline();
     av.msScansione = Math.round(performance.now() - tScan);
     av.fase = 'lettura'; av.totale = daFare.length;
     this.emit('avanzamento', av);
-    if (av.rimossi) this.#cambiato();
 
     // lettura: più file in parallelo (lettura dal disco nel main, estrazione nei worker)
     const pool = daFare.length ? this.#pool() : null;
@@ -208,6 +209,7 @@ export class Archivio {
     };
     await Promise.all(Array.from({ length: pool ? pool.size + 1 : 0 }, operaio));
     av.msLettura = Math.round(performance.now() - tLett);
+    if (spariti.length && !lavoro.annullato) { await this.motore.call('togli', { ids: spariti }); av.rimossi = spariti.length; }
     await this.scriviOra();
     av.fase = lavoro.annullato ? 'interrotto' : 'fatto';
     av.ms = Math.round(performance.now() - t0);

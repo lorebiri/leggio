@@ -7,15 +7,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { PDFDocument, StandardFonts, rgb, PDFName, PDFString } from '@cantoo/pdf-lib';
 import forge from 'node-forge';
+import zlib from 'node:zlib';
 
 const args = process.argv.slice(2);
 const dir = path.resolve(args.find((a) => !a.startsWith('--')) || 'archivio-prova');
 const N = +(args.find((a) => a.startsWith('--n='))?.slice(4) || 3000);
 const GRANDE = args.includes('--grande');
+const PESANTI = +(args.find((a) => a.startsWith('--pesanti='))?.slice(10) || 0); // scansioni vere (immagini), ~1-2 MB l'una
 const OGGI = new Date(Date.UTC(2026, 10, 12));
 
 let seed = 20261112;
-const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+// mulberry32: sequenza riproducibile e senza cicli brevi
+const rnd = () => { seed = (seed + 0x6d2b79f5) | 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 const pick = (a) => a[Math.floor(rnd() * a.length)];
 const int = (a, b) => a + Math.floor(rnd() * (b - a + 1));
 const pad = (n, k = 2) => String(n).padStart(k, '0');
@@ -222,6 +225,23 @@ for (const [tipo, quota] of piano) {
       await scrivi({ sub: 'Riservati', nome: `riservato_${k + 1}.pdf`, bytes: await pdf([{ t: 'DOCUMENTO RISERVATO', b: true }, `Contratto con ${f.nome}`], { password: 'segreta' }) });
     }
   }
+}
+// PNG in scala di grigi con «rumore» (non comprimibile): simula una scansione a 150 dpi
+function pngRumore(w, h) {
+  const raw = Buffer.alloc((w + 1) * h);
+  for (let y = 0; y < h; y++) { raw[y * (w + 1)] = 0; for (let x = 0; x < w; x++) raw[y * (w + 1) + 1 + x] = 200 + Math.floor(rnd() * 55) - ((y % 40 < 3 && x > 80 && x < w - 80) ? 150 : 0); }
+  const crcT = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; crcT[n] = c >>> 0; }
+  const crc = (b) => { let c = 0xffffffff; for (const x of b) c = crcT[(c ^ x) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const chunk = (t, d) => { const len = Buffer.alloc(4); len.writeUInt32BE(d.length); const td = Buffer.concat([Buffer.from(t), d]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([len, td, c]); };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 0;
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw, { level: 1 })), chunk('IEND', Buffer.alloc(0))]);
+}
+for (let k = 0; k < PESANTI; k++, i++) {
+  const d = await PDFDocument.create();
+  const img = await d.embedPng(pngRumore(1240, 1754));
+  for (let p = 0; p < 1 + (k % 2); p++) d.addPage([595, 842]).drawImage(img, { x: 0, y: 0, width: 595, height: 842 });
+  await scrivi({ sub: path.join('Scansioni pesanti', String(2025 + (k % 2))), nome: `scansione_ufficio_${pad(k + 1, 4)}.pdf`, bytes: await d.save() });
+  conteggi.pesanti = (conteggi.pesanti || 0) + 1;
 }
 if (GRANDE) {
   // un file oltre il limite di lettura (200 MB): indicizzato solo per nome

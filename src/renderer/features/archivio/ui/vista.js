@@ -68,9 +68,15 @@ export function apriVista(app, A, opts = {}) {
   fOrdine.value = 'data-desc';
   const azzera = h('button', { class: 'btn', onclick: () => { for (const x of [q, fForn, fDal, fAl, fCig]) x.value = ''; for (const x of [fTipo, fStato, fCartella, fSegnale]) x.value = ''; st.filtro = {}; st.ordineScelto = false; fOrdine.value = 'data-desc'; cerca(); } }, 'Azzera filtri');
   const campo = (label, input) => h('label', { class: 'ar-campo' }, h('span', {}, label), input);
-  const filtri = h('div', { class: 'ar-filtri' },
-    campo('Tipo', fTipo), campo('Fornitore', fForn), campo('Data dal', fDal), campo('al', fAl), campo('CIG / CUP', fCig),
-    campo('Stato', fStato), campo('Cartella', fCartella), campo('Mostra', fSegnale), campo('Ordina per', fOrdine), azzera, dlForn);
+  // i filtri meno usati stanno in «Altri filtri»: con i caratteri grandi la lista deve restare visibile
+  const altri = h('div', { class: 'ar-filtri ar-filtri-altri', hidden: !app.settings.get('archivio.altriFiltri', false) },
+    campo('Fornitore', fForn), campo('Data dal', fDal), campo('al', fAl), campo('CIG / CUP', fCig), campo('Cartella', fCartella), campo('Mostra', fSegnale), dlForn);
+  const altriBtn = h('button', { class: 'btn', 'aria-expanded': String(!altri.hidden), onclick: () => { altri.hidden = !altri.hidden; altriBtn.setAttribute('aria-expanded', String(!altri.hidden)); app.settings.set('archivio.altriFiltri', !altri.hidden); aggiornaAltri(); } });
+  const aggiornaAltri = () => {
+    const n = [fForn.value.trim(), fDal.value.trim(), fAl.value.trim(), fCig.value.trim(), fCartella.value, fSegnale.value].filter(Boolean).length;
+    altriBtn.textContent = (altri.hidden ? 'Altri filtri' : 'Meno filtri') + (n ? ` (${n} attiv${n === 1 ? 'o' : 'i'})` : '');
+  };
+  const filtri = h('div', {}, h('div', { class: 'ar-filtri' }, campo('Tipo', fTipo), campo('Stato', fStato), campo('Ordina per', fOrdine), altriBtn, azzera), altri);
   const conteggio = h('div', { class: 'ar-conteggio', role: 'status', 'aria-live': 'polite' });
   const selInfo = h('span', { class: 'ar-selinfo' });
   const tuttiChk = h('input', { type: 'checkbox', 'aria-label': 'Seleziona tutti i risultati', onchange: () => { if (tuttiChk.checked) st.righe.forEach((r) => st.sel.add(r.id)); else st.sel.clear(); aggiornaSel(); lista.ridisegna(); } });
@@ -82,8 +88,11 @@ export function apriVista(app, A, opts = {}) {
     bottone('Etichette e nota…', () => dialogoEtichette(app, A, selezionate())),
     bottone('Azioni guidate…', () => azioniGuidate(app, A, selezionate())),
     bottone('Copie con nome proposto…', () => copieConNomeProposto(app, A, selezionate())),
-    bottone('Esporta in Excel', () => esportaRegistro(app, st.sel.size ? selezionate() : st.righe, 'xlsx')),
-    bottone('Esporta CSV', () => esportaRegistro(app, st.sel.size ? selezionate() : st.righe, 'csv')));
+    bottone('Esporta registro…', async () => {
+      const righe = st.sel.size ? selezionate() : st.righe;
+      const f = await app.ui.choice({ title: 'Esporta registro', message: `${righe.length} documenti (${st.sel.size ? 'quelli selezionati' : 'tutti i risultati della ricerca'}) con tipo, data, numero, fornitore, P.IVA, importo, CIG, CUP, scadenza e stato.`, buttons: [{ value: null, label: 'Lascia perdere', left: true }, { value: 'csv', label: 'CSV' }, { value: 'xlsx', label: 'Excel (.xlsx)', primary: true }] });
+      if (f) await esportaRegistro(app, righe, f);
+    }));
   const lista = listaVirtuale({ h, render: renderRiga, onVisibili: chiediEstratti, etichetta: 'Documenti trovati' });
   const schedaDoc = h('div', { class: 'ar-scheda ar-scheda-doc' }, h('div', { class: 'ar-cerca' }, q), filtri, h('div', { class: 'ar-riga-info' }, conteggio, barraSel), lista.el);
 
@@ -105,6 +114,7 @@ export function apriVista(app, A, opts = {}) {
     const dal = dataDaTesto(fDal.value); const al = dataDaTesto(fAl.value);
     fDal.classList.toggle('errato', !!fDal.value.trim() && !dal); fAl.classList.toggle('errato', !!fAl.value.trim() && !al);
     st.q = q.value.trim();
+    aggiornaAltri();
     // con una ricerca l'ordine predefinito diventa «Più pertinenti» (finché l'utente non sceglie)
     if (!st.ordineScelto) fOrdine.value = st.q ? 'pertinenza' : 'data-desc';
     const f = { q: st.q, tipo: fTipo.value, fornitore: fForn.value.trim(), dal, al, cigcup: fCig.value.trim(), stato: fStato.value, cartella: fCartella.value, segnale: fSegnale.value, ordine: fOrdine.value, ...st.filtro };

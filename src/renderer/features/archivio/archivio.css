@@ -14,6 +14,10 @@
 .ar-scheda { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .ar-scheda[hidden] { display: none; }
 .ar-scheda-oggi { overflow: auto; padding: 18px; }
+.ar-scheda-doc { overflow-y: auto; }
+.ar-scheda-doc .ar-vl { min-height: max(320px, 55vh); flex: 1 0 auto; height: 0; }
+.ar-filtri-altri { padding-top: 0; }
+.ar-filtri-altri[hidden] { display: none; }
 
 .ar-progresso { display: flex; align-items: center; gap: 12px; padding: 8px 18px; background: var(--accent-soft); border-bottom: 1px solid var(--border); font-size: 14px; }
 .ar-progresso[hidden] { display: none; }
@@ -119,3 +123,5 @@
 .ar-anteprima { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-bottom: 8px; }
 .ar-anteprima td, .ar-anteprima th { border-bottom: 1px solid var(--border); padding: 4px 6px; text-align: left; overflow-wrap: anywhere; }
 .ar-rapporto ul { max-height: 260px; overflow: auto; font-size: 13.5px; }
+.ar-side-oggi .ar-oggi-sec header { flex-wrap: wrap; }
+.ar-side-oggi .ar-oggi-sec h3 { flex: 1 1 100%; }

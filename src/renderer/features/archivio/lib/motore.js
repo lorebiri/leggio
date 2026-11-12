@@ -4,6 +4,7 @@
 import { normalizza, interpretaRicerca, estratto, paginaDi } from './testo.js';
 import { haStato, descrivi } from './stati.js';
 
+const TIPO_PAROLE = { durc: 'durc', fattura: 'fattura', fatture: 'fattura', 'nota di credito': 'nota-credito', determina: 'ordine', ordine: 'ordine', missione: 'missione', missioni: 'missione', contratto: 'contratto', contratti: 'contratto', pec: 'pec' };
 const coll = new Intl.Collator('it', { sensitivity: 'base', numeric: true });
 
 /** Campi del documento che vanno all'interfaccia (tutto tranne il testo). */
@@ -78,6 +79,7 @@ export class Motore {
           if (im < 0 && it < 0) { st ??= this.#testoStato(r); is = st.indexOf(t); }
           if (im < 0 && it < 0 && is < 0) { ok = false; break; }
           if (im >= 0) score += 50;
+          if (TIPO_PAROLE[t] === r.tipo) score += 80; // «durc», «fattura»…: prima i documenti di quel tipo
           if (is >= 0) score += 30;
           if (it >= 0) {
             if (pos < 0) pos = it;
