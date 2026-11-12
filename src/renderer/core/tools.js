@@ -14,6 +14,27 @@ export const CATEGORIES = [
   ['vista', 'Lettura e accessibilità'],
 ];
 
+/**
+ * Nomi usati da Adobe Acrobat (italiano) per gli id riservati: chi viene da Acrobat li cerca così.
+ * Il primo è il nome mostrato tra parentesi (acrobatName), gli altri sono sinonimi per la ricerca.
+ * Un'area può impostare acrobatName nel proprio strumento: ha la precedenza.
+ */
+export const ACROBAT_NAMES = {
+  merge: ['Combina file', 'combina unire unisci accorpare'],
+  organize: ['Organizza pagine', 'organizza riordina sposta pagine'],
+  compress: ['Comprimi PDF', 'riduci dimensioni file ottimizza pesante'],
+  redact: ['Redazione', 'oscura annerisci censura'],
+  'fill-sign': ['Compila e firma', 'compila firma modulo'],
+  protect: ['Proteggi', 'password cifra proteggi'],
+  'convert-word': ['Esporta PDF', 'esporta word docx converti'],
+  ocr: ['Scansione e OCR', 'riconosci testo ocr scansione'],
+  compare: ['Confronta file', 'confronta differenze'],
+  'create-pdf': ['Crea PDF', 'crea converti in pdf immagini'],
+  sign: ['Usa un certificato', 'firma digitale certificato pades'],
+  'delete-pages': ['Elimina pagine', 'elimina cancella pagine'],
+  metadata: ['Proprietà documento', 'proprieta titolo autore metadati'],
+};
+
 export class ToolRegistry {
   constructor(app) { this.app = app; this.tools = new Map(); this.active = null; }
 
@@ -25,7 +46,8 @@ export class ToolRegistry {
   register(def) {
     if (!def.id || !def.name) throw new Error('Strumento senza id/nome');
     if (this.tools.has(def.id)) console.warn('[tools] id duplicato sostituito:', def.id);
-    this.tools.set(def.id, { needsDoc: true, category: 'avanzati', keywords: '', ...def });
+    const acro = ACROBAT_NAMES[def.id];
+    this.tools.set(def.id, { needsDoc: true, category: 'avanzati', keywords: '', acrobatName: acro?.[0], ...def, keywords: `${def.keywords || ''} ${acro ? acro.join(' ') : ''}`.trim() });
     this.app.bus.emit('tools:changed');
   }
   list() { return [...this.tools.values()]; }
@@ -77,23 +99,26 @@ export class ToolRegistry {
         h('header', { class: 'hub-head' }, h('h2', {}, 'Tutti gli strumenti'), h('span', { class: 'hub-free' }, 'Tutto incluso, gratis per sempre'), search, h('button', { class: 'icon-btn', 'aria-label': 'Chiudi', onclick: close, html: icon('close') })),
         grid));
     const norm = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const score = (t, q) => (norm(t.name).startsWith(q) || norm(t.acrobatName || '').startsWith(q) ? 2 : norm(`${t.name} ${t.acrobatName || ''}`).includes(q) ? 1 : 0);
     const render = () => {
       const q = norm(search.value.trim());
       grid.innerHTML = '';
       let first = null;
       for (const [cat, catName] of CATEGORIES) {
-        const items = this.list().filter((t) => t.category === cat && (!q || norm(`${t.name} ${t.description || ''} ${t.keywords}`).includes(q)));
+        const items = this.list().filter((t) => t.category === cat && !t.hidden && (!q || q.split(/\s+/).every((w) => norm(`${t.name} ${t.acrobatName || ''} ${t.description || ''} ${t.keywords}`).includes(w))));
+        // nome o nome Acrobat che iniziano con la ricerca: prima
+        if (q) items.sort((a, b) => score(b, q) - score(a, q));
         if (!items.length) continue;
         const sec = h('section', { class: 'hub-sec' }, h('h3', {}, catName));
         for (const t of items) {
           const b = h('button', { class: 'hub-tool', onclick: () => { close(); this.run(t.id); } },
             h('span', { class: 'hub-ico', html: icon(t.icon || 'tools', 22) }),
-            h('span', { class: 'hub-txt' }, h('strong', {}, t.name), h('small', {}, t.description || '')));
+            h('span', { class: 'hub-txt' }, h('strong', {}, t.name, t.acrobatName && t.acrobatName !== t.name ? h('span', { class: 'hub-acro' }, ` (in Acrobat: ${t.acrobatName})`) : null), h('small', {}, t.description || '')));
           first ||= b; sec.append(b);
         }
         grid.append(sec);
       }
-      if (!grid.children.length) grid.append(h('p', { class: 'muted' }, 'Nessuno strumento trovato.'));
+      if (!grid.children.length) grid.append(h('p', { class: 'muted' }, `Nessuno strumento trovato per «${search.value.trim()}». Prova con un'altra parola (per esempio «unisci», «comprimi», «firma»); alcune funzioni potrebbero non essere ancora disponibili.`));
       return first;
     };
     search.addEventListener('input', render);

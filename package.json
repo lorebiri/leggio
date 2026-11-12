@@ -73,6 +73,14 @@
         "mimeType": "application/pdf",
         "role": "Editor",
         "rank": "Alternate"
+      },
+      {
+        "ext": ["p7m", "m7m", "tsd"],
+        "name": "Documento firmato digitalmente",
+        "description": "Documento firmato digitalmente (CAdES)",
+        "mimeType": "application/pkcs7-mime",
+        "role": "Viewer",
+        "rank": "Alternate"
       }
     ],
     "mac": {

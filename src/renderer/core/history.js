@@ -84,7 +84,14 @@ export class History {
     /** @type {Entry[]} */ this.undoStack = [];
     /** @type {Entry[]} */ this.redoStack = [];
     this.diskFailed = false;
+    this.#chain = Promise.resolve();
   }
+  #chain;
+  /** Le operazioni sulla cronologia sono serializzate: push può proseguire in sottofondo (scrittura su disco)
+   *  mentre la modifica è già visibile; un Annulla successivo aspetta che sia finita. */
+  #serial(fn) { const p = this.#chain.then(fn); this.#chain = p.catch(() => {}); return p; }
+  /** Si risolve quando le scritture in sottofondo sono finite. */
+  idle() { return this.#chain; }
 
   get canUndo() { return this.undoStack.length > 0; }
   get canRedo() { return this.redoStack.length > 0; }
@@ -157,7 +164,8 @@ export class History {
   }
 
   /** Nuova modifica: prevBytes è lo stato prima della modifica. Svuota i Ripeti. */
-  async push(label, prevVersion, prevBytes) {
+  push(label, prevVersion, prevBytes) { return this.#serial(() => this.#push(label, prevVersion, prevBytes)); }
+  async #push(label, prevVersion, prevBytes) {
     const entry = await this.#stash(label, prevVersion, prevBytes);
     const redo = this.redoStack; this.redoStack = [];
     await this.#release(redo);
@@ -169,8 +177,8 @@ export class History {
    * Annulla: restituisce {label, version, bytes} dello stato precedente e mette lo stato
    * corrente nei Ripeti. Se la copia non è leggibile la voce resta dov'era e l'errore risale.
    */
-  async undo(curVersion, curBytes) { return this.#swap(this.undoStack, this.redoStack, curVersion, curBytes); }
-  async redo(curVersion, curBytes) { return this.#swap(this.redoStack, this.undoStack, curVersion, curBytes); }
+  undo(curVersion, curBytes) { return this.#serial(() => this.#swap(this.undoStack, this.redoStack, curVersion, curBytes)); }
+  redo(curVersion, curBytes) { return this.#serial(() => this.#swap(this.redoStack, this.undoStack, curVersion, curBytes)); }
 
   async #swap(from, to, curVersion, curBytes) {
     const e = from.at(-1);
@@ -184,7 +192,8 @@ export class History {
     return { label: e.label, version: e.version, bytes };
   }
 
-  async clear() {
+  clear() { return this.#serial(() => this.#clear()); }
+  async #clear() {
     const all = [...this.undoStack, ...this.redoStack];
     this.undoStack = []; this.redoStack = [];
     await this.#release(all);

@@ -34,6 +34,9 @@ const norm = (p) => (process.platform === 'win32' || isMac ? path.normalize(p).t
 const grantFile = (p) => { if (p) grantedFiles.add(norm(p)); };
 const grantFolder = (p) => { if (p) grantedFolders.add(norm(p)); };
 const canWrite = (p) => grantedFiles.has(norm(p));
+// file non PDF (es. .p7m) che l'utente ha aperto dal sistema: il renderer può leggerli, non sovrascriverli
+const grantedReads = new Set();
+const grantRead = (p) => { if (p) grantedReads.add(norm(p)); };
 
 // ---------- file recenti ----------
 const recentFile = () => path.join(app.getPath('userData'), 'recenti.json');
@@ -73,8 +76,10 @@ function readPdf(p) {
 function send(channel, payload) { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload); }
 function notify(kind, message, title) { send('app:notify', { kind, message, title }); }
 
+// Accetta qualunque file esistente passato dal sistema (doppio clic, «Apri con», trascinamento sull'icona,
+// riga di comando): è il renderer a decidere, in base ai gestori registrati (app.registerOpener).
 function sendOpen(paths) {
-  const files = paths.filter((p) => typeof p === 'string' && /\.pdf$/i.test(p) && fs.existsSync(p));
+  const files = paths.filter((p) => { try { return typeof p === 'string' && !p.startsWith('-') && path.isAbsolute(p) && fs.statSync(p).isFile(); } catch { return false; } });
   if (!files.length) return;
   if (mainWindow && mainWindow.webContents && !mainWindow.webContents.isLoading()) {
     for (const p of files) openInRenderer(p);
@@ -82,8 +87,16 @@ function sendOpen(paths) {
     mainWindow.focus();
   } else pendingOpen.push(...files);
 }
+// Si invia solo il percorso: i byte li chiede il renderer con file:read (invoke). Passare grandi
+// Uint8Array come argomenti di un evento attraverso contextBridge blocca il renderer per minuti
+// (copia elemento per elemento): verificato con Electron 45 e sandbox attiva.
 function openInRenderer(p) {
-  try { send('app:open-file', readPdf(p)); }
+  try {
+    const st = fs.statSync(p);
+    if (st.size > V.MAX_BYTES) throw new Error(`«${path.basename(p)}» supera i 2 GB: Leggio non può aprirlo.`);
+    if (/\.pdf$/i.test(p)) grantFile(p); else grantRead(p);
+    send('app:open-file', { path: p, name: path.basename(p) });
+  }
   catch (err) { L('warn', 'apertura non riuscita', { p, error: err.message }); notify('error', err.message, 'Impossibile aprire il documento'); }
 }
 
@@ -95,6 +108,13 @@ let recoverySession = null; // cambia a ogni caricamento del renderer
 const recoveryDir = () => path.join(recoveryRoot(), recoverySession);
 const SESSION_RE = /^[a-z0-9-]{4,64}$/;
 
+function pidAlive(pid) { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } }
+/** Elimina le cronologie temporanee lasciate da processi non più in vita (crash, uscite forzate). */
+function cleanStaleHistory() {
+  let list = [];
+  try { list = fs.readdirSync(historyRoot()); } catch { return; }
+  for (const d of list) { const pid = Number(d); if (!Number.isInteger(pid) || pid === process.pid || !pidAlive(pid)) rmrf(path.join(historyRoot(), d)); }
+}
 function rmrf(p) { try { fs.rmSync(p, { recursive: true, force: true }); } catch (err) { L('warn', 'pulizia non riuscita', { p, error: err.message }); } }
 function newRecoverySession() { recoverySession = `${Date.now().toString(36)}-${process.pid}-${crypto.randomBytes(3).toString('hex')}`; }
 function cleanEmptyRecoverySessions() {
@@ -134,6 +154,10 @@ function createWindow() {
       webviewTag: false,
       navigateOnDragDrop: false,
       spellcheck: true,
+      // niente rallentamento dei timer quando la finestra è in secondo piano: pdf-lib e pdf.js
+      // cedono il controllo con setTimeout, e un salvataggio o una modifica lunga avviata prima
+      // di passare a un'altra app altrimenti procederebbe a un passo al secondo (minuti invece di secondi)
+      backgroundThrottling: false,
     },
   });
   const devUrl = process.env.LEGGIO_DEV_URL;
@@ -351,8 +375,9 @@ function registerCoreIpc() {
   });
   handle('file:read', async (_e, p) => {
     const target = V.absPath(p);
-    if (!/\.pdf$/i.test(target)) throw new V.IpcValidationError('Si possono riaprire solo file PDF.');
-    return readPdf(target);
+    if (/\.pdf$/i.test(target)) return readPdf(target);
+    if (!grantedReads.has(norm(target))) throw new V.IpcValidationError('Si possono riaprire solo file PDF o file aperti dall\'utente.');
+    return { path: target, name: path.basename(target), bytes: readFileChecked(target) };
   });
   handle('file:recent', () => readRecent());
   handle('file:show-in-folder', (_e, p) => shell.showItemInFolder(V.absPath(p)));
@@ -473,6 +498,8 @@ function registerFeatureModules() {
 }
 
 // ---------- ciclo di vita ----------
+// cartella dati separata (collaudo automatico, più copie in parallelo): LEGGIO_USER_DATA=/percorso
+if (process.env.LEGGIO_USER_DATA) app.setPath('userData', path.resolve(process.env.LEGGIO_USER_DATA));
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
 else {
@@ -482,8 +509,9 @@ else {
   app.whenReady().then(() => {
     logger = createLogger(path.join(app.getPath('userData'), 'logs'));
     L('info', 'avvio', { version: app.getVersion(), electron: process.versions.electron, platform: process.platform, arch: process.arch, mem: os.totalmem() });
-    // un'istanza sola (lock): la cartella della cronologia è tutta nostra e si può ripulire
-    rmrf(historyRoot());
+    // cronologie temporanee di sessioni precedenti (processi terminati) e la nostra, se esiste
+    cleanStaleHistory();
+    rmrf(historyDir());
     cleanEmptyRecoverySessions();
     // nessun permesso del browser (fotocamera, microfono, posizione, notifiche…) tranne il minimo indispensabile
     const allowed = new Set(['clipboard-sanitized-write', 'fullscreen']);
@@ -499,7 +527,7 @@ else {
   });
   app.on('window-all-closed', () => { if (!isMac) app.quit(); });
   app.on('will-quit', () => {
-    rmrf(historyRoot());
+    rmrf(historyDir());
     cleanEmptyRecoverySessions();
     L('info', 'uscita');
   });
