@@ -34,7 +34,8 @@ export async function verifyRedaction(pdfjs, bytes, marks, terms = [], { passwor
           const g = itemGeometry(it);
           const r = spanRect(g, 0, g.width);
           // restringe verticalmente: le righe adiacenti non devono dare falsi allarmi
-          const rr = [r[0], r[1] + g.size * 0.3, r[2], r[3] - g.size * 0.3];
+          const dx = Math.min(g.size * 0.25, g.width * 0.3);
+          const rr = [r[0] + dx, r[1] + g.size * 0.3, r[2] - dx, r[3] - g.size * 0.3];
           if (rects.some((m) => intersects(rr, m))) problems.push({ page: i + 1, where: 'testo nell\'area oscurata', text: it.str });
         }
       }

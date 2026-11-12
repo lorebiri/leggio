@@ -23,10 +23,22 @@ export function spanRect(g, x0, x1) {
   return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
 }
 
-/** Larghezze stimate dei caratteri (spazi e lettere strette più piccoli), normalizzate sulla larghezza dell'elemento. */
+/** Funzione di misura opzionale (browser): measure(str, fontFamily) → larghezze relative dei caratteri. */
+let measureFn = null; let stylesRef = null;
+export function setMeasure(fn) { measureFn = fn; }
+export function setStyles(styles) { stylesRef = styles || null; }
+
+/** Larghezze dei caratteri normalizzate sulla larghezza dell'elemento (misurate se possibile, altrimenti stimate). */
 function estimateWidths(it, g) {
   const n = it.str.length;
   if (!n) return null;
+  if (measureFn) {
+    try {
+      const fam = stylesRef?.[it.fontName]?.fontFamily || 'sans-serif';
+      const m = measureFn(it.str, fam);
+      if (m && m.length === n) { const tot = m.reduce((s, x) => s + x, 0); if (tot > 0) return m.map((x) => (x / tot) * g.width); }
+    } catch { /* ripiega sulla stima */ }
+  }
   const w = [];
   for (let i = 0; i < n; i++) {
     const ch = it.str[i];
@@ -41,7 +53,8 @@ function charPos(widths, k) { let s = 0; for (let i = 0; i < k; i++) s += widths
  * Prepara il testo di una pagina. items = textContent.items di pdf.js.
  * → { text, map (indice elemento per carattere, -1 = separatore), off, items: [{it, g, widths}] }
  */
-export function buildPageText(items) {
+export function buildPageText(items, styles) {
+  setStyles(styles);
   const parts = []; const map = []; const off = []; const prepared = [];
   items.forEach((it, idx) => {
     if (typeof it.str !== 'string') { prepared.push(null); return; }
@@ -66,7 +79,9 @@ export function rangeRects(pt, start, end) {
   const rects = [];
   for (const [idx, [k0, k1]] of byItem) {
     const p = pt.items[idx]; if (!p) continue;
-    rects.push(padRect(spanRect(p.g, charPos(p.widths, k0), charPos(p.widths, k1)), p.g.size * 0.08));
+    // margine orizzontale generoso (0,2 em): meglio coprire un po' di spazio che lasciare scoperto un carattere
+    const ext = p.g.size * 0.2;
+    rects.push(padRect(spanRect(p.g, charPos(p.widths, k0) - ext, charPos(p.widths, k1) + ext), p.g.size * 0.08));
   }
   return rects;
 }
@@ -77,7 +92,8 @@ export function intersects(a, b) { return a[0] < b[2] && b[0] < a[2] && a[1] < b
 export function intersectsAny(r, rects) { return rects.some((x) => intersects(r, x)); }
 
 /** Parole della pagina con riquadro e dati per ricostruire un livello di testo invisibile. */
-export function pageWords(items) {
+export function pageWords(items, styles) {
+  if (styles !== undefined) setStyles(styles);
   const words = [];
   for (const it of items) {
     if (typeof it.str !== 'string' || !it.str.trim()) continue;
@@ -95,5 +111,13 @@ export function pageWords(items) {
   return words;
 }
 
-/** Parole che NON toccano nessuna area da oscurare (una parola parzialmente coperta viene tolta tutta). */
-export function wordsOutside(words, rects) { return words.filter((w) => !intersectsAny(w.rect, rects)); }
+/** Riquadro "interno" della parola: i margini delle aree oscurate che sfiorano una parola vicina non la tolgono. */
+export function coreRect(w) {
+  const dx = Math.min(w.size * 0.25, w.width * 0.3); const dy = w.size * 0.3;
+  const r = w.rect;
+  return [r[0] + dx, r[1] + dy, r[2] - dx, r[3] - dy];
+}
+/** La parola tocca un'area da oscurare? (una parola coperta anche solo in parte viene tolta tutta) */
+export function wordHit(w, rects) { return intersectsAny(coreRect(w), rects); }
+/** Parole che NON toccano nessuna area da oscurare. */
+export function wordsOutside(words, rects) { return words.filter((w) => !wordHit(w, rects)); }
