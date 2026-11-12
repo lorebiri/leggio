@@ -16,7 +16,7 @@ import { openPdfLib, savePdfLib, renderPageToCanvas, openPdfJs, verifyPdfBytes, 
 import { isSignedPdf } from './signature.js';
 import { reorderPdfPages } from './pagetree.js';
 import * as ui from './ui.js';
-import { h, toast, dialog, confirm, withProgress, parsePageRanges, formatBytes, escapeHtml } from './ui.js';
+import { h, toast, dialog, confirm, withProgress, parsePageRanges, formatBytes, escapeHtml, contextMenu } from './ui.js';
 import { icon } from './icons.js';
 
 export class App {
@@ -166,7 +166,7 @@ export class App {
     const v = await ui.choice({
       title: 'Modifiche limitate dall\'autore',
       message: `L'autore ha limitato le modifiche a «${doc.name}». Vuoi continuare comunque?`,
-      buttons: [{ value: 'cancel', label: 'Annulla' }, { value: 'ok', label: 'Continua', primary: true }],
+      buttons: [{ value: 'cancel', label: 'Lascia perdere' }, { value: 'ok', label: 'Continua', primary: true }],
     });
     if (v !== 'ok') return false;
     doc.data.__permAck = true;
@@ -178,7 +178,7 @@ export class App {
     const v = await ui.choice({
       title: 'Documento firmato digitalmente',
       message: `«${doc.name}» contiene una firma digitale. Modificarlo annulla la validità della firma. Vuoi lavorare su una copia, così il file firmato resta intatto?`,
-      buttons: [{ value: 'cancel', label: 'Annulla' }, { value: 'anyway', label: 'Modifica questo file' }, { value: 'copy', label: 'Lavora su una copia', primary: true }],
+      buttons: [{ value: 'cancel', label: 'Lascia perdere' }, { value: 'anyway', label: 'Modifica questo file' }, { value: 'copy', label: 'Lavora su una copia', primary: true }],
     });
     if (!v || v === 'cancel') return false;
     doc.data.__signatureAck = true;
@@ -227,7 +227,7 @@ export class App {
     } catch (err) {
       doc.destroy();
       clearTimeout(timer); prog?.close();
-      if (err?.name === 'AbortError') { toast('Apertura annullata'); return null; }
+      if (err?.name === 'AbortError') { toast('Apertura interrotta'); return null; }
       if (err?.name === 'PasswordException') { if (/non inserita/.test(err.message)) toast('Apertura annullata'); else this.#openFailed(describeOpenError(err, bytes, displayName), displayName); return null; }
       log('warn', 'apertura non riuscita', { name: displayName, size: bytes.length, error: String(err?.message || err) });
       // ultimo tentativo: riparazione (file troncati, xref/trailer mancanti)
@@ -277,8 +277,15 @@ export class App {
 
   activate(doc) {
     if (this.activeDoc === doc && (doc || this.viewer.doc == null)) return;
+    const prev = this.activeDoc;
     this.tools.deactivate();
-    if (this.activeDoc) this.viewer.saveViewState();
+    if (prev) this.viewer.saveViewState();
+    // lo stato appartiene al documento: ricerca e pannello destro del documento precedente si chiudono
+    if (prev && prev !== doc) {
+      if (!this.el.findbar.hidden) this.closeFind();
+      if (this.rightPanelDoc && this.rightPanelDoc !== doc) this.closeRightPanel({ notify: true });
+      this.bus.emit('document:deactivated', { doc: prev, next: doc });
+    }
     this.activeDoc = doc;
     this.el.root.classList.toggle('has-doc', !!doc);
     this.viewer.setDocument(doc);
@@ -454,7 +461,6 @@ export class App {
     const d = this.activeDoc;
     const busy = !!d?.busy;
     this.el.root.classList.toggle('doc-busy', busy);
-    for (const b of this.el.toolbar.querySelectorAll('[data-cmd="undo"],[data-cmd="redo"],[data-cmd="save"]')) b.disabled = busy;
     this.#updateNav();
   }
 
@@ -487,6 +493,8 @@ export class App {
     const zoomSel = h('select', { class: 'zoom-select', 'aria-label': 'Zoom' },
       [['auto', 'Automatico'], ['page-fit', 'Pagina intera'], ['page-width', 'Larghezza pagina'], ['page-actual', 'Dimensioni reali'], ['0.5', '50%'], ['0.75', '75%'], ['1', '100%'], ['1.25', '125%'], ['1.5', '150%'], ['2', '200%'], ['3', '300%'], ['4', '400%'], ['custom', '']].map(([v, l]) => h('option', { value: v, hidden: v === 'custom' }, l)));
     const quick = h('div', { class: 'quick-tools' });
+    const moreTools = h('button', { class: 'icon-btn has-label needs-doc more-tools', hidden: true, title: 'Altri strumenti', 'aria-label': 'Altri strumenti', 'aria-haspopup': 'menu', html: icon('tools') }, h('span', { class: 'tb-label', 'aria-hidden': 'true' }, 'Altri strumenti'));
+    moreTools.addEventListener('click', () => this.#openMoreTools(moreTools));
     const toolbar = h('div', { class: 'toolbar', role: 'toolbar', 'aria-label': 'Barra degli strumenti' },
       h('div', { class: 'tb-group' }, btn('open', `Apri (${modKey}O)`, 'open', {}, 'Apri'), btn('save', `Salva (${modKey}S)`, 'save', { class: 'icon-btn needs-doc' }, 'Salva'), btn('saveAs', `Salva con nome (${modKey}⇧S)`, 'save-as', { class: 'icon-btn needs-doc' }, 'Salva con nome'), btn('print', `Stampa (${modKey}P)`, 'print', { class: 'icon-btn needs-doc' }, 'Stampa')),
       h('div', { class: 'tb-sep' }),
@@ -496,7 +504,7 @@ export class App {
       h('div', { class: 'tb-group needs-doc nav' }, btn('chevronUp', 'Pagina precedente', 'prev-page'), pageInput, pageTotal, btn('chevronDown', 'Pagina successiva', 'next-page')),
       h('div', { class: 'tb-group needs-doc' }, btn('minus', 'Riduci', 'zoom-out'), zoomSel, btn('plus', 'Ingrandisci', 'zoom-in'), btn('rotate', `Ruota la visualizzazione (non modifica il file) (${modKey}R)`, 'rotate-view')),
       h('div', { class: 'tb-spacer' }),
-      quick,
+      quick, moreTools,
       h('div', { class: 'tb-group' }, btn('search', `Trova (${modKey}F)`, 'find', { class: 'icon-btn needs-doc' }, 'Trova'),
         h('button', { class: 'btn tools-btn', 'data-cmd': 'tools', title: `Tutti gli strumenti (${modKey}K)`, html: icon('tools', 16) + '<span>Strumenti</span>' }),
         btn('settings', 'Impostazioni', 'settings', {}, 'Impostazioni')));
@@ -512,17 +520,31 @@ export class App {
     const body = h('div', { class: 'body' }, rail, sideBody, h('div', { class: 'center' }, toolOptions, findbar, main));
     const app = h('div', { class: 'app sidebar-closed' }, titlebar, toolbar, body, status);
     root.append(app, h('div', { id: 'overlay-root' }), h('div', { id: 'toast-root', 'aria-live': 'polite' }), h('div', { id: 'print-root' }));
-    return { root: app, tabs, toolbar, quick, pageInput, pageTotal, zoomSel, toolOptions, findbar, rail, sideBody, viewerContainer, home, right, status, main };
+    // la barra si ridispone quando cambia la larghezza (finestra, zoom dell'interfaccia, etichette)
+    new ResizeObserver(() => { if (!this.layoutPending) { this.layoutPending = true; requestAnimationFrame(() => { this.layoutPending = false; this.layoutToolbar(); }); } }).observe(toolbar);
+    return { root: app, tabs, toolbar, quick, moreTools, pageInput, pageTotal, zoomSel, toolOptions, findbar, rail, sideBody, viewerContainer, home, right, status, main };
   }
 
   /** Pannello destro per strumenti con molte opzioni. → container (svuotato). close() lo nasconde. */
-  openRightPanel(title, { onClose } = {}) {
+  /**
+   * Pannello destro. Appartiene a un documento (predefinito: quello attivo; `doc: null` = pannello
+   * generale): al cambio di scheda viene chiuso e onClose() chiamato. → container (svuotato).
+   */
+  openRightPanel(title, { onClose, doc } = {}) {
+    if (this.rightPanelOnClose) { const f = this.rightPanelOnClose; this.rightPanelOnClose = null; try { f(); } catch (err) { console.error(err); } }
     const r = this.el.right; r.innerHTML = ''; r.hidden = false;
+    this.rightPanelDoc = doc === undefined ? this.activeDoc : doc;
+    this.rightPanelOnClose = onClose || null;
     const c = h('div', { class: 'right-content' });
-    r.append(h('header', { class: 'side-head' }, h('h2', {}, title), h('button', { class: 'icon-btn', 'aria-label': 'Chiudi', onclick: () => { this.closeRightPanel(); onClose?.(); }, html: icon('close') })), c);
+    r.append(h('header', { class: 'side-head' }, h('h2', {}, title), h('button', { class: 'icon-btn', title: 'Chiudi il pannello', 'aria-label': 'Chiudi il pannello', onclick: () => this.closeRightPanel({ notify: true }), html: icon('close') })), c);
     return c;
   }
-  closeRightPanel() { this.el.right.hidden = true; this.el.right.innerHTML = ''; }
+  /** Chiude il pannello destro; con notify chiama anche l'onClose di chi l'ha aperto. */
+  closeRightPanel({ notify = false } = {}) {
+    const f = this.rightPanelOnClose; this.rightPanelOnClose = null; this.rightPanelDoc = null;
+    this.el.right.hidden = true; this.el.right.innerHTML = '';
+    if (notify && f) { try { f(); } catch (err) { console.error(err); } }
+  }
 
   #renderTabs() {
     const t = this.el.tabs; t.innerHTML = '';
@@ -578,10 +600,40 @@ export class App {
 
   #renderQuickTools() {
     const q = this.el.quick; q.innerHTML = '';
-    for (const t of this.tools.list().filter((t) => t.quick).sort((a, b) => (a.quickOrder ?? 50) - (b.quickOrder ?? 50))) {
-      q.append(h('button', { class: 'icon-btn needs-doc', 'data-tool-id': t.id, title: t.name + (t.shortcut ? ` (${t.shortcut})` : ''), 'aria-label': t.name, onclick: () => this.tools.run(t.id), html: icon(t.icon || 'tools') }));
+    this.quickList = this.tools.list().filter((t) => t.quick && !t.hidden).sort((a, b) => (a.quickOrder ?? 50) - (b.quickOrder ?? 50));
+    for (const t of this.quickList) {
+      const b = h('button', { class: 'icon-btn has-label needs-doc quick-btn', 'data-tool-id': t.id, title: t.name + (t.shortcut ? ` (${t.shortcut})` : ''), 'aria-label': t.name, onclick: () => this.tools.run(t.id), html: icon(t.icon || 'tools') });
+      b.append(h('span', { class: 'tb-label', 'aria-hidden': 'true' }, t.quickLabel || shortLabel(t.name)));
+      q.append(b);
     }
+    this.layoutToolbar();
     if (!this.docs.length) this.#renderHome();
+  }
+
+  /**
+   * Barra adattiva: niente scorrimento orizzontale. Gli strumenti rapidi che non ci stanno finiscono
+   * nel pulsante «Altri strumenti»; se nemmeno così basta, la barra va a capo.
+   */
+  layoutToolbar() {
+    const tb = this.el.toolbar; const more = this.el.moreTools;
+    if (!tb || !more) return;
+    const btns = [...this.el.quick.querySelectorAll('.quick-btn')];
+    tb.classList.remove('wrap');
+    btns.forEach((b) => (b.hidden = false));
+    more.hidden = true;
+    const overflows = () => tb.scrollWidth > tb.clientWidth + 1;
+    if (overflows()) {
+      more.hidden = false;
+      for (let i = btns.length - 1; i >= 0 && overflows(); i--) btns[i].hidden = true;
+      if (overflows()) tb.classList.add('wrap');
+    }
+    this.hiddenQuick = btns.filter((b) => b.hidden).map((b) => b.dataset.toolId);
+    more.hidden = !this.hiddenQuick.length;
+  }
+  #openMoreTools(anchor) {
+    const r = anchor.getBoundingClientRect();
+    const items = (this.hiddenQuick || []).map((id) => this.tools.get(id)).filter(Boolean).map((t) => ({ label: t.name, icon: t.icon || 'tools', run: () => this.tools.run(t.id) }));
+    contextMenu(r.left, r.bottom + 4, [...items, '-', { label: 'Tutti gli strumenti…', icon: 'tools', run: () => this.tools.openHub() }]);
   }
 
   #updateNav() {
@@ -607,6 +659,7 @@ export class App {
     if (zoom != null) this.settings.set('uiZoom', zoom);
     if (labels != null) this.settings.set('toolbarLabels', !!labels);
     this.#applyUiPrefs();
+    this.layoutToolbar();
     const z = this.uiZoom;
     toast(`Interfaccia al ${Math.round(z * 100)}%${this.settings.get('uiLarge', false) ? ' (caratteri e pulsanti grandi)' : ''}`);
   }
@@ -652,7 +705,8 @@ export class App {
     if (id.startsWith('tool:')) return this.tools.run(id.slice(5));
     const needsDoc = !['open', 'tools', 'settings', 'shortcuts', 'toggle-theme', 'open-logs', 'toggle-large-ui', 'ui-zoom-in', 'ui-zoom-out', 'ui-zoom-reset'].includes(id);
     if (needsDoc && !this.activeDoc) return;
-    if (['undo', 'redo', 'save', 'save-as', 'print'].includes(id) && this.activeDoc?.busy) {
+    // Annulla/Ripeti/Salva durante un'operazione vengono messi in coda (nessun clic perso); la stampa no
+    if (id === 'print' && this.activeDoc?.busy) {
       toast(`Attendi: «${this.activeDoc.queue.current}» è ancora in corso`, { kind: 'warning' });
       return;
     }
@@ -704,7 +758,27 @@ export class App {
     });
   }
 
+  /** C'è una finestra modale aperta (dialogo, avanzamento, «Tutti gli strumenti», pannelli a schermo intero delle aree)? */
+  modalOpen() {
+    const layer = document.getElementById('overlay-root');
+    return !!layer && [...layer.children].some((el) => !el.classList.contains('ctx-menu') && !el.classList.contains('closing'));
+  }
+
   #wireDragDrop() {
+    // Trascinamenti sicuri: con una finestra modale aperta, i file lasciati fuori dalla finestra
+    // non arrivano al documento sotto (né al nucleo né alle aree); il browser non deve mai aprirli da sé.
+    const layer = () => document.getElementById('overlay-root');
+    const guard = (e) => {
+      if (!this.modalOpen() || !e.dataTransfer?.types?.includes('Files')) return;
+      if (layer().contains(e.target)) return; // dentro la finestra: decide lei
+      e.preventDefault(); e.stopPropagation();
+      if (e.type === 'dragover') e.dataTransfer.dropEffect = 'none';
+      if (e.type === 'drop') toast('Rilascia i file dentro la finestra aperta', { kind: 'warning' });
+    };
+    for (const t of ['dragenter', 'dragover', 'drop']) window.addEventListener(t, guard, true);
+    // nessun file deve mai «navigare» la finestra se nessuna zona lo gestisce
+    window.addEventListener('dragover', (e) => { if (e.dataTransfer?.types?.includes('Files')) e.preventDefault(); });
+    window.addEventListener('drop', (e) => { if (e.dataTransfer?.types?.includes('Files')) e.preventDefault(); });
     const root = this.el.root;
     root.addEventListener('dragover', (e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); root.classList.add('dragging'); } });
     root.addEventListener('dragleave', (e) => { if (e.target === root || !root.contains(e.relatedTarget)) root.classList.remove('dragging'); });
@@ -863,4 +937,12 @@ function stepZoom(cur, dir) {
   const i = UI_ZOOMS.findIndex((z) => z >= cur - 0.001);
   const k = Math.max(0, Math.min(UI_ZOOMS.length - 1, (i < 0 ? UI_ZOOMS.length - 1 : i) + dir));
   return UI_ZOOMS[k];
+}
+
+/** Etichetta breve per un'icona della barra: al massimo due parole significative. */
+function shortLabel(name) {
+  const w = String(name).replace(/\s*\(.*\)\s*$/, '').split(/\s+/);
+  if (w.join(' ').length <= 14) return w.join(' ');
+  const keep = w.filter((x, i) => i === 0 || !/^(il|lo|la|i|gli|le|un|una|di|del|della|dei|delle|e|in|da|con|per|a|al|alla|PDF)$/i.test(x));
+  return keep.slice(0, 2).join(' ');
 }
