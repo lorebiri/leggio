@@ -19,7 +19,7 @@ const abort = (signal) => { if (signal?.aborted) throw new DOMException('Annulla
 /**
  * Cerca con i cercatori in tutte le pagine. → { byPage: Map(i → rects), hits: [{ page, text, matcher }], textless: [indici] }
  */
-export async function findInPdf(pdf, matchers, { signal, onProgress, OPS, signatures = false } = {}) {
+export async function findInPdf(pdf, matchers, { signal, onProgress, OPS, signatures = false, exclude } = {}) {
   const byPage = new Map(); const hits = []; const textless = [];
   for (let i = 0; i < pdf.numPages; i++) {
     abort(signal);
@@ -42,6 +42,7 @@ export async function findInPdf(pdf, matchers, { signal, onProgress, OPS, signat
     page.cleanup();
     const pt = buildPageText(tc.items, tc.styles);
     for (const hit of findMatches(pt.text, matchers)) {
+      if (exclude?.(hit)) continue; // es. telefono o email dell'ente: mai oscurati
       const rects = rangeRects(pt, hit.start, hit.end);
       if (!rects.length) continue;
       if (!byPage.has(i)) byPage.set(i, []);

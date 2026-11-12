@@ -4,11 +4,11 @@ import { MODELLI, buildMatchers, findMatches } from './logica/modelli.js';
 import { buildPageText, rangeRects, normRect, padRect } from './logica/testo.js';
 import { viewportRect, measureChars } from './codec.js';
 import { applyRedaction, hasImages, findSignatures } from './redigi.js';
-import { getPreset, preselect, FIRMA } from './logica/preset.js';
+import { getPreset, preselect, FIRMA, datiEnte, isDatoEnte } from './logica/preset.js';
 import { presetMenu } from './ui-conferma.js';
 import { setMeasure } from './logica/testo.js';
 setMeasure(measureChars);
-import { st, salvaCopia, copyName, signatureCount, avvisoFirma, boxAvviso } from './comune.js';
+import { esclusioneEnte, st, salvaCopia, copyName, signatureCount, avvisoFirma, boxAvviso } from './comune.js';
 
 const fmtKB = (n) => (n < 1048576 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1048576).toFixed(1).replace('.', ',') + ' MB');
 let active = null; // { app, mode, cleanup[] }
@@ -245,7 +245,7 @@ export async function openSearchPanel(app) {
     const doc = app.activeDoc;
     const matchers = buildMatchers({ terms: terms.value.split('\n'), regex: regex.value, caseSensitive: cs.checked, wholeWord: ww.checked, models: models.filter((m) => m.i.checked).map((m) => m.i.value) });
     if (!matchers.length) { status.textContent = 'Scrivi una parola oppure scegli almeno un tipo di dato.'; return; }
-    let found = 0; let textless = 0; let firme = 0; const existing = new Set(marks(app).map((m) => `${m.page}:${m.rect.map((x) => x.toFixed(1)).join(',')}`));
+    let found = 0; let textless = 0; let firme = 0; let ente = 0; const escludiEnte = esclusioneEnte(app, datiEnte, isDatoEnte); const existing = new Set(marks(app).map((m) => `${m.page}:${m.rect.map((x) => x.toFixed(1)).join(',')}`));
     await app.ui.withProgress('Ricerca nel documento…', async (p) => {
       for (let i = 0; i < doc.pageCount; i++) {
         if (p.signal.aborted) throw new DOMException('Annullata', 'AbortError');
@@ -263,6 +263,7 @@ export async function openSearchPanel(app) {
         page.cleanup();
         const pt = buildPageText(tc.items, tc.styles);
         for (const hit of findMatches(pt.text, matchers)) {
+          if (escludiEnte?.(hit)) { ente++; continue; } // telefono o email dell'ente: mai oscurati
           const rects = rangeRects(pt, hit.start, hit.end);
           if (!rects.length) continue;
           const on = preselect(preset, hit);
@@ -285,6 +286,7 @@ export async function openSearchPanel(app) {
     redrawAll(app); render();
     status.innerHTML = '';
     status.append(found ? `Trovati ${found} risultati. Controlla l'elenco: togli la spunta da quelli da lasciare visibili (partite IVA e dati non previsti dal modello sono esclusi in partenza).` : 'Nessun risultato.');
+    if (ente) status.append(h('div', { class: 'muted', style: { marginTop: '6px' } }, `${ente} ${ente === 1 ? 'recapito' : 'recapiti'} dell'ente (dal Profilo dell'ente) lasciati visibili.`));
     if (preset?.firma && !firme) status.append(h('div', { style: { marginTop: '8px' } }, boxAvviso(app, 'Nessuna firma autografa riconosciuta come immagine. Se c\'è una firma (per esempio su una pagina scansionata), segnala a mano con «Riquadro».')));
     if (textless) {
       const ocrBtn = h('button', { class: 'btn small', onclick: () => runOcr(app) }, 'Rendi ricercabile (OCR)');
