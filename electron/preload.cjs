@@ -10,7 +10,9 @@ contextBridge.exposeInMainWorld('leggio', {
   on: (channel, fn) => {
     check(channel);
     if (typeof fn !== 'function') throw new Error('Gestore non valido');
-    const h = (_e, ...a) => fn(...a);
+    // il valore restituito da fn NON deve tornare indietro: contextBridge copierebbe in profondità
+    // l'esito della promessa (es. un intero Doc con il proxy pdf.js) bloccando il renderer
+    const h = (_e, ...a) => { try { fn(...a); } catch (err) { console.error(err); } };
     ipcRenderer.on(channel, h);
     return () => ipcRenderer.removeListener(channel, h);
   },

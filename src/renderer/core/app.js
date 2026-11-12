@@ -12,7 +12,7 @@ import { Sidebar, thumbnailsPanel, outlinePanel } from './sidebar.js';
 import { ToolRegistry } from './tools.js';
 import { Settings } from './settings.js';
 import { platform, isMac, modKey } from './platform.js';
-import { openPdfLib, savePdfLib, renderPageToCanvas, openPdfJs, verifyPdfBytes, PDFLib, pdfjs } from './pdf.js';
+import { openPdfLib, savePdfLib, renderPageToCanvas, openPdfJs, verifyPdfBytes, destroyPdf, PDFLib, pdfjs } from './pdf.js';
 import * as ui from './ui.js';
 import { h, toast, dialog, confirm, withProgress, parsePageRanges, formatBytes, escapeHtml } from './ui.js';
 import { icon } from './icons.js';
@@ -88,8 +88,9 @@ export class App {
       let pdf;
       try { pdf = await doc.openCandidate(next); }
       catch (err) { throw new Error(`«${label}» ha prodotto un PDF non leggibile (${err?.message || err}). Il documento non è stato modificato.`); }
-      if (doc.closed) { pdf.destroy(); return false; }
-      await doc.commit(label, next);
+      if (doc.closed) { destroyPdf(pdf); return false; }
+      // la copia per Annulla (su disco nell'app) prosegue in sottofondo; Annulla la attende
+      doc.commit(label, next).catch((err) => log('error', 'cronologia: copia non salvata', { error: String(err?.message || err) }));
       await this.#swapPdf(doc, pdf);
       this.bus.emit('document:changed', { doc, label });
       toast(label, { kind: 'success', timeout: 2600, action: { label: 'Annulla', run: () => this.undo(doc) } });
@@ -288,7 +289,7 @@ export class App {
           d.bytes = prev.bytes; d.version = prev.version;
           throw err;
         }
-        if (d.closed) { pdf.destroy(); return; }
+        if (d.closed) { destroyPdf(pdf); return; }
         await this.#swapPdf(d, pdf);
         toast((dir === 'undo' ? 'Annullato: ' : 'Ripetuto: ') + label);
         this.bus.emit('document:changed', { doc: d, label: dir });
@@ -334,7 +335,7 @@ export class App {
     const old = doc.setPdf(pdf);
     this.#watchForms(doc);
     if (doc === this.activeDoc) { await this.viewer.reloadKeepingView(); this.sidebar.refresh(); }
-    try { old?.destroy(); } catch { /* già distrutto */ }
+    destroyPdf(old);
     this.#renderTabs(); this.#updateTitle(); this.#updateNav();
   }
 
@@ -525,9 +526,9 @@ export class App {
     this.el.pageInput.addEventListener('change', () => { const n = parseInt(this.el.pageInput.value, 10); if (n) this.viewer.page = n; this.#updateNav(); });
     this.el.pageInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') this.el.pageInput.blur(); });
     this.el.zoomSel.addEventListener('change', () => { if (this.el.zoomSel.value !== 'custom') this.viewer.scaleValue = this.el.zoomSel.value; });
-    platform.on('app:command', (id) => this.command(id));
-    platform.on('app:open-file', (f) => this.openBytes(f.bytes, f));
-    platform.on('app:open-recovery', () => this.recovery?.offer(true));
+    platform.on('app:command', (id) => { this.command(id); });
+    platform.on('app:open-file', (f) => { if (f?.bytes) this.openBytes(f.bytes, f); else if (f?.path) this.openPath(f.path); });
+    platform.on('app:open-recovery', () => { this.recovery?.offer(true); });
     platform.on('app:before-close', async () => {
       for (const d of [...this.docs]) if (!(await this.closeDoc(d))) return;
       await this.recovery?.cleanExit();
@@ -625,7 +626,7 @@ export class App {
       }
       return true;
     });
-    pdf.destroy();
+    destroyPdf(pdf);
     if (ok) { document.body.classList.add('printing'); window.print(); document.body.classList.remove('printing'); }
     root.innerHTML = '';
   }

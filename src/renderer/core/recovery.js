@@ -33,7 +33,8 @@ export class Recovery {
     if (!this.enabled || doc.closed) return;
     const st = this.#st(doc);
     clearTimeout(st.timer);
-    const d = delay ?? (doc.bytes.length > 200 * MB ? 30000 : 4000);
+    const big = doc.bytes.length > 100 * MB;
+    const d = delay ?? (big ? 60000 : 4000);
     st.timer = setTimeout(() => this.snapshot(doc).catch((err) => log('warn', 'recupero: copia non riuscita', { name: doc.name, error: String(err?.message || err) })), d);
   }
 
