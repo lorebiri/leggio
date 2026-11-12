@@ -198,7 +198,7 @@ export function findAnnot(pdfDoc, target) {
 
 // ---------------------------------------------------------------- scrittura
 const fontCache = new WeakMap();
-async function getFonts(pdfDoc) {
+export async function getFonts(pdfDoc) {
   let f = fontCache.get(pdfDoc);
   if (!f) {
     f = { regular: await pdfDoc.embedFont(StandardFonts.Helvetica), bold: await pdfDoc.embedFont(StandardFonts.HelveticaBold) };
@@ -550,3 +550,9 @@ export function apMatrix(ctx, sdict, rect) {
   return A;
 }
 export { inflate };
+
+/** Dizionario /Measure (PDF 12.9) per le annotazioni di misura. factor: punti PDF → unità reali. */
+export function measureSpec(label, unit, factor) {
+  const fmt = (u, c) => ({ Type: 'NumberFormat', U: PDFString.of(u), C: r2(c * 1e6) / 1e6, D: 100, RD: PDFString.of(',') });
+  return { Type: 'Measure', Subtype: 'RL', R: PDFString.of(label), X: [fmt(unit, factor)], D: [fmt(unit, 1)], A: [fmt(unit + '²', 1)] };
+}

@@ -8,18 +8,20 @@ const P = (p) => `${r2(p[0])} ${r2(p[1])}`;
 
 /** Timbri predefiniti: etichetta, colore, nome standard PDF (/Name). */
 export const STAMPS = [
-  { id: 'approvato', label: 'APPROVATO', color: [0.13, 0.55, 0.2], name: 'Approved' },
-  { id: 'non-approvato', label: 'NON APPROVATO', color: [0.75, 0.1, 0.1], name: 'NotApproved' },
-  { id: 'bozza', label: 'BOZZA', color: [0.15, 0.35, 0.7], name: 'Draft' },
-  { id: 'riservato', label: 'RISERVATO', color: [0.75, 0.1, 0.1], name: 'NotForPublicRelease' },
-  { id: 'confidenziale', label: 'CONFIDENZIALE', color: [0.75, 0.1, 0.1], name: 'Confidential' },
-  { id: 'ricevuto', label: 'RICEVUTO', color: [0.15, 0.35, 0.7], name: 'Leggio.Ricevuto' },
-  { id: 'pagato', label: 'PAGATO', color: [0.13, 0.55, 0.2], name: 'Leggio.Pagato' },
-  { id: 'rivisto', label: 'RIVISTO', color: [0.15, 0.35, 0.7], name: 'Leggio.Rivisto' },
-  { id: 'urgente', label: 'URGENTE', color: [0.85, 0.3, 0.05], name: 'Leggio.Urgente' },
-  { id: 'finale', label: 'DEFINITIVO', color: [0.13, 0.55, 0.2], name: 'Final' },
-  { id: 'per-commenti', label: 'PER COMMENTI', color: [0.15, 0.35, 0.7], name: 'ForComment' },
-  { id: 'annullato', label: 'ANNULLATO', color: [0.75, 0.1, 0.1], name: 'Leggio.Annullato' },
+  { id: 'ricevuto', label: 'RICEVUTO', sub: 'il {data}', color: [0.15, 0.35, 0.7], name: 'Leggio.Ricevuto' },
+  { id: 'visto-si-liquidi', label: 'VISTO SI LIQUIDI', sub: '{autore} · {data}', color: [0.13, 0.55, 0.2], name: 'Leggio.VistoSiLiquidi' },
+  { id: 'pagato', label: 'PAGATO', sub: 'il {data} · mandato n. {numero}', color: [0.13, 0.55, 0.2], name: 'Leggio.Pagato' },
+  { id: 'registrato', label: 'REGISTRATO', sub: 'il {data}', color: [0.15, 0.35, 0.7], name: 'Leggio.Registrato' },
+  { id: 'approvato', label: 'APPROVATO', sub: '', color: [0.13, 0.55, 0.2], name: 'Approved' },
+  { id: 'non-approvato', label: 'NON APPROVATO', sub: '', color: [0.75, 0.1, 0.1], name: 'NotApproved' },
+  { id: 'bozza', label: 'BOZZA', sub: '', color: [0.15, 0.35, 0.7], name: 'Draft' },
+  { id: 'riservato', label: 'RISERVATO', sub: '', color: [0.75, 0.1, 0.1], name: 'NotForPublicRelease' },
+  { id: 'confidenziale', label: 'CONFIDENZIALE', sub: '', color: [0.75, 0.1, 0.1], name: 'Confidential' },
+  { id: 'rivisto', label: 'RIVISTO', sub: '', color: [0.15, 0.35, 0.7], name: 'Leggio.Rivisto' },
+  { id: 'urgente', label: 'URGENTE', sub: '', color: [0.85, 0.3, 0.05], name: 'Leggio.Urgente' },
+  { id: 'copia-conforme', label: 'COPIA CONFORME', sub: '', color: [0.15, 0.35, 0.7], name: 'Leggio.CopiaConforme' },
+  { id: 'annullato', label: 'ANNULLATO', sub: '', color: [0.75, 0.1, 0.1], name: 'Leggio.Annullato' },
+  { id: 'definitivo', label: 'DEFINITIVO', sub: '', color: [0.13, 0.55, 0.2], name: 'Final' },
 ];
 export function stampById(id) { return STAMPS.find((s) => s.id === id || s.name === id) || null; }
 
