@@ -4,3 +4,5 @@
 .conv-banner-txt { flex: 1 1 280px; }
 .conv-link { border: 0; background: none; color: var(--muted); text-decoration: underline; cursor: pointer; font: inherit; padding: 4px; }
 .conv-check { display: inline-flex; align-items: center; gap: 4px; margin: 2px 14px 2px 0; cursor: pointer; }
+.conv-hint { color: var(--muted); }
+.conv-sel { position: absolute; border: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 3px; pointer-events: none !important; }

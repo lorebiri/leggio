@@ -88,9 +88,12 @@ export async function convertiPdf(app, pdf, formato, opts = {}) {
     case 'txt': return enc.encode('﻿' + strutt.map((s, k) => (pages.length > 1 ? `--- Pagina ${s.index + 1} ---\n\n` : '') + blocchiInTesto(s.blocks)).join('\n\n\f') + '\n');
     case 'html': return enc.encode(html(strutt.map((s) => ({ blocks: s.blocks, image: s.image?.dataUrl })), { title }));
     case 'xlsx': case 'csv': {
+      const nessunaTabella = !strutt.some((s) => s.blocks.some((b) => b.type === 'table'));
+      const tutto = opts.tuttoIlTesto || nessunaTabella; // senza tabelle riconosciute si esporta tutto il testo in colonne
+      if (opts.report) opts.report.nessunaTabella = nessunaTabella;
       const fogli = strutt.map((s) => {
         const tabs = s.blocks.filter((b) => b.type === 'table');
-        const rows = tabs.length && !opts.tuttoIlTesto ? tabs.flatMap((t, i) => (i ? [[], ...t.rows] : t.rows)) : tabellaDaFrammenti(s.frags);
+        const rows = tutto ? tabellaDaFrammenti(s.frags) : tabs.flatMap((t, i) => (i ? [[], ...t.rows] : t.rows));
         return { name: `Pagina ${s.index + 1}`, rows };
       }).filter((f) => f.rows.length);
       if (formato === 'csv') return enc.encode(csv(fogli.flatMap((f, i) => (i ? [[], ...f.rows] : f.rows)), { sep: opts.csvSep || ';' }));
