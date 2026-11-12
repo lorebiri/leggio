@@ -51,7 +51,7 @@ export const browserCodec = {
  * Rende una pagina a ~300 dpi, senza rotazione e senza annotazioni, con i riquadri di oscuramento.
  * → { bytes (JPEG), kind: 'jpeg', view: [x1,y1,x2,y2] }
  */
-export async function renderRedactedPage(pdfjs, pdf, pageIndex, rects, { dpi = 300, color = '#000000', label = '', maxPixels = 36e6, quality = 0.92 } = {}) {
+export async function renderRedactedPage(pdfjs, pdf, pageIndex, rects, { dpi = 300, color = '#000000', label = '', maxPixels = 36e6, quality = 0.92, signal } = {}) {
   const page = await pdf.getPage(pageIndex + 1);
   try {
     const base = page.getViewport({ scale: 1, rotation: 0 });
@@ -63,7 +63,12 @@ export async function renderRedactedPage(pdfjs, pdf, pageIndex, rects, { dpi = 3
     const canvas = makeCanvas(w, h);
     const ctx = canvas.getContext('2d', { alpha: false });
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h);
-    await page.render({ canvasContext: ctx, canvas, viewport: vp, annotationMode: pdfjs.AnnotationMode.DISABLE, background: '#ffffff' }).promise;
+    // intent 'print': niente requestAnimationFrame, così il lavoro prosegue anche a finestra ridotta a icona
+    const task = page.render({ canvasContext: ctx, canvas, viewport: vp, intent: 'print', annotationMode: pdfjs.AnnotationMode.DISABLE, background: '#ffffff' });
+    const onAbort = () => task.cancel();
+    signal?.addEventListener('abort', onAbort);
+    try { await task.promise; } catch (e) { if (signal?.aborted) throw new DOMException('Annullato', 'AbortError'); throw e; }
+    finally { signal?.removeEventListener('abort', onAbort); }
     ctx.fillStyle = color;
     const boxes = rects.map((r) => viewportRect(vp, r));
     for (const [x, y, bw, bh] of boxes) ctx.fillRect(Math.floor(x), Math.floor(y), Math.ceil(bw) + 1, Math.ceil(bh) + 1);
