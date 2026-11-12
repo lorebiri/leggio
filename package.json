@@ -16,7 +16,8 @@
     "dist:win": "vite build && electron-builder --win --publish never",
     "preview": "bash scripts-preview.sh",
     "icone": "node scripts/genera-icone.mjs",
-    "dist:prova": "vite build && electron-builder --mac dmg --arm64 --publish never"
+    "dist:prova": "vite build && electron-builder --mac dmg --arm64 --publish never",
+    "verifica:pacchetto": "node scripts/verifica-pacchetto.mjs"
   },
   "dependencies": {
     "@cantoo/pdf-lib": "^2.11.1",
@@ -47,7 +48,12 @@
       "dist/**/*",
       "electron/**/*",
       "package.json",
-      "!dist/fixtures/**"
+      "!dist/fixtures/**",
+      "!node_modules/{pdfjs-dist,@napi-rs,docx}/**",
+      "!node_modules/{@types,undici-types}/**",
+      "!node_modules/{tesseract.js,tesseract.js-core,zlibjs,bmp-js,idb-keyval,wasm-feature-detect,is-url,opencollective-postinstall,regenerator-runtime,node-fetch,tr46,whatwg-url,webidl-conversions}/**",
+      "!node_modules/**/*.{map,ts,md,markdown}",
+      "!node_modules/**/{docs,doc,test,tests,example,examples,__tests__}/**"
     ],
     "extraResources": [
       {
@@ -91,7 +97,7 @@
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
-      "identity": null,
+      "identity": "-",
       "minimumSystemVersion": "12.0"
     },
     "dmg": {
@@ -112,7 +118,8 @@
       "window": {
         "width": 560,
         "height": 380
-      }
+      },
+      "format": "ULFO"
     },
     "win": {
       "target": [

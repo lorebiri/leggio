@@ -13,7 +13,8 @@
 // Preferenze: il renderer comunica l'impostazione «Controlla automaticamente gli aggiornamenti»
 // con invoke('app:update-prefs', { auto }). Variabili d'ambiente:
 //   LEGGIO_NO_UPDATE_CHECK=1  spegne il controllo automatico (il menu resta disponibile)
-//   LEGGIO_UPDATE_TEST=1      collaudo: simula una release più nuova (anche fuori dall'app installata)
+//   LEGGIO_UPDATE_TEST=1      collaudo: simula una release più nuova (anche fuori dall'app installata);
+//                             in questa modalità non scrive nulla su disco
 const { app, dialog, shell, net, ipcMain } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -30,7 +31,7 @@ const testMode = () => yes(process.env.LEGGIO_UPDATE_TEST);
 // ---------- stato su disco (userData/aggiornamenti.json) ----------
 const stateFile = () => path.join(app.getPath('userData'), 'aggiornamenti.json');
 function readState() { try { return JSON.parse(fs.readFileSync(stateFile(), 'utf8')) || {}; } catch { return {}; } }
-function writeState(patch) { try { fs.writeFileSync(stateFile(), JSON.stringify({ ...readState(), ...patch })); } catch {} }
+function writeState(patch) { if (testMode()) return; try { fs.writeFileSync(stateFile(), JSON.stringify({ ...readState(), ...patch })); } catch {} }
 
 // ---------- versioni (semver essenziale, scritto a mano) ----------
 // 1.2.10 > 1.2.9; una pre-release (1.2.0-beta.1) è minore della stabile 1.2.0.

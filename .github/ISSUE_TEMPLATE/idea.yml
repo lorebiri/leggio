@@ -1,0 +1,28 @@
+name: Proponi un'idea
+description: Una funzione nuova o un miglioramento
+title: "[Idea] "
+labels: [idea]
+body:
+  - type: textarea
+    id: bisogno
+    attributes:
+      label: Cosa ti serve fare?
+      description: Raccontaci l'attività che vorresti svolgere con Leggio (più del «come», ci interessa il «perché»).
+      placeholder: Ogni settimana devo…
+    validations:
+      required: true
+  - type: textarea
+    id: proposta
+    attributes:
+      label: Come te lo immagini?
+      description: La soluzione che avresti in mente, se ne hai una.
+  - type: textarea
+    id: oggi
+    attributes:
+      label: Come fai oggi?
+      description: Altri programmi o trucchi che usi al momento (es. «in Acrobat uso…»).
+  - type: textarea
+    id: altro
+    attributes:
+      label: Altro
+      description: Schermate, esempi, collegamenti.
