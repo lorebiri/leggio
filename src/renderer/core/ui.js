@@ -187,7 +187,7 @@ export function toast(message, { kind = 'info', timeout = 3800, action } = {}) {
   // lo stesso avviso già visibile (es. «Niente da annullare» due volte): si rinnova invece di raddoppiarlo
   if (!action) for (const old of root.children) if (!old.classList.contains('closing') && old.dataset.msg === String(message)) { old.__rearm?.(); return old; }
   const t = h('div', { class: 'toast toast-' + kind, role: kind === 'error' ? 'alert' : 'status' },
-    h('span', { html: icon(kind === 'error' ? 'warning' : kind === 'success' ? 'check' : 'info', 16) }),
+    h('span', { html: icon(kind === 'error' || kind === 'warning' ? 'warning' : kind === 'success' ? 'check' : 'info', 16) }),
     h('span', { class: 'toast-msg' }, message));
   if (action) {
     timeout = Math.max(timeout, 10000);
