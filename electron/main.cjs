@@ -555,11 +555,25 @@ function registerCoreIpc() {
   });
 }
 
+// I moduli delle aree ricevono un ipcMain che accetta richieste solo dalla pagina dell'app (come i canali
+// del nucleo) e i permessi sui percorsi (grants): file e cartelle scelti dall'utente, sola lettura.
+const featureIpc = {
+  handle(channel, fn) {
+    ipcMain.handle(channel, (e, ...args) => {
+      if (!senderOk(e)) { L('warn', 'IPC da mittente non autorizzato', { channel, url: e.senderFrame?.url }); throw new Error('Mittente non autorizzato'); }
+      return fn(e, ...args);
+    });
+  },
+  removeHandler: (channel) => ipcMain.removeHandler(channel),
+};
 function registerFeatureModules() {
   const dir = path.join(__dirname, 'features');
   if (!fs.existsSync(dir)) return;
+  const loaded = [];
+  // percorsi che un modulo ha fatto scegliere all'utente (cartelle dell'archivio, dialoghi delle aree)
+  const pathAllowed = (p) => loaded.some((m) => { try { return typeof m.pathAllowed === 'function' && m.pathAllowed(p); } catch { return false; } });
   for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.cjs')).sort()) {
-    try { require(path.join(dir, f)).register({ ipcMain, app, BrowserWindow, dialog, getWindow: () => mainWindow }); }
+    try { const m = require(path.join(dir, f)); loaded.push(m); m.register({ ipcMain: featureIpc, app, BrowserWindow, dialog, getWindow: () => mainWindow, grants, pathAllowed }); }
     catch (err) { console.error('[leggio] modulo main non caricato:', f, err); L('error', 'modulo main non caricato: ' + f, { error: err.message }); }
   }
 }

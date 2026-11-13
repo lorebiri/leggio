@@ -11,6 +11,7 @@ const fsp = require('node:fs/promises');
 const os = require('node:os');
 const { execFile } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
+const { safeWrite } = require('../core/safe-write.cjs');
 
 const MB = 1024 * 1024;
 const MAX_READ = 1024 * MB;
@@ -53,13 +54,14 @@ function safeName(n, fallback = 'documento') {
 
 // percorsi autorizzati dall'utente tramite i dialoghi di questo modulo
 const allowedRoots = new Set();
+let grantsRef = null; // permessi del nucleo (sola lettura)
 function allow(p) { allowedRoots.add(path.resolve(p)); }
 function isAllowed(p) {
   const r = path.resolve(p);
   for (const root of allowedRoots) {
     if (r === root) return true;
     const rel = path.relative(root, r);
-    if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) return true;
+    if (rel && rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel)) return true;
   }
   return false;
 }
@@ -128,9 +130,10 @@ async function writeAllowed({ folder, sub, name, bytes, overwrite }) {
   await fsp.mkdir(dir, { recursive: true });
   const fileName = safeName(name);
   const target = overwrite === true ? path.join(dir, fileName) : await uniquePath(dir, fileName);
-  const tmp = target + '.leggio-tmp';
-  await fsp.writeFile(tmp, Buffer.from(data.buffer, data.byteOffset, data.byteLength));
-  await fsp.rename(tmp, target);
+  // «Sostituisci gli originali» non vale per i file aperti in sola lettura (es. dall'archivio)
+  if (grantsRef && grantsRef.isReadOnly(target)) throw new UserError(`«${fileName}» è aperto in sola lettura: l'originale non viene sovrascritto.`);
+  // scrittura atomica e verificata (temporaneo unico, ripulito in caso di errore)
+  await safeWrite(target, data);
   return target;
 }
 
@@ -175,6 +178,10 @@ async function htmlToPdf(BrowserWindow, args = {}) {
   wc.session.on('will-download', (e) => e.preventDefault());
   wc.session.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
   if (target.file) wc.on('will-navigate', (e) => e.preventDefault());
+  // HTML generato da Leggio (fatture, messaggi .eml…): può contenere <iframe src="file:///…"> o immagini
+  // remote messe da chi ha scritto il documento. Si carica solo la pagina stessa (niente altri file locali,
+  // niente rete); per un file HTML scelto dall'utente, solo i file della sua cartella.
+  wc.session.webRequest.onBeforeRequest((d, cb) => cb({ cancel: !requestAllowed(target, args, d.url) }));
   try {
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new UserError('La pagina impiega troppo tempo a caricarsi. Controlla l\'indirizzo o la connessione e riprova.')), timeout);
@@ -194,6 +201,17 @@ async function htmlToPdf(BrowserWindow, args = {}) {
     try { win.destroy(); } catch {}
     if (tmpDir) fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+function requestAllowed(target, args, url) {
+  if (/^(data|blob|about|devtools):/i.test(url)) return true;
+  if (target.url) return /^https?:/i.test(url);
+  let p;
+  try { const u = new URL(url); if (u.protocol !== 'file:') return false; p = require('node:url').fileURLToPath(u); } catch { return false; }
+  if (args.html != null) return path.resolve(p) === path.resolve(target.file);
+  const dir = path.dirname(path.resolve(target.file));
+  const rel = path.relative(dir, path.resolve(p));
+  return rel === '' || (rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel));
 }
 
 // ---------------- Office → PDF ----------------
@@ -334,7 +352,8 @@ function wrap(fn) {
   };
 }
 
-function register({ ipcMain, BrowserWindow, dialog, getWindow, app }) {
+function register({ ipcMain, BrowserWindow, dialog, getWindow, app, grants }) {
+  grantsRef = grants || null;
   try { userDataDir = app?.getPath?.('userData') || null; } catch { userDataDir = null; }
   const h = (name, fn) => { ipcMain.removeHandler('feat:avanzati:' + name); ipcMain.handle('feat:avanzati:' + name, wrap(fn)); };
   h('choose-folder', async ({ title }) => {
@@ -365,4 +384,4 @@ function register({ ipcMain, BrowserWindow, dialog, getWindow, app }) {
   h('cancel', async ({ jobId }) => { const c = jobs.get(str(jobId, 'jobId', 100)); if (c) { c.leggioCancelled = true; try { c.kill(); } catch {} } return !!c; });
 }
 
-module.exports = { register, _test: { jobSave, jobLoad, jobClear, heicToJpeg, safeName, isAllowed, allow, listFiles, readAllowed, writeAllowed, officeConvert, findSoffice, marginsFor, msOfficeScript, UserError } };
+module.exports = { register, requestAllowed, pathAllowed: (p) => { try { return typeof p === 'string' && path.isAbsolute(p) && isAllowed(p); } catch { return false; } }, _test: { jobSave, jobLoad, jobClear, heicToJpeg, safeName, isAllowed, allow, listFiles, readAllowed, writeAllowed, officeConvert, findSoffice, marginsFor, msOfficeScript, UserError } };

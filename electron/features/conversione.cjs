@@ -3,7 +3,9 @@
 const path = require('node:path');
 const fs = require('node:fs/promises');
 
-function register({ ipcMain }) {
+const { safeWrite } = require('../core/safe-write.cjs');
+
+function register({ ipcMain, grants }) {
   // appunti: tabella come testo (tabulazioni) e HTML, così Excel la incolla in colonne
   ipcMain.handle('feat:conversione:appunti', (_e, { text, html } = {}) => {
     const { clipboard } = require('electron');
@@ -25,9 +27,16 @@ function register({ ipcMain }) {
     if (typeof p !== 'string' || !p || p.includes('\0') || !path.isAbsolute(p)) throw new Error('Percorso non valido');
     return path.resolve(p);
   };
+  // solo dentro le cartelle scelte dall'utente con il dialogo (file:choose-folder): un renderer
+  // compromesso non deve poter leggere, elencare o scrivere altrove
+  const scelto = (p) => {
+    const full = assoluto(p);
+    if (!grants || !grants.underFolder(full)) throw new Error('Per sicurezza Leggio usa solo le cartelle scelte da te: scegli di nuovo la cartella.');
+    return full;
+  };
   ipcMain.handle('feat:conversione:elenca', async (_e, { cartella, sottocartelle = true, escludi = [], max = 20000 } = {}) => {
-    const root = assoluto(cartella);
-    const esclusi = new Set(escludi.map((x) => path.resolve(x)));
+    const root = scelto(cartella);
+    const esclusi = new Set((Array.isArray(escludi) ? escludi : []).filter((x) => typeof x === 'string').map((x) => path.resolve(x)));
     const out = [];
     async function giro(dir, depth) {
       if (out.length >= max || depth > 12 || esclusi.has(dir)) return;
@@ -48,19 +57,21 @@ function register({ ipcMain }) {
     return out;
   });
   ipcMain.handle('feat:conversione:leggi', async (_e, p) => {
-    const buf = await fs.readFile(assoluto(p));
+    const buf = await fs.readFile(scelto(p));
     return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
   });
   ipcMain.handle('feat:conversione:esiste', async (_e, p) => {
-    try { const st = await fs.stat(assoluto(p)); return { size: st.size, mtimeMs: Math.round(st.mtimeMs) }; } catch { return null; }
+    const full = scelto(p);
+    try { const st = await fs.stat(full); return { size: st.size, mtimeMs: Math.round(st.mtimeMs) }; } catch { return null; }
   });
   ipcMain.handle('feat:conversione:scrivi', async (_e, { percorso, bytes } = {}) => {
-    const full = assoluto(percorso);
+    const full = scelto(percorso);
     if (!/\.(pdf|json|txt|docx|odt|xlsx|csv|html)$/i.test(full)) throw new Error('Tipo di file non consentito');
+    if (grants.isReadOnly(full)) throw new Error(`«${path.basename(full)}» è aperto in sola lettura e non può essere sovrascritto.`);
+    if (!(bytes instanceof Uint8Array) && !(bytes instanceof ArrayBuffer)) throw new Error('Dati non validi');
     await fs.mkdir(path.dirname(full), { recursive: true });
-    const tmp = full + '.leggio-tmp';
-    await fs.writeFile(tmp, Buffer.from(bytes.buffer ? new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength) : bytes));
-    await fs.rename(tmp, full); // scrittura atomica: mai file a metà
+    // scrittura atomica e verificata, con file temporaneo unico (due scritture insieme non si pestano)
+    await safeWrite(full, bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : bytes);
     return full;
   });
   ipcMain.handle('feat:conversione:unisci', (_e, ...parti) => path.join(...parti.map(String)));

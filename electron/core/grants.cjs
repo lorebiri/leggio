@@ -17,6 +17,18 @@ function createGrants({ caseInsensitive = process.platform === 'win32' || proces
     hasFile(p) { return files.has(norm(p)); },
     canRead(p) { return reads.has(norm(p)); },
     hasFolder(p) { return folders.has(norm(p)); },
+    /** p è una cartella scelta dall'utente o si trova dentro una di esse. */
+    underFolder(p) {
+      const n = norm(p);
+      for (const f of folders) {
+        if (n === f) return true;
+        const rel = path.relative(f, n);
+        if (rel && rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel)) return true;
+      }
+      return false;
+    },
+    /** File scelto dall'utente (concesso) o dentro una cartella scelta: i moduli del main possono usarlo. */
+    canUse(p) { return files.has(norm(p)) || reads.has(norm(p)) || this.underFolder(p); },
     /** Protegge (o libera) un file aperto in sola lettura. */
     setReadOnly(p, on) { if (!p) return; if (on) readOnly.add(norm(p)); else readOnly.delete(norm(p)); },
     isReadOnly(p) { return readOnly.has(norm(p)); },
