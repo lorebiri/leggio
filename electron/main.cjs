@@ -413,7 +413,12 @@ function registerCoreIpc() {
   });
   handle('file:read', async (_e, p) => {
     const target = V.absPath(p);
-    if (/\.pdf$/i.test(target)) return readPdf(target);
+    if (/\.pdf$/i.test(target)) {
+      // leggere non concede la sovrascrittura: solo i file già scelti dall'utente o fra i recenti
+      const bytes = readFileChecked(target);
+      if (grants.onRendererRead(target, readRecent()).recent) addRecent(target);
+      return { path: target, name: path.basename(target), bytes };
+    }
     if (!grants.canRead(target)) throw new V.IpcValidationError('Si possono riaprire solo file PDF o file aperti dall\'utente.');
     return { path: target, name: path.basename(target), bytes: readFileChecked(target) };
   });
@@ -488,6 +493,8 @@ function registerCoreIpc() {
     const id = Number(meta?.id);
     if (!Number.isInteger(id) || id < 0) throw new V.IpcValidationError('id non valido');
     const m = { id, name: V.str(meta.name, 'nome', 1024), path: meta.path ? V.absPath(meta.path) : null, size: bytes.byteLength, time: Date.now(), pages: Number(meta.pages) || 0, readOnly: !!meta.readOnly };
+    // il permesso di sovrascrivere al ripristino lo decide il main ora, non il renderer: solo se il file era già concesso
+    m.writable = !!m.path && grants.hasFile(m.path);
     const dir = recoveryDir();
     await fsp.mkdir(dir, { recursive: true });
     await safeWrite(path.join(dir, `${id}.pdf`), bytes, { verify: false });
@@ -520,7 +527,7 @@ function registerCoreIpc() {
     if (typeof s !== 'string' || !SESSION_RE.test(s)) throw new V.IpcValidationError('sessione non valida');
     const n = Number(id); if (!Number.isInteger(n)) throw new V.IpcValidationError('id non valido');
     const dir = path.join(recoveryRoot(), s);
-    try { const m = JSON.parse(await fsp.readFile(path.join(dir, `${n}.json`), 'utf8')); if (m.path) grantFile(m.path); } catch { /* */ }
+    try { const m = JSON.parse(await fsp.readFile(path.join(dir, `${n}.json`), 'utf8')); if (m.path && m.writable === true) grantFile(m.path); } catch { /* */ }
     const b = await fsp.readFile(path.join(dir, `${n}.pdf`));
     return new Uint8Array(b.buffer, b.byteOffset, b.byteLength);
   });

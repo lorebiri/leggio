@@ -75,7 +75,9 @@ apertura di file protetti), **@pdf-lib/fontkit**, **tesseract.js** (OCR), **docx
 ### Processo main
 Canali del nucleo validati (tipi, dimensioni ≤ 2 GB, percorsi assoluti) e accettati solo dalla pagina dell'app.
 Il renderer può **sovrascrivere solo file aperti o scelti dall'utente** e scrivere solo in cartelle scelte con il
-dialogo. Nei gestori `platform.on(canale, fn)` il valore restituito da `fn` viene ignorato (una promessa che
+dialogo. Leggere un PDF per percorso (`file:read`) **non** dà il permesso di sovrascriverlo, a meno che il file sia
+già stato scelto dall'utente o sia fra i recenti; il recupero automatico concede la sovrascrittura solo se il main l'aveva
+già concessa quando il documento è stato copiato (`test/e2e/permessi-app.mjs`). Nei gestori `platform.on(canale, fn)` il valore restituito da `fn` viene ignorato (una promessa che
 restituisce oggetti grandi bloccava il renderer); **non inviare grandi Uint8Array come argomenti di eventi**
 `webContents.send`: inviare il percorso e far leggere i byte con un `invoke`. Per il collaudo:
 `LEGGIO_USER_DATA=/cartella` usa una cartella dati separata.

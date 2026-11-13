@@ -14,11 +14,24 @@ function createGrants({ caseInsensitive = process.platform === 'win32' || proces
     grantFile(p) { if (p) files.add(norm(p)); },
     grantFolder(p) { if (p) folders.add(norm(p)); },
     grantRead(p) { if (p) reads.add(norm(p)); },
+    hasFile(p) { return files.has(norm(p)); },
     canRead(p) { return reads.has(norm(p)); },
     hasFolder(p) { return folders.has(norm(p)); },
     /** Protegge (o libera) un file aperto in sola lettura. */
     setReadOnly(p, on) { if (!p) return; if (on) readOnly.add(norm(p)); else readOnly.delete(norm(p)); },
     isReadOnly(p) { return readOnly.has(norm(p)); },
+    /**
+     * Il renderer legge un PDF per percorso (file:read). La sola lettura non è una scelta dell'utente:
+     * il permesso di sovrascrivere si concede solo se c'era già (dialogo, doppio clic, trascinamento)
+     * o se il file è fra i recenti del main (riaperto dalla schermata iniziale o dalla sessione precedente).
+     * → { write, recent }: write = ora si può sovrascrivere; recent = va aggiunto ai recenti.
+     */
+    onRendererRead(p, recentList = []) {
+      const n = norm(p);
+      if (!files.has(n) && recentList.some((r) => norm(r) === n)) files.add(n);
+      const ok = files.has(n);
+      return { write: ok, recent: ok };
+    },
     /** → null se si può scrivere, altrimenti il motivo (messaggio per l'utente). */
     whyNotWrite(p) {
       const name = path.basename(String(p));
