@@ -37,6 +37,7 @@ export class App {
     this.el = this.#buildShell(root);
     this.#applyUiPrefs();
     this.viewer = new Viewer(this, this.el.viewerContainer);
+    this.#wireStageStack();
     this.sidebar = new Sidebar(this, this.el.rail, this.el.sideBody);
     this.tools = new ToolRegistry(this);
     this.sidebar.registerPanel(thumbnailsPanel(this));
@@ -324,6 +325,7 @@ export class App {
     this.#renderTabs();
     this.#updateTitle();
     this.sidebar.refresh();
+    this.sidebar.updateVisibility(doc);
     this.#updateBusy();
     this.bus.emit('document:activated', { doc });
   }
@@ -373,7 +375,11 @@ export class App {
    */
   async save(doc = this.activeDoc, { as = false } = {}) {
     if (!doc || doc.closed) return false;
-    if ((doc.readOnly || platform.isReadOnlyPath(doc.path)) && !as) as = true; // sola lettura: mai sovrascrivere l'originale
+    if ((doc.readOnly || platform.isReadOnlyPath(doc.path)) && !as) {
+      // sola lettura: mai sovrascrivere l'originale; una domanda semplice, nessun messaggio tecnico
+      if (!(await this.#askSaveCopy(doc))) return false;
+      as = true;
+    }
     try {
       return await this.#exclusive(doc, 'Salvataggio', async () => {
         const version = doc.version;
@@ -381,8 +387,17 @@ export class App {
         if (bytes.length > MAX_PDF_BYTES) throw new Error('Il documento supera i 2 GB e non può essere salvato. Riduci le immagini (Comprimi) o dividilo in più file.');
         try { await verifyPdfBytes(bytes, doc.password); }
         catch (err) { throw new Error(`Il documento da salvare non risulta un PDF valido (${err?.message || err}). Il file su disco non è stato toccato.`); }
-        if (doc.path && !as) await platform.writeFile(doc.path, bytes);
-        else {
+        let copy = as || !doc.path;
+        if (!copy) {
+          try { await platform.writeFile(doc.path, bytes); }
+          catch (err) {
+            // file che Leggio non può sovrascrivere (sola lettura, aperto da un'area senza permesso): si propone una copia
+            if (!/sola lettura|non ha il permesso|non lo sovrascrive/i.test(String(err?.message))) throw err;
+            if (!(await this.#askSaveCopy(doc))) return false;
+            copy = true;
+          }
+        }
+        if (copy) {
           const r = await platform.saveAs(bytes, doc.name);
           if (!r) return false;
           if (r.path) { doc.path = r.path; doc.name = r.name; }
@@ -400,6 +415,18 @@ export class App {
       this.reportError(err, 'Salvataggio non riuscito');
       return false;
     }
+  }
+
+  /** «Questo è l'originale dell'archivio: salvo una copia?» → true se l'utente sceglie «Salva una copia…». */
+  async #askSaveCopy(doc) {
+    const v = await ui.choice({
+      title: 'Salva una copia',
+      message: 'Questo è l\'originale dell\'archivio: salvo una copia?',
+      buttons: [{ value: 'cancel', label: 'Lascia perdere' }, { value: 'copy', label: 'Salva una copia…', primary: true }],
+    });
+    if (v !== 'copy') return false;
+    if (!/_copia\.pdf$/i.test(doc.name)) doc.name = doc.name.replace(/(\.pdf)?$/i, '_copia.pdf');
+    return true;
   }
 
   /** Esporta byte arbitrari (es. conversioni) con dialogo "Salva con nome". */
@@ -532,7 +559,9 @@ export class App {
     const zoomSel = h('select', { class: 'zoom-select', 'aria-label': 'Zoom' },
       [['auto', 'Automatico'], ['page-fit', 'Pagina intera'], ['page-width', 'Larghezza pagina'], ['page-actual', 'Dimensioni reali'], ['0.5', '50%'], ['0.75', '75%'], ['1', '100%'], ['1.25', '125%'], ['1.5', '150%'], ['2', '200%'], ['3', '300%'], ['4', '400%'], ['custom', '']].map(([v, l]) => h('option', { value: v, hidden: v === 'custom' }, l)));
     const quick = h('div', { class: 'quick-tools' });
-    const moreTools = h('button', { class: 'icon-btn has-label needs-doc more-tools', hidden: true, title: 'Altri strumenti', 'aria-label': 'Altri strumenti', 'aria-haspopup': 'menu', html: icon('tools') }, h('span', { class: 'tb-label', 'aria-hidden': 'true' }, 'Altri strumenti'));
+    // quando non tutti gli strumenti rapidi stanno nella barra, questo pulsante sostituisce «Strumenti»:
+    // un solo pulsante, con gli strumenti nascosti e «Tutti gli strumenti…» nel menu
+    const moreTools = h('button', { class: 'icon-btn has-label more-tools', hidden: true, title: `Strumenti (${modKey}K per cercarli tutti)`, 'aria-label': 'Strumenti', 'aria-haspopup': 'menu', html: icon('tools') }, h('span', { class: 'tb-label', 'aria-hidden': 'true' }, 'Strumenti'));
     moreTools.addEventListener('click', () => this.#openMoreTools(moreTools));
     const toolbar = h('div', { class: 'toolbar', role: 'toolbar', 'aria-label': 'Barra degli strumenti' },
       h('div', { class: 'tb-group' }, btn('open', `Apri (${modKey}O)`, 'open', {}, 'Apri'), btn('save', `Salva (${modKey}S)`, 'save', { class: 'icon-btn needs-doc' }, 'Salva'), btn('saveAs', `Salva con nome (${modKey}⇧S)`, 'save-as', { class: 'icon-btn needs-doc' }, 'Salva con nome'), btn('print', `Stampa (${modKey}P)`, 'print', { class: 'icon-btn needs-doc' }, 'Stampa')),
@@ -703,7 +732,7 @@ export class App {
   #fitQuick({ ownRow = false } = {}) {
     const tb = this.el.toolbar; const more = this.el.moreTools; const quick = this.el.quick;
     const btns = [...quick.querySelectorAll('.quick-btn')];
-    tb.classList.remove('wrap');
+    tb.classList.remove('wrap', 'more-shown');
     tb.classList.toggle('quick-row', ownRow);
     btns.forEach((b) => (b.hidden = false));
     more.hidden = false;
@@ -722,7 +751,9 @@ export class App {
     const qGap = parseFloat(qs.columnGap) || 0;
     const qChrome = ['paddingLeft', 'paddingRight', 'marginLeft', 'marginRight', 'borderLeftWidth', 'borderRightWidth'].reduce((t, k) => t + (parseFloat(qs[k]) || 0), 0);
     const widths = btns.map((b) => b.offsetWidth);
-    const moreW = outer(more);
+    const hubBtn = tb.querySelector('.tools-btn');
+    const hubW = hubBtn && getComputedStyle(hubBtn).display !== 'none' ? outer(hubBtn) + gap : 0;
+    const moreW = outer(more) - (ownRow ? 0 : hubW); // con «Strumenti» a tendina il pulsante «Strumenti» separato sparisce
     // elementi in riga: fissi + contenitore rapidi (+ «Altri strumenti»); lo spaziatore vale 0 ma ha il suo gap
     const room = (withMore) => inner - fixed - (kids.length + 1 + (withMore ? 1 : 0)) * gap - (withMore ? moreW : 0) - qChrome;
     const fitCount = (avail) => { let w = 0; let k = 0; for (const x of widths) { const add = x + (k ? qGap : 0); if (w + add > avail) break; w += add; k++; } return k; };
@@ -731,6 +762,7 @@ export class App {
     if (showMore) n = fitCount(room(true));
     btns.forEach((b, i) => (b.hidden = i >= n));
     more.hidden = !showMore;
+    tb.classList.toggle('more-shown', showMore);
     quick.hidden = n === 0;
     this.hiddenQuick = btns.filter((b) => b.hidden).map((b) => b.dataset.toolId);
     return n;
@@ -738,7 +770,7 @@ export class App {
   #openMoreTools(anchor) {
     const r = anchor.getBoundingClientRect();
     const items = (this.hiddenQuick || []).map((id) => this.tools.get(id)).filter(Boolean).map((t) => ({ label: t.name, icon: t.icon || 'tools', run: () => this.tools.run(t.id) }));
-    contextMenu(r.left, r.bottom + 4, [...items, '-', { label: 'Tutti gli strumenti…', icon: 'tools', run: () => this.tools.openHub() }]);
+    contextMenu(r.left, r.bottom + 4, [{ label: 'Tutti gli strumenti…', icon: 'tools', hint: `${modKey}K`, run: () => this.tools.openHub() }, ...(items.length ? ['-', ...items] : [])]);
   }
 
   #updateNav() {
@@ -862,6 +894,20 @@ export class App {
       if (e.key === 'PageDown' && this.viewer.pdfViewer.scrollMode === 3) this.viewer.page += 1;
       for (const t of this.tools.list()) if (t.shortcut && t.shortcut.length === 1 && e.key.toLowerCase() === t.shortcut.toLowerCase()) { e.preventDefault(); this.tools.run(t.id); return; }
     });
+  }
+
+  /**
+   * Spazi di lavoro a tutta area aggiunti dalle aree sopra la vista (archivio, fattura, pratiche…):
+   * l'ultimo aperto sta sempre sopra gli altri, così uno strumento avviato dall'archivio non finisce sotto.
+   */
+  #wireStageStack() {
+    const stage = this.el.main.querySelector('.stage');
+    let z = 40;
+    new MutationObserver((muts) => {
+      for (const m of muts) for (const el of m.addedNodes) {
+        if (el.nodeType === 1 && el !== this.el.viewerContainer && el !== this.el.home) el.style.zIndex = String(++z);
+      }
+    }).observe(stage, { childList: true });
   }
 
   /** C'è una finestra modale aperta (dialogo, avanzamento, «Tutti gli strumenti», pannelli a schermo intero delle aree)? */
