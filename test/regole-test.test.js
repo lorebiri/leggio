@@ -2,8 +2,9 @@
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const cartella = new URL('.', import.meta.url).pathname;
+const cartella = fileURLToPath(new URL('.', import.meta.url)); // valido anche su Windows
 const file = readdirSync(cartella).filter((f) => /\.test\.js$/.test(f) && f !== 'regole-test.test.js');
 
 describe('regole per i test multipiattaforma', () => {
