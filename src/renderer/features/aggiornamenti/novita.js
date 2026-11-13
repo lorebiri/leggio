@@ -7,7 +7,10 @@ export const NOVITA = [
     versione: '0.1.0',
     titolo: 'La prima versione di Leggio',
     punti: [
-      'Apri, leggi, cerca e stampa i PDF, anche più documenti insieme in schede separate.',
+      'Leggi, commenta, firma, compila, oscura, unisci e converti i PDF: tutto gratis e senza internet.',
+      'Apri i file firmati .p7m e le fatture elettroniche XML, con i controlli già fatti nel riquadro «Controlli».',
+      'Archivio d’ufficio: collega le tue cartelle, cerca in migliaia di documenti e vedi in «Oggi» cosa c’è da fare.',
+      'Leggio legge la segnatura di Titulus e ti prepara i dati da copiare per Titulus e U-GOV.',
       'Leggio ti avvisa quando esce una nuova versione: basta premere «Scarica».',
     ],
   },
