@@ -29,7 +29,8 @@ export function installGuards(app) {
     if (now - lastToast < 8000) return;
     lastToast = now;
     // import dinamico evitato: ui.toast è caricato dall'app
-    app?.ui?.toast?.('Si è verificato un errore imprevisto. Il documento non è stato perso; i dettagli sono nel registro (Aiuto › Apri cartella dei log).', { kind: 'warning', timeout: 7000 });
+    const msg = 'Si è verificato un errore imprevisto. Il documento non è stato perso.';
+    app?.ui?.toast?.(msg, { kind: 'warning', timeout: 7000, action: platform.isElectron === false ? undefined : { label: 'Segnalalo', run: () => platform.reportProblem(msg) } });
   };
   window.addEventListener('error', (e) => {
     const err = e.error || e.message;

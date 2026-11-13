@@ -88,6 +88,8 @@ export const platform = {
   /** Registro locale (file ruotato nel main). Nel browser: solo console. */
   async log(entry) { if (native) return native.invoke('app:log', entry); },
   async openLogs() { if (native) return native.invoke('app:open-logs'); },
+  /** Apre il programma di posta con una segnalazione già pronta per lo sviluppatore. → { ok, destinatario } */
+  async reportProblem(contesto = '') { if (native) return native.invoke('app:report-problem', contesto); return { ok: false }; },
   isElectron,
   /** Protegge (o libera) un file aperto in sola lettura: anche il main rifiuterà di scriverlo. */
   async setReadOnly(path, on) {

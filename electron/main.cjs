@@ -310,7 +310,7 @@ function buildMenu() {
     { label: 'Finestra', submenu: [{ role: 'minimize', label: 'Riduci a icona' }, { role: 'zoom', label: 'Zoom' }] },
     { label: 'Aiuto', submenu: [
       { label: 'Sito di Leggio', click: () => shell.openExternal('https://github.com/lorebiri/leggio') },
-      { label: 'Segnala un problema', click: () => shell.openExternal('https://github.com/lorebiri/leggio/issues') },
+      { label: 'Segnala un problema…', click: () => reportProblem() },
       { label: 'Scorciatoie da tastiera', click: cmd('shortcuts') },
       { type: 'separator' },
       { label: 'Controlla aggiornamenti…', click: () => require('./updater.cjs').checkInteractive(mainWindow) },
@@ -320,6 +320,44 @@ function buildMenu() {
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
+// mail precompilata per lo sviluppatore, aperta nel programma di posta: l'utente la legge e la invia.
+// Facoltativo: un'immagine della finestra salvata in Download (il mailto: non può allegare file,
+// l'utente la trascina nella mail). Può contenere il documento aperto: per questo si chiede prima.
+async function reportProblem(contesto = '') {
+  try {
+    const { mailDaRegistro, nomeImmagine } = require('./core/segnalazione.cjs');
+    let immagine = '';
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      let png = null;
+      try { png = (await mainWindow.webContents.capturePage()).toPNG(); } catch (err) { L('warn', 'segnalazione: immagine non catturata', { err: String(err?.message || err) }); }
+      const r = await dialog.showMessageBox(mainWindow, {
+        type: 'question', title: 'Segnala un problema',
+        message: 'Aggiungere un\'immagine della finestra?',
+        detail: 'Aiuta a capire il problema. L\'immagine mostra anche il documento aperto: Leggio la salva nella cartella Download e tu decidi se trascinarla nella mail.',
+        buttons: png ? ['Sì, prepara l\'immagine', 'No, solo la mail', 'Annulla'] : ['Scrivi la mail', 'Annulla'],
+        defaultId: 0, cancelId: png ? 2 : 1,
+      });
+      if (r.response === (png ? 2 : 1)) return { ok: false, annullato: true };
+      if (png && r.response === 0) {
+        try {
+          const dir = app.getPath('downloads');
+          immagine = path.join(dir, nomeImmagine(new Date()));
+          await safeWrite(immagine, png);
+          shell.showItemInFolder(immagine);
+        } catch (err) { immagine = ''; L('warn', 'segnalazione: immagine non salvata', { err: String(err?.message || err) }); }
+      }
+    }
+    const m = mailDaRegistro({ logDir: logger.dir, home: os.homedir(), versione: app.getVersion(), sistema: process.platform, versioneSistema: os.release(), contesto, immagine: immagine ? path.basename(immagine) : '' });
+    L('info', 'segnalazione: apro il programma di posta', { immagine: !!immagine });
+    try { await shell.openExternal(m.url); return { ok: true, destinatario: m.destinatario }; } catch (err) {
+      L('warn', 'segnalazione: programma di posta non disponibile', { err: String(err?.message || err) });
+      dialog.showMessageBox(mainWindow || undefined, { type: 'info', title: 'Segnala un problema', message: 'Non trovo un programma di posta su questo computer.', detail: `Scrivi a ${m.destinatario} dalla tua posta: il testo da incollare è già stato copiato.`, buttons: ['OK'] });
+      try { require('electron').clipboard.writeText(m.corpo); } catch { /* */ }
+      return { ok: false, destinatario: m.destinatario };
+    }
+  } catch (err) { L('error', 'segnalazione non preparata', { err: String(err?.message || err) }); return { ok: false }; }
+}
+
 function openLogs() { try { fs.mkdirSync(logger.dir, { recursive: true }); } catch { /* */ } return shell.openPath(logger.dir); }
 
 // ---------- IPC di base ----------
@@ -415,6 +453,7 @@ function registerCoreIpc() {
     L(level, String(entry?.message ?? '').slice(0, 2000), entry?.data, 'renderer');
   });
   handle('app:open-logs', () => openLogs());
+  handle('app:report-problem', (_e, contesto) => reportProblem(typeof contesto === 'string' ? contesto.slice(0, 300) : ''));
 
   // --- memoria e disco ---
   handle('app:memory', () => {

@@ -12,6 +12,7 @@ export const NOVITA = [
       'Archivio d’ufficio: collega le tue cartelle, cerca in migliaia di documenti e vedi in «Oggi» cosa c’è da fare.',
       'Leggio legge la segnatura di Titulus e ti prepara i dati da copiare per Titulus e U-GOV.',
       'Leggio ti avvisa quando esce una nuova versione: basta premere «Scarica».',
+      'Qualcosa non va? Aiuto › «Segnala un problema…» prepara una mail già pronta, anche con l’immagine della finestra se vuoi.',
     ],
   },
 ];
