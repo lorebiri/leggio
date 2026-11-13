@@ -68,7 +68,8 @@ describe('modulo main «avanzati»', () => {
     expect(Buffer.from(r.bytes).toString()).toBe('%PDF-1.7 finto');
     await expect(m.officeConvert({ name: 'virus.exe', bytes: new Uint8Array([1]) })).rejects.toThrow(/non è tra quelli convertibili/);
     const slow = path.join(dir, 'lento.sh');
-    fs.writeFileSync(slow, '#!/bin/sh\nsleep 5\n'); fs.chmodSync(slow, 0o755);
+    // lo script dura molto più del limite (5 s): niente corse fra i due tempi
+    fs.writeFileSync(slow, '#!/bin/sh\nsleep 60\n'); fs.chmodSync(slow, 0o755);
     process.env.LEGGIO_SOFFICE = slow;
     await expect(m.officeConvert({ name: 'x.odt', bytes: new Uint8Array([1]), timeoutMs: 5000 })).rejects.toThrow(/troppo tempo|non è riuscita/);
   }, 20000);

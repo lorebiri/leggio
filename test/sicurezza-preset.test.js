@@ -7,7 +7,7 @@ import { buildMatchers, findMatches } from '../src/renderer/features/sicurezza/l
 import { getPreset, preselect, emailIstituzionale, signatureCandidates, FIRMA, datiEnte, isDatoEnte } from '../src/renderer/features/sicurezza/logica/preset.js';
 import { findSignatures } from '../src/renderer/features/sicurezza/logica/firme.js';
 
-const FONTS = fileURLToPath(new URL('../node_modules/pdfjs-dist/standard_fonts/', import.meta.url));
+const FONTS = fileURLToPath(new URL('../node_modules/pdfjs-dist/standard_fonts/', import.meta.url)).replace(/\\/g, '/'); // barra finale anche su Windows
 const P = getPreset('incarichi');
 const applica = (testo) => {
   const hits = findMatches(testo, buildMatchers({ models: P.cerca }));
