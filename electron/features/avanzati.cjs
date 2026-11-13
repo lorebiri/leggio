@@ -303,7 +303,9 @@ async function officeConvert(args = {}) {
   }
 }
 
-function psq(s) { return "'" + String(s).replace(/'/g, "''") + "'"; }
+// PowerShell considera apici singoli anche ‘ ’ ‚ ‛ (frequenti nei nomi italiani: «dell’ufficio»):
+// vanno raddoppiati tutti, altrimenti chiudono la stringa (conversione fallita o codice eseguito)
+function psq(s) { return "'" + String(s).replace(/['\u2018\u2019\u201A\u201B]/g, (c) => c + c) + "'"; }
 function msOfficeScript(input, out, ext) {
   const i = psq(input); const o = psq(out);
   if (/^(xls|xlsx|xlsm|ods|csv)$/.test(ext)) {

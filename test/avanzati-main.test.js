@@ -74,6 +74,14 @@ describe('modulo main «avanzati»', () => {
     await expect(m.officeConvert({ name: 'x.odt', bytes: new Uint8Array([1]), timeoutMs: 5000 })).rejects.toThrow(/troppo tempo|non è riuscita/);
   }, 20000);
 
+  it('lo script per Microsoft Office protegge anche gli apici tipografici (dell’ufficio)', () => {
+    const s = m.msOfficeScript('C:\\in\\Relazione dell’ufficio.docx', 'C:\\o\\D‘Angelo‚x‛.pdf', 'docx');
+    expect(s).toContain("'C:\\in\\Relazione dell’’ufficio.docx'");
+    expect(s).toContain("'C:\\o\\D‘‘Angelo‚‚x‛‛.pdf'");
+    // nessun apice (di qualunque tipo) resta da solo dentro le stringhe
+    const strings = s.match(/'(?:[^'\u2018\u2019\u201A\u201B]|(['\u2018\u2019\u201A\u201B])\1)*'/g);
+    expect(strings.some((x) => x.includes('Relazione dell’’ufficio.docx'))).toBe(true);
+  });
   it('lo script per Microsoft Office protegge gli apici', () => {
     expect(m.msOfficeScript("C:\\a'b.docx", 'C:\\o.pdf', 'docx')).toContain("'C:\\a''b.docx'");
   });
