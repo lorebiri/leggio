@@ -176,6 +176,18 @@ describe('riparazione dei file troncati', () => {
     }
     (globalThis.__riparati = esiti);
   }, 30000);
+  it('il file riparato ha un albero delle pagine coerente: ogni pagina dichiarata si apre', async () => {
+    // troncato dopo alcune pagine: /Pages /Count dichiarava ancora tutte le pagine dell'originale
+    // e pdf.js falliva sulle pagine «mancanti» («Page dictionary kid reference points to wrong type»)
+    const b = new Uint8Array(readFileSync(new URL('./fixtures/prova.pdf', import.meta.url)));
+    const tr = b.slice(0, Math.floor(b.length / 2));
+    const rep = await repairPdf(tr);
+    expect(rep).not.toBe(null);
+    const d = await pdfjs.getDocument({ data: rep.bytes.slice() }).promise;
+    expect(d.numPages).toBe(rep.pages);
+    for (let i = 1; i <= d.numPages; i++) await d.getPage(i);
+    await d.loadingTask.destroy();
+  }, 30000);
   it('non inventa nulla da file che non sono PDF', async () => {
     expect(await repairPdf(enc('ciao'))).toBe(null);
     expect(await repairPdf(new Uint8Array())).toBe(null);
