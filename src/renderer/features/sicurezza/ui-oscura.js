@@ -4,8 +4,8 @@ import { MODELLI, buildMatchers, findMatches } from './logica/modelli.js';
 import { buildPageText, rangeRects, normRect, padRect } from './logica/testo.js';
 import { viewportRect, measureChars } from './codec.js';
 import { applyRedaction, hasImages, findSignatures } from './redigi.js';
-import { getPreset, preselect, FIRMA, datiEnte, isDatoEnte } from './logica/preset.js';
-import { presetMenu } from './ui-conferma.js';
+import { getPreset, preselect, FIRMA, datiEnte, isDatoEnte, presetConsigliato } from './logica/preset.js';
+import { presetMenu, rigaProfiloEnte } from './ui-conferma.js';
 import { setMeasure } from './logica/testo.js';
 setMeasure(measureChars);
 import { esclusioneEnte, st, salvaCopia, copyName, signatureCount, avvisoFirma, boxAvviso } from './comune.js';
@@ -208,8 +208,10 @@ export async function openSearchPanel(app) {
   const status = h('div', { class: 'muted', 'aria-live': 'polite', style: { margin: '8px 0' } });
   const list = h('div');
   const go = h('button', { class: 'btn primary', onclick: () => run().catch((e) => app.reportError(e, 'Ricerca non riuscita')) }, 'Cerca');
+  const perche = h('p', { class: 'muted', style: { margin: '-6px 0 10px' }, hidden: true }, 'Proposto perché il documento sembra un incarico, un contratto di collaborazione, un assegno o una borsa.');
   c.append(
-    menu.el,
+    rigaProfiloEnte(app) || '',
+    menu.el, perche,
     h('div', { class: 'lg-section-title' }, 'Cosa cercare'), terms,
     h('div', { class: 'lg-section-title' }, 'Dati personali da trovare'), h('div', { class: 'lg-models' }, models.map((m) => m.el)),
     h('details', {}, h('summary', {}, 'Opzioni avanzate'),
@@ -217,6 +219,15 @@ export async function openSearchPanel(app) {
       h('div', { class: 'field' }, h('label', {}, 'Espressione regolare (per esperti)'), regex)),
     h('div', { class: 'lg-row' }, go), status, list);
 
+  (async () => {
+    try {
+      let testo = '';
+      for (let i = 0; i < Math.min(3, panelDoc.pageCount); i++) { const pg = await panelDoc.pdf.getPage(i + 1); testo += (await pg.getTextContent()).items.map((x) => x.str).join(' ') + '\n'; pg.cleanup(); }
+      let tipo = null; try { tipo = panelDoc.path ? (await app.services?.statoArchivio?.(panelDoc.path))?.tipo : null; } catch { /* */ }
+      const id = presetConsigliato({ testo, tipoArchivio: tipo });
+      if (id && c.isConnected && menu.select.value !== id) { menu.set(id); perche.hidden = false; }
+    } catch { /* proposta facoltativa */ }
+  })();
   const results = []; // { id, page, text, matcher, before, after, markIds }
   const render = () => {
     list.innerHTML = '';
