@@ -8,6 +8,7 @@ import { datiPerTitulus, testoDatiTitulus } from '../lib/titulus.js';
 import { pageText } from '../lib/textsearch.js';
 import { percorsoOriginale } from './datititulus.js';
 import { isDesktop } from '../native.js';
+import { sezioniFattura } from './fattura.js';
 
 const KEY_REGOLE = 'avanzati.regole';
 const KEY_RICEZIONE = 'avanzati.sdi.ricezione'; // { chiave fattura: 'aaaa-mm-gg' }
@@ -46,6 +47,32 @@ async function ordiniDallArchivio(app, f) {
   return out;
 }
 
+/**
+ * Dall'indice dell'archivio: data di ricezione SdI (letta dai metadati) o data del file come stima, IBAN delle fatture
+ * precedenti dello stesso fornitore, CUP presenti nella pratica (stesso CIG). Servizio preferito: app.services.ibanFornitore.
+ */
+async function datiArchivio(app, doc, f) {
+  const out = { ricezione: null, fonte: null, ibanNoti: [], cupPratica: false };
+  const A = app.archivio;
+  const path = percorsoOriginale(doc);
+  const piva = String(f.cedente?.partitaIva || '').replace(/^IT/i, '');
+  if (A?.cerca && piva) {
+    const r = await A.cerca({ fornitore: piva, tipo: 'fattura', limite: 60 }).catch(() => null);
+    for (const x of r?.righe || []) {
+      if (path && x.path === path) {
+        if (x.ricezione) { out.ricezione = String(x.ricezione).slice(0, 10); out.fonte = 'metadati'; }
+        else if (x.mtime) { out.ricezione = new Date(x.mtime).toISOString().slice(0, 10); out.fonte = 'stima'; }
+        continue;
+      }
+      if (x.iban) out.ibanNoti.push({ iban: x.iban, numero: x.numero, data: x.data });
+    }
+  }
+  if (typeof app.services?.ibanFornitore === 'function' && piva) { try { const l = await app.services.ibanFornitore(piva, { escludi: path }); if (Array.isArray(l)) out.ibanNoti = l; } catch {} }
+  const cig = f.corpi[0]?.cig[0];
+  if (A?.cerca && cig) { const r = await A.cerca({ cigcup: cig, limite: 30 }).catch(() => null); out.cupPratica = (r?.righe || []).some((x) => x.path !== path && x.cup?.length); }
+  return out;
+}
+
 async function apriDallArchivio(app, idOPath) {
   const A = app.archivio;
   try {
@@ -79,12 +106,18 @@ export function registerControlli(app) {
         try {
           if (doc.data.fattura) {
             const f = doc.data.fattura.f;
-            const ricez = (app.settings.get(KEY_RICEZIONE, {}) || {})[chiaveFattura(doc)] || null;
-            avvisi.push(...controlliFattura(f, { dataRicezione: ricez, regole: R }));
-            if (doc.data.fattura.firma?.stato === 'invalid') avvisi.unshift({ id: 'firma', livello: 'avviso', testo: 'La firma del file .p7m non è valida.', aiuto: 'Verifica CAdES fatta da Leggio senza rete.' });
+            const indicata = (app.settings.get(KEY_RICEZIONE, {}) || {})[chiaveFattura(doc)] || null;
+            const da = await datiArchivio(app, doc, f).catch(() => ({ ibanNoti: [] }));
+            if (!vivo) return;
             const ordini = await ordiniDallArchivio(app, f);
-            if (ordini) {
-              const ab = abbinaFatturaOrdini(f, ordini);
+            const ab = ordini ? abbinaFatturaOrdini(f, ordini) : null;
+            // CUP dovuto: regola dell'ufficio, CUP nell'ordine abbinato o nella pratica, oppure fattura su un progetto
+            const c0 = f.corpi[0];
+            const cupDovuto = app.settings.get('avanzati.cup.sempre', false) === true || !!ab?.abbinati[0]?.ordine.cup?.length || !!da.cupPratica
+              || /\b(PNRR|progetto di investimento|NextGenerationEU)\b/i.test([...c0.causali, ...c0.linee.map((l) => l.descrizione)].join(' '));
+            avvisi.push(...controlliFattura(f, { dataRicezione: indicata || da.ricezione, fonteRicezione: indicata ? 'indicata' : da.fonte, cupDovuto, ibanNoti: da.ibanNoti, regole: R }));
+            if (doc.data.fattura.firma?.stato === 'invalid') avvisi.unshift({ id: 'firma', livello: 'avviso', testo: 'La firma del file .p7m non è valida.', aiuto: 'Verifica CAdES fatta da Leggio senza rete.' });
+            if (ab) {
               avvisi.push(...ab.avvisi);
               const o = ab.abbinati[0]?.ordine;
               if (o) gruppi.push({ titolo: `Ordine abbinato (${ab.abbinati[0].motivi.join(', ')})`, campi: [['Documento', o.nome], ['Tipo', o.tipo], ['Numero', o.numero], ['CIG', o.cig.join(', ')], ['Importo', o.importo != null ? o.importo.toFixed(2).replace('.', ',') : '']].filter((x) => x[1]).map(([etichetta, valore]) => ({ etichetta, valore })), apri: o.id });
@@ -121,9 +154,12 @@ export function registerControlli(app) {
           if (s) avvisi.push({ id: 'protocollato', livello: 'info', testo: `Protocollato in Titulus: n. ${s.numero} del ${s.data.split('-').reverse().join('/')}.` });
         } catch (err) { console.error('[controlli]', err); }
         if (!vivo) return;
+        const fatt = doc.data.fattura && app.avanzati ? sezioniFattura(app, doc, app.avanzati) : null;
         wrap.replaceChildren(...[
           sezioneAvvisi(app, avvisi, doc, ridisegna),
           sezioneDati(app, gruppi),
+          ...(fatt?.extra || []),
+          fatt?.pulsanti,
           sezioneFonti(app, R, ridisegna),
         ].filter(Boolean));
       })();
@@ -137,13 +173,16 @@ function sezioneAvvisi(app, avvisi, doc, ridisegna) {
   if (!avvisi.length) return h('p', { class: 'av-ok' }, 'Nessun controllo da segnalare.');
   avvisi.sort((a, b) => (a.livello === 'avviso' ? 0 : 1) - (b.livello === 'avviso' ? 0 : 1));
   return h('div', { class: 'av-controlli' }, avvisi.map((a) => {
-    const fonte = a.aiuto ? h('p', { class: 'av-note', hidden: true }, 'Fonte: ' + a.aiuto) : null;
-    return h('div', { class: 'av-controllo ' + (a.livello === 'avviso' ? 'avviso' : 'info') },
-      h('p', {}, a.testo),
-      h('div', { class: 'av-row' },
-        a.azione ? h('button', { class: 'btn small', onclick: () => azione(app, a.azione, doc, ridisegna) }, a.azione.etichetta) : null,
-        fonte ? h('button', { class: 'btn small', 'aria-expanded': 'false', onclick: (e) => { fonte.hidden = !fonte.hidden; e.target.setAttribute('aria-expanded', String(!fonte.hidden)); } }, 'Fonte') : null),
-      fonte);
+    const perche = a.aiuto ? h('p', { class: 'av-note av-perche', hidden: true }, a.aiuto) : null;
+    const riga = h('div', { class: 'av-row' });
+    if (a.azione?.tipo === 'data-ricezione') {
+      // correzione in linea, senza finestre
+      const inp = h('input', { type: 'date', class: 'av-input', value: a.azione.valore || '', 'aria-label': 'Data di ricezione dallo SdI', hidden: true });
+      const ok = h('button', { class: 'btn small', hidden: true, onclick: () => { if (!/^\d{4}-\d{2}-\d{2}$/.test(inp.value)) return; const k = chiaveFattura(doc); app.settings.set(KEY_RICEZIONE, { ...(app.settings.get(KEY_RICEZIONE, {}) || {}), [k]: inp.value }); ridisegna(); } }, 'Salva');
+      riga.append(h('button', { class: 'btn small', onclick: (e) => { e.target.hidden = true; inp.hidden = false; ok.hidden = false; inp.focus(); } }, a.azione.etichetta), inp, ok);
+    } else if (a.azione) riga.append(h('button', { class: 'btn small', onclick: () => azione(app, a.azione, doc, ridisegna) }, a.azione.etichetta));
+    if (perche) riga.append(h('button', { class: 'av-link', 'aria-expanded': 'false', onclick: (e) => { perche.hidden = !perche.hidden; e.target.setAttribute('aria-expanded', String(!perche.hidden)); } }, 'Perché?'));
+    return h('div', { class: 'av-controllo ' + (a.livello === 'avviso' ? 'avviso' : 'info') }, h('p', {}, a.testo), riga, perche);
   }));
 }
 
@@ -154,13 +193,6 @@ async function azione(app, a, doc, ridisegna) {
     case 'apri': return apriDallArchivio(app, a.valore);
     case 'strumento': return app.tools.run(a.valore);
     case 'pannello': return app.sidebar.show(a.valore);
-    case 'data-ricezione': {
-      const k = chiaveFattura(doc);
-      const map = { ...(app.settings.get(KEY_RICEZIONE, {}) || {}) };
-      const v = await app.ui.dialog({ title: 'Data di ricezione dallo SdI', message: 'È la data in cui la fattura è arrivata (consegna SdI): la trovi nella ricevuta o in U-GOV.', fields: [{ name: 'd', label: 'Data di ricezione', type: 'date', value: map[k] || new Date().toISOString().slice(0, 10) }], okLabel: 'Salva', validate: (x) => (/^\d{4}-\d{2}-\d{2}$/.test(x.d) ? null : 'Scegli una data.') });
-      if (!v) return;
-      map[k] = v.d; app.settings.set(KEY_RICEZIONE, map); return ridisegna();
-    }
     case 'importo-contratto': {
       const v = await app.ui.dialog({ title: 'Importo massimo del contratto', message: 'Comprende opzioni e rinnovi: serve per sapere il bollo dovuto.', fields: [{ name: 'n', label: 'Importo in euro', type: 'number', min: 0, value: '' }], okLabel: 'Salva', validate: (x) => (x.n > 0 ? null : 'Scrivi un importo.') });
       if (!v) return;

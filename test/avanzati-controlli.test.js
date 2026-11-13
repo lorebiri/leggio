@@ -31,8 +31,8 @@ describe('regole aggiornabili', () => {
 });
 
 describe('controlli FatturaPA', () => {
-  it('fattura in regola: nessun avviso, solo la richiesta della data di ricezione', () => {
-    expect(ids(controlliFattura(fattura(), { oggi }))).toEqual(['sdi-data']);
+  it('fattura in regola e senza data di ricezione: nessun avviso (niente richieste ripetute)', () => {
+    expect(ids(controlliFattura(fattura(), { oggi }))).toEqual([]);
   });
   it('giorni rimasti dalla consegna SdI (15)', () => {
     const a = controlliFattura(fattura(), { oggi, dataRicezione: '2026-11-03' });
@@ -40,6 +40,10 @@ describe('controlli FatturaPA', () => {
     expect(a[0].testo).toBe('Restano 6 giorni per accettare o rifiutare (fino al 18/11/2026).');
     expect(controlliFattura(fattura(), { oggi, dataRicezione: '2026-10-30' })[0]).toMatchObject({ livello: 'avviso' });
     expect(controlliFattura(fattura(), { oggi, dataRicezione: '2026-10-20' })[0].id).toBe('sdi-scaduto');
+    expect(controlliFattura(fattura(), { oggi, dataRicezione: '2026-06-01' })).toEqual([]); // scaduto da mesi: silenzio
+    const stima = controlliFattura(fattura(), { oggi, dataRicezione: '2026-11-03', fonteRicezione: 'stima' })[0];
+    expect(stima.testo).toMatch(/Data stimata dal file/);
+    expect(stima.azione).toMatchObject({ tipo: 'data-ricezione', etichetta: 'Correggi la data' });
     expect(dataRicezioneDaMetadati('<ns:DataOraRicezione>2026-11-03T10:22:00</ns:DataOraRicezione>')).toBe('2026-11-03');
   });
   it('CIG e CUP mancanti come cause di rifiuto ammesse, con la fonte', () => {
@@ -47,7 +51,8 @@ describe('controlli FatturaPA', () => {
     const cig = a.find((x) => x.id === 'cig-mancante');
     expect(cig.testo).toMatch(/tra le cause di rifiuto ammesse/);
     expect(cig.aiuto).toMatch(/DL 66\/2014.*DM 132\/2020/);
-    expect(a.find((x) => x.id === 'cup-mancante').livello).toBe('info');
+    expect(a.find((x) => x.id === 'cup-mancante')).toBeUndefined(); // CUP non dovuto: nessun avviso
+    expect(controlliFattura(fattura({ cup: '' }), { oggi, cupDovuto: true }).find((x) => x.id === 'cup-mancante').testo).toMatch(/che questo acquisto richiede/);
     expect(ids(controlliFattura(fattura({ cig: '<CodiceCIG>Z1A2</CodiceCIG>' }), { oggi }))).toContain('cig-formato');
   });
   it('nota di credito senza fattura collegata', () => {
@@ -71,6 +76,13 @@ describe('controlli FatturaPA', () => {
   it('la fattura di prova del progetto (due documenti) dà avvisi per il documento giusto', () => {
     const a = controlliFattura(parseFattura(FATTURA_FPA12), { oggi });
     expect(a.find((x) => x.id === 'cig-mancante').testo).toMatch(/documento 2: n\. 7/);
+  });
+  it('IBAN diverso da quello delle fatture precedenti dello stesso fornitore', () => {
+    const noti = [{ iban: 'IT02 L123 4512 3451 2345 6789 012', numero: '800' }];
+    const a = controlliFattura(fattura(), { oggi, ibanNoti: noti });
+    expect(a.find((x) => x.id === 'iban-cambiato').testo).toMatch(/IBAN diverso.*IT02…9012/);
+    expect(ids(controlliFattura(fattura(), { oggi, ibanNoti: [{ iban: 'IT60X0542811101000000123456' }] }))).not.toContain('iban-cambiato');
+    expect(ids(controlliFattura(fattura(), { oggi, ibanNoti: [] }))).not.toContain('iban-cambiato');
   });
 });
 
