@@ -24,6 +24,8 @@ export function validaRegole(x) {
 const giorno = 86400000;
 const isoOggi = (d) => new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())).toISOString().slice(0, 10);
 /** Data locale 'aaaa-mm-gg' di un istante in ms (toISOString darebbe il giorno UTC: tra mezzanotte e le 2 in Italia è il giorno prima). */
+/** Data di oggi (giorno locale) come AAAA-MM-GG. */
+export const oggiLocale = () => isoOggi(new Date());
 export const dataLocaleDaMs = (ms) => (Number.isFinite(ms) && ms > 0 ? isoOggi(new Date(ms)) : '');
 const euro = (v) => Number(v).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' }) + ' €';
 const dataIt = (iso) => (iso ? iso.split('-').reverse().join('/') : '');
