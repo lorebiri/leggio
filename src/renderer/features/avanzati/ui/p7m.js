@@ -27,7 +27,7 @@ export async function analyze(app, bytes, name) {
 }
 
 /** Apre un file firmato: il contenuto si apre da solo (PDF in una scheda, fattura impaginata) con le firme accanto. */
-export async function openSignedFile(app, { bytes, name, path = null }, deps) {
+export async function openSignedFile(app, { bytes, name, path = null, readOnly = false }, deps) {
   let result;
   try { result = await analyze(app, bytes, name); }
   catch (err) {
@@ -40,7 +40,7 @@ export async function openSignedFile(app, { bytes, name, path = null }, deps) {
   const inner = innerName(name, result.kind);
   if (result.kind === 'pdf') {
     // il nome della scheda ricorda che il PDF viene da un file firmato («Salva il PDF contenuto» usa il nome originale)
-    const doc = await app.openBytes(result.content, { name: inner.replace(/\.pdf$/i, '') + ' (da .p7m).pdf' });
+    const doc = await app.openBytes(result.content, { name: inner.replace(/\.pdf$/i, '') + ' (da .p7m).pdf', readOnly });
     if (!doc) {
       // il PDF contenuto non si apre (danneggiato o alterato): mostriamo comunque l'esito della firma
       showSignaturePane(app, info, deps);
@@ -52,7 +52,7 @@ export async function openSignedFile(app, { bytes, name, path = null }, deps) {
     return doc;
   }
   if (result.kind === 'fattura' || (result.content && isFattura(result.content))) {
-    return deps.openFattura(app, result.content, inner, { firma: info });
+    return deps.openFattura(app, result.content, inner, { firma: info, readOnly });
   }
   // altro contenuto (immagine, zip, xml generico, firma separata)
   showSignaturePane(app, info, deps);

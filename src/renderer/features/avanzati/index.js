@@ -196,12 +196,12 @@ export default function register(app) {
   if (typeof app.registerOpener === 'function') {
     app.registerOpener({
       id: 'avanzati-firmati', name: 'File firmati (.p7m)', extensions: [...SIGNED_EXT],
-      open: (f) => deps.openSignedFile(app, { bytes: f.bytes, name: f.name, path: f.path }),
+      open: (f, _app, o = {}) => deps.openSignedFile(app, { bytes: f.bytes, name: f.name, path: f.path, readOnly: !!o.readOnly }),
     });
     app.registerOpener({
       id: 'avanzati-xml', name: 'Fattura elettronica (.xml)', extensions: ['xml'],
-      open: (f) => (isFattura(f.bytes) ? deps.openFattura(app, f.bytes, f.name, { path: f.path })
-        : looksLikeP7m(f.bytes) ? deps.openSignedFile(app, { bytes: f.bytes, name: f.name, path: f.path })
+      open: (f, _app, o = {}) => (isFattura(f.bytes) ? deps.openFattura(app, f.bytes, f.name, { path: f.path, readOnly: !!o.readOnly })
+        : looksLikeP7m(f.bytes) ? deps.openSignedFile(app, { bytes: f.bytes, name: f.name, path: f.path, readOnly: !!o.readOnly })
         : app.ui.toast(`«${f.name}» non è una fattura elettronica.`, { kind: 'warning' })),
     });
     app.registerOpener({ id: 'avanzati-eml', name: 'Messaggi PEC (.eml)', extensions: ['eml'], open: (f) => deps.openEml(app, f.bytes, f.name) });

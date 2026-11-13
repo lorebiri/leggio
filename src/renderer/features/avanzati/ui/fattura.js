@@ -23,7 +23,7 @@ export async function fatturaPdfDaBytes(app, bytes, { nomeFile = 'fattura.xml', 
   return { bytes: pdf, fattura: f, nome: nomeProposto(f) };
 }
 
-export async function openFattura(app, bytes, name, { firma = null, path = null } = {}, deps) {
+export async function openFattura(app, bytes, name, { firma = null, path = null, readOnly = false } = {}, deps) {
   let f;
   try { f = parseFattura(bytes); }
   catch (err) {
@@ -34,7 +34,7 @@ export async function openFattura(app, bytes, name, { firma = null, path = null 
     try {
       const pdf = await creaPdf(app, f, { compatta, firma, nomeFile: name });
       if (pdf) {
-        const doc = await app.openBytes(pdf, { name: nomeProposto(f) });
+        const doc = await app.openBytes(pdf, { name: nomeProposto(f), readOnly });
         if (doc) {
           doc.data.fattura = { f, xmlName: name, xmlBytes: bytes, xmlPath: path || firma?.sourcePath || null, firma, compatta };
           if (firma) doc.data.p7m = firma;
