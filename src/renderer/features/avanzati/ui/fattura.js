@@ -38,9 +38,8 @@ export async function openFattura(app, bytes, name, { firma = null, path = null 
         if (doc) {
           doc.data.fattura = { f, xmlName: name, xmlBytes: bytes, xmlPath: path || firma?.sourcePath || null, firma, compatta };
           if (firma) doc.data.p7m = firma;
-          app.sidebar.show('fattura');
-          const avvisi = f.corpi.flatMap((c) => c.avvisi.filter((a) => a.livello !== 'info'));
-          if (avvisi.length) app.ui.toast(avvisi.length === 1 ? 'C\'è un controllo da vedere su questa fattura.' : `Ci sono ${avvisi.length} controlli da vedere su questa fattura.`, { kind: 'warning', timeout: 9000, action: { label: 'Apri «Controlli»', run: () => app.sidebar.show('controlli') } });
+          app.sidebar.show('controlli');
+          // gli avvisi sono nel riquadro «Controlli», già aperto accanto alla fattura
           return doc;
         }
       }
@@ -92,39 +91,45 @@ function riepilogo(app, f, firma, deps) {
   return out;
 }
 
-/** Pannello laterale «Fattura elettronica» per i documenti nati da un XML. */
-export function registerFatturaPanel(app, deps) {
-  app.registerPanel({
-    id: 'fattura', title: 'Fattura elettronica', icon: 'invoice', order: 61,
-    render(c) {
-      const { h } = app.ui;
-      const doc = app.activeDoc;
-      const info = doc?.data?.fattura;
-      if (!info) {
-        c.append(h('div', { class: 'pad av-side' }, h('p', {}, 'Questo documento non è una fattura elettronica.'),
-          h('button', { class: 'btn', onclick: () => app.tools.run('fattura-elettronica') }, 'Apri fattura elettronica (XML)…')));
-        return;
-      }
-      const toggle = async () => {
-        try {
-          const compatta = !info.compatta;
-          const pdf = await creaPdf(app, info.f, { compatta, firma: info.firma, nomeFile: info.xmlName });
-          if (!pdf) return;
-          await app.applyEdit(compatta ? 'Vista compatta della fattura' : 'Vista completa della fattura', async () => pdf, doc);
-          info.compatta = compatta; app.settings.set('avanzati.fattura.compatta', compatta);
-          app.sidebar.show('fattura');
-        } catch (err) { app.reportError(err, 'Impaginazione non riuscita'); }
-      };
-      c.append(h('div', { class: 'pad av-side' },
-        h('div', { class: 'av-btn-col' },
-          h('button', { class: 'btn primary', onclick: () => app.save(doc, { as: true }) }, 'Salva come PDF…'),
-          h('button', { class: 'btn', onclick: () => app.print() }, 'Stampa…'),
-          h('button', { class: 'btn', onclick: toggle }, info.compatta ? 'Vista completa' : 'Vista compatta'),
-          h('button', { class: 'btn', onclick: () => app.exportFile(info.xmlBytes, info.xmlName.replace(/(\.p7m)+$/i, ''), [{ name: 'XML', extensions: ['xml'] }]) }, 'Salva l\'XML originale…')),
-        h('p', { class: 'av-note' }, `Copia leggibile del file ${info.xmlName}. Il documento con valore fiscale resta il file XML.`),
-        ...riepilogo(app, info.f, info.firma, deps)));
-    },
+/**
+ * Parti della fattura per il riquadro unico «Controlli» (non c'è più un pannello «Fattura elettronica» separato):
+ * allegati e firma (da mostrare dopo i dati da copiare) e i pulsanti Salva come PDF / Stampa / Vista / XML (in fondo).
+ */
+export function sezioniFattura(app, doc, deps) {
+  const { h } = app.ui;
+  const info = doc?.data?.fattura;
+  if (!info) return null;
+  const toggle = async () => {
+    try {
+      const compatta = !info.compatta;
+      const pdf = await creaPdf(app, info.f, { compatta, firma: info.firma, nomeFile: info.xmlName });
+      if (!pdf) return;
+      await app.applyEdit(compatta ? 'Vista compatta della fattura' : 'Vista completa della fattura', async () => pdf, doc);
+      info.compatta = compatta; app.settings.set('avanzati.fattura.compatta', compatta);
+      app.sidebar.show('controlli');
+    } catch (err) { app.reportError(err, 'Impaginazione non riuscita'); }
+  };
+  const extra = [];
+  info.f.corpi.forEach((c) => {
+    if (!c.allegati.length) return;
+    extra.push(h('div', { class: 'av-box' }, h('h3', {}, `Allegati nella fattura (${c.allegati.length})`),
+      h('ul', { class: 'av-list' }, c.allegati.map((a) => h('li', {},
+        h('div', { class: 'av-list-name' }, allegatoNome(a)), a.descrizione ? h('small', {}, a.descrizione) : null,
+        h('div', { class: 'av-row' },
+          h('button', { class: 'btn small', onclick: () => apriAllegato(app, a, deps) }, 'Apri'),
+          h('button', { class: 'btn small', onclick: () => salvaAllegato(app, a) }, 'Salva…')))))));
   });
+  if (info.firma) {
+    extra.push(h('details', { class: 'av-box' }, h('summary', {}, 'Firma digitale del file'),
+      deps.signatureView(app, info.firma, { compact: true }),
+      h('button', { class: 'btn small', onclick: () => deps.saveReport(app, info.firma) }, 'Salva rapporto di verifica (PDF)…')));
+  }
+  const pulsanti = h('div', { class: 'av-btn-col' },
+    h('button', { class: 'btn primary', onclick: () => app.save(doc, { as: true }) }, 'Salva come PDF…'),
+    h('button', { class: 'btn', onclick: () => app.exportFile(info.xmlBytes, info.xmlName.replace(/(\.p7m)+$/i, ''), [{ name: 'XML', extensions: ['xml'] }]) }, 'Salva l\'XML originale…'),
+    h('div', { class: 'av-row' }, h('button', { class: 'btn small', onclick: () => app.print() }, 'Stampa…'), h('button', { class: 'btn small', onclick: toggle }, info.compatta ? 'Vista completa' : 'Vista compatta')),
+    h('p', { class: 'av-note' }, `Copia leggibile del file ${info.xmlName}. Il documento con valore fiscale resta il file XML.`));
+  return { extra, pulsanti };
 }
 
 /** Spazio di lavoro con la fattura impaginata (anteprima web o ripiego). */

@@ -80,3 +80,25 @@ export { extOf };
 export function destroyPdf(pdf) {
   try { if (!pdf) return; if (typeof pdf.destroy === 'function') pdf.destroy(); else pdf.loadingTask?.destroy(); } catch {}
 }
+
+/**
+ * Salva con la finestra di sistema; se la finestra viene chiusa, il risultato NON si perde: si apre in una scheda
+ * (solo per i PDF) o si avvisa con «Riprova». → percorso salvato | 'scheda' | null
+ */
+export async function salvaOApri(app, bytes, nome, filtri = [{ name: 'PDF', extensions: ['pdf'] }]) {
+  const r = await app.exportFile(bytes, nome, filtri).catch(() => null);
+  if (r) return r.path || r.name || true;
+  if (/\.pdf$/i.test(nome)) { await app.openBytes(bytes, { name: nome }); app.ui.toast(`«${nome}» non è stato salvato: lo trovi in una scheda.`, { kind: 'info', timeout: 8000 }); return 'scheda'; }
+  app.ui.toast(`«${nome}» non è stato salvato.`, { kind: 'info', timeout: 8000, action: { label: 'Riprova', run: () => salvaOApri(app, bytes, nome, filtri) } });
+  return null;
+}
+
+/**
+ * Apre un risultato appena creato in una scheda segnata come «non salvata»: chiudendola, Leggio chiede se salvarla.
+ * Così nessun risultato si perde se si chiude una finestra di salvataggio.
+ */
+export async function apriRisultato(app, bytes, nome) {
+  const doc = await app.openBytes(bytes, { name: nome });
+  if (doc) { doc.dirty = true; try { app.bus.emit('document:changed', { doc, label: 'Nuovo documento non salvato' }); } catch {} }
+  return doc;
+}

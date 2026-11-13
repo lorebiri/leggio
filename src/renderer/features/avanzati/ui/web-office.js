@@ -1,5 +1,5 @@
 // Crea PDF da pagina web / file HTML e da documenti Office (LibreOffice o Microsoft Office).
-import { isDesktop, call, chooseFiles } from '../native.js';
+import { isDesktop, call, chooseFiles, apriRisultato } from '../native.js';
 
 export const OFFICE_EXT = ['doc', 'docx', 'docm', 'dot', 'dotx', 'odt', 'ott', 'rtf', 'txt', 'xls', 'xlsx', 'xlsm', 'ods', 'csv', 'ppt', 'pptx', 'pps', 'ppsx', 'odp', 'odg'];
 
@@ -37,7 +37,7 @@ export async function creaDaWeb(app) {
     opts.filePath = f.path; nome = f.name.replace(/\.[^.]+$/, '') + '.pdf';
   }
   const bytes = await app.ui.withProgress('Creazione del PDF', async (p) => { p.set(null, v.origine === 'url' ? 'Caricamento della pagina…' : 'Impaginazione…'); return call(app, 'html-to-pdf', opts); }, { cancellable: false });
-  if (bytes) await app.openBytes(bytes, { name: nome });
+  if (bytes) await apriRisultato(app, bytes, nome);
 }
 
 export async function creaDaOffice(app) {
@@ -61,7 +61,7 @@ export async function convertOfficeBytes(app, bytes, name) {
       return call(app, 'office-convert', { name, bytes, jobId, timeoutMs: 180000 });
     });
     if (!r) return false;
-    await app.openBytes(r.bytes, { name: name.replace(/\.[^.]+$/, '') + '.pdf' });
+    await apriRisultato(app, r.bytes, name.replace(/\.[^.]+$/, '') + '.pdf');
     return true;
   } catch (err) {
     if (err.code === 'NO_OFFICE') { await spiegaLibreOffice(app); return 'stop'; }

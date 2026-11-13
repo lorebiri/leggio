@@ -1,3 +1,4 @@
+import { salvaOApri } from '../native.js';
 // «Pronto per la pubblicazione» (Amministrazione Trasparente): procedura guidata in un pannello a destra, sul
 // documento attivo. Usa i servizi delle altre aree: oscuramento (sicurezza), sanificazione (sicurezza),
 // PDF/A e controllo di accessibilità (conversione). Alla fine salva «_pubblicabile.pdf» e un rapporto PDF da archiviare.
@@ -113,7 +114,7 @@ export function prontoPubblicazione(app) {
           if (!ok) { doc.name = vecchio; return; }
           const bytes = await app.currentBytes(doc);
           const rap = await rapportoPubblicazione(app.lib.PDFLib, { originale: s.originale, nome: doc.name, sha256: await sha256Hex(bytes), dimensione: bytes.length, pagine: doc.pageCount, esiti: s.esiti, inizio: s.inizio });
-          await app.exportFile(rap, `${base}_pubblicabile_rapporto.pdf`, [{ name: 'PDF', extensions: ['pdf'] }]);
+          await salvaOApri(app, rap, `${base}_pubblicabile_rapporto.pdf`);
           segna(s, id, true, `Salvati «${doc.name}» e il rapporto.`);
         }, true)];
       default: return [];

@@ -33,9 +33,11 @@ const dataIt = (iso) => (iso ? iso.split('-').reverse().join('/') : '');
 
 // ---------------------------------------------------------------- FatturaPA
 /**
- * f: fattura (parseFattura). o: { oggi: Date, dataRicezione: 'aaaa-mm-gg' | null, regole }
+ * f: fattura (parseFattura). o: { oggi: Date, dataRicezione: 'aaaa-mm-gg' | null, fonteRicezione: 'metadati'|'indicata'|'stima',
+ *   cupDovuto: bool (progetto d'investimento, CUP nell'ordine o nella pratica, o regola dell'ufficio), ibanNoti: [{ iban, numero, data }],
+ *   regole }. Senza data di ricezione non si dice nulla sui 15 giorni (niente richieste ripetute).
  */
-export function controlliFattura(f, { oggi = new Date(), dataRicezione = null, regole: R = regole() } = {}) {
+export function controlliFattura(f, { oggi = new Date(), dataRicezione = null, fonteRicezione = 'indicata', cupDovuto = false, ibanNoti = [], regole: R = regole() } = {}) {
   const out = [];
   const add = (x) => out.push({ livello: 'avviso', ...x });
   // 15 giorni dalla consegna SdI per accettare o rifiutare
@@ -43,17 +45,23 @@ export function controlliFattura(f, { oggi = new Date(), dataRicezione = null, r
   if (dataRicezione) {
     const scad = new Date(Date.parse(dataRicezione) + gg * giorno).toISOString().slice(0, 10);
     const rimasti = Math.round((Date.parse(scad) - Date.parse(isoOggi(oggi))) / giorno);
-    if (rimasti < 0) add({ id: 'sdi-scaduto', livello: 'info', testo: `Termine per rifiutare scaduto il ${dataIt(scad)}: la fattura si considera accettata.`, aiuto: R.sdi.fonte });
-    else add({ id: 'sdi-giorni', livello: rimasti <= 5 ? 'avviso' : 'info', testo: rimasti === 0 ? 'Oggi è l\'ultimo giorno per accettare o rifiutare (in U-GOV).' : `Restano ${rimasti} giorni per accettare o rifiutare (fino al ${dataIt(scad)}).`, aiuto: R.sdi.fonte, azione: { tipo: 'data-ricezione', etichetta: 'Cambia la data di ricezione' } });
-  } else add({ id: 'sdi-data', livello: 'info', testo: `Per contare i ${gg} giorni per accettare o rifiutare serve la data di ricezione dallo SdI.`, aiuto: R.sdi.fonte, azione: { tipo: 'data-ricezione', etichetta: 'Indica la data di ricezione' } });
+    const stima = fonteRicezione === 'stima' ? ' Data stimata dal file: correggila se serve.' : '';
+    const az = { tipo: 'data-ricezione', etichetta: 'Correggi la data', valore: dataRicezione };
+    if (rimasti < 0) { if (rimasti >= -30) add({ id: 'sdi-scaduto', livello: 'info', testo: `Termine per rifiutare scaduto il ${dataIt(scad)}: la fattura si considera accettata.${stima}`, aiuto: R.sdi.fonte, azione: az }); }
+    else add({ id: 'sdi-giorni', livello: rimasti <= 5 ? 'avviso' : 'info', testo: (rimasti === 0 ? 'Oggi è l\'ultimo giorno per accettare o rifiutare (in U-GOV).' : `Restano ${rimasti} giorni per accettare o rifiutare (fino al ${dataIt(scad)}).`) + stima, aiuto: R.sdi.fonte, azione: az });
+  }
   f.corpi.forEach((c, i) => {
     const qual = f.corpi.length > 1 ? ` (documento ${i + 1}: n. ${c.numero})` : '';
     // CIG / CUP
     const cigErr = c.cig.filter((x) => !/^[A-Z0-9]{10}$/.test(x));
     if (!c.cig.length) add({ id: 'cig-mancante', testo: `Manca il CIG${qual}. È tra le cause di rifiuto ammesse, salvo i casi esclusi dalla tracciabilità.`, aiuto: R.cigCup.fonte, azione: { tipo: 'copia', etichetta: 'Copia il motivo', valore: 'Fattura priva del CIG (art. 25 DL 66/2014; causa di rifiuto ai sensi del DM 132/2020)' } });
     else if (cigErr.length) add({ id: 'cig-formato', testo: `CIG non valido: ${cigErr.join(', ')}${qual}. Deve avere 10 caratteri.`, aiuto: R.cigCup.fonte });
-    if (!c.cup.length) add({ id: 'cup-mancante', livello: 'info', testo: `Manca il CUP${qual}. Se l'acquisto è su un progetto con CUP, è tra le cause di rifiuto ammesse.`, aiuto: R.cigCup.fonte });
+    if (!c.cup.length) { if (cupDovuto) add({ id: 'cup-mancante', testo: `Manca il CUP${qual}, che questo acquisto richiede. È tra le cause di rifiuto ammesse.`, aiuto: R.cigCup.fonte }); }
     else if (c.cup.some((x) => !/^[A-Z]\d{2}[A-Z][0-9A-Z]{11}$/.test(x))) add({ id: 'cup-formato', testo: `CUP non valido${qual}: deve avere 15 caratteri.`, aiuto: R.cigCup.fonte });
+    // IBAN diverso da quello delle fatture precedenti dello stesso fornitore
+    const iban = c.pagamenti.flatMap((p) => p.dettagli.map((d) => d.iban)).find(Boolean);
+    const noti = [...new Set((ibanNoti || []).map((x) => String(x.iban || '').replace(/\s+/g, '').toUpperCase()).filter(Boolean))];
+    if (i === 0 && iban && noti.length && !noti.includes(iban.toUpperCase())) add({ id: 'iban-cambiato', testo: `IBAN diverso da quello delle fatture precedenti di questo fornitore (${noti[0].slice(0, 4)}…${noti[0].slice(-4)}). Verifica il conto dedicato prima di pagare.`, aiuto: 'L. 136/2010 art. 3 (tracciabilità: conto dedicato dichiarato dal fornitore). Confronto con le fatture già in archivio.', azione: { tipo: 'copia', etichetta: 'Copia i due IBAN', valore: `IBAN in fattura: ${iban}\nIBAN precedente: ${noti.join(', ')}` } });
     // nota di credito senza fattura collegata
     if (c.tipo === 'TD04' && !c.riferimenti.some((r) => r.tipo === 'DatiFattureCollegate' && r.idDocumento)) add({ id: 'nc-senza-fattura', testo: `Nota di credito senza la fattura collegata${qual}. Chiedi al fornitore il riferimento.`, aiuto: 'Manuale CNR fatturazione elettronica: le note di credito vanno abbinate alla fattura che rettificano.', azione: { tipo: 'cerca', etichetta: 'Cerca la fattura del fornitore', valore: f.cedente?.partitaIva || f.cedente?.nome } });
     // split payment con ritenuta
