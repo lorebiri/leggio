@@ -99,3 +99,11 @@ Test: `test/sicurezza-preset.test.js` (contratto di lavoro autonomo e decreto di
 **Recapiti dell'ente mai oscurati**: telefoni ed email presenti nel Profilo dell'ente (`app.services.profiloEnte()`,
 area avanzati: sede, segreteria, PEC) vengono esclusi dai risultati in «Cerca e oscura», nella conferma di
 «Pronto per la pubblicazione» e nelle Azioni guidate (stesso numero anche scritto in altro formato, es. +39 050-3152443).
+
+**Modello proposto da solo**: se il documento sembra un incarico, un contratto di collaborazione o di lavoro autonomo,
+un assegno o una borsa (testo delle prime pagine, oppure tipo «Incarico o assegno» dell'archivio via
+`app.services.statoArchivio`), «Cerca e oscura» e la conferma di «Pronto per la pubblicazione» partono da
+«Incarichi e assegni», con la riga «Proposto perché…». La proposta non viene ricordata come scelta dell'utente.
+Nelle Azioni guidate c'è «Scegli da solo». **Profilo dell'ente vuoto**: una riga propone «Compila il profilo…»
+(`app.tools.run('entity-profile')`); dopo il salvataggio i recapiti dell'ente escono subito dall'elenco; se l'utente
+rinuncia o sceglie «Non ora» non viene più chiesto (`sic.chiediProfiloEnte`).
