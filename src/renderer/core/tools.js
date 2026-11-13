@@ -59,6 +59,9 @@ export class ToolRegistry {
     const t = this.tools.get(id);
     if (!t) return toast('Strumento non disponibile: ' + id, { kind: 'error' });
     if (t.needsDoc && !this.app.activeDoc) return toast('Apri prima un documento PDF', { kind: 'warning' });
+    // un solo pannello per volta: avviare uno strumento chiude il pannello destro aperto prima
+    if (!this.app.el.right.hidden) this.app.closeRightPanel({ notify: true });
+    this.app.bus.emit('tool:run', { id: t.id, needsDoc: t.needsDoc });
     try {
       if (t.interactive) return this.activate(t);
       await t.run(this.app);

@@ -334,3 +334,4 @@ html, body, #app, .app, .body, .center, .main, .titlebar { overflow: clip; }
 :root .lg-sic-info { background: var(--info-soft); border-color: var(--info-line); color: var(--ink); }
 :root .lg-meter { background: var(--surface-3); }
 :root .leggio-overlay .lg-red .lg-x { background: var(--danger-solid); }
+.toolbar.more-shown .tools-btn { display: none; }

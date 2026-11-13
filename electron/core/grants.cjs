@@ -23,7 +23,7 @@ function createGrants({ caseInsensitive = process.platform === 'win32' || proces
     whyNotWrite(p) {
       const name = path.basename(String(p));
       if (readOnly.has(norm(p))) return `«${name}» è aperto in sola lettura: l'originale non può essere sovrascritto. Salva una copia con un altro nome.`;
-      if (!files.has(norm(p))) return `Leggio non ha il permesso di scrivere «${name}» (file non aperto né scelto dall'utente). Usa «Salva con nome».`;
+      if (!files.has(norm(p))) return `«${name}» non è stato aperto da te in Leggio (per esempio viene dall'archivio): Leggio non lo sovrascrive. Salva una copia con «Salva con nome».`;
       return null;
     },
     /** Scelta in «Salva con nome»: tutto consentito tranne un file in sola lettura. */
