@@ -85,8 +85,9 @@ const soloCifre = (s) => String(s).replace(/\D/g, '').replace(/^(00)?39(?=\d{9,}
 /** Dal profilo dell'ente (oggetto con testi qualsiasi) → { emails:Set, phones:Set } */
 export function datiEnte(profilo) {
   const emails = new Set(); const phones = new Set();
-  for (const v of Object.values(profilo || {})) {
-    if (typeof v !== 'string') continue;
+  const NON_RECAPITI = new Set(['partitaIva', 'codiceFiscale', 'codiceUfficio', 'codiceIpa', 'cap']);
+  for (const [k, v] of Object.entries(profilo || {})) {
+    if (typeof v !== 'string' || NON_RECAPITI.has(k)) continue;
     for (const m of v.matchAll(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g)) emails.add(m[0].toLowerCase());
     for (const m of v.matchAll(/(?:\+|00)?[\d][\d\s./-]{5,}\d/g)) { const d = soloCifre(m[0]); if (d.length >= 6 && d.length <= 13) phones.add(d); }
   }
@@ -104,3 +105,19 @@ export function isDatoEnte(hit, ente) {
   }
   return false;
 }
+
+// ---- Proposta automatica del modello ----
+// Stesse espressioni dell'archivio (tipo «Incarico o assegno»), più alcune forme frequenti nei decreti.
+const INCARICO_RE = /\bconferimento\s+(?:di\s+|dell['’]\s*)?(?:incarico|assegno|borsa)\b|\bcontratto\s+di\s+(?:collaborazione|lavoro\s+autonomo|prestazione\s+(?:d['’]opera|occasionale)|ricerca)\b|\bassegn[oi]\s+(?:di|per\s+(?:lo\s+svolgimento\s+di\s+)?attivit[àa]\s+di)\s+ricerca\b|\bincarico\s+(?:di\s+collaborazione|post-?doc|di\s+ricerca|professionale|di\s+lavoro\s+autonomo)\b|\bborsa\s+di\s+(?:studio|ricerca)\b|\bprestazione\s+occasionale\b|\bco\.?co\.?co\b/i;
+
+/** Il testo sembra un incarico, un contratto di collaborazione, un assegno o una borsa? */
+export function sembraIncarico(testo) { return INCARICO_RE.test(String(testo || '').replace(/\s+/g, ' ')); }
+
+/** Modello da proporre: 'incarichi' se il documento sembra un incarico (dal testo o dal tipo d'archivio). */
+export function presetConsigliato({ testo, tipoArchivio } = {}) {
+  if (tipoArchivio === 'incarico' || sembraIncarico(testo)) return 'incarichi';
+  return null;
+}
+
+/** Il profilo dell'ente ha almeno un telefono o un'email? */
+export function profiloEnteCompilato(profilo) { const d = datiEnte(profilo); return d.emails.size > 0 || d.phones.size > 0; }

@@ -3,7 +3,7 @@
 // Un errore lanciato = file «non elaborato» e NON salvato (così un oscuramento non verificato non esce mai).
 import { PDFJS_ASSETS } from '../../core/pdf.js';
 import { buildMatchers, MODELLI } from './logica/modelli.js';
-import { PRESET, getPreset, preselect, FIRMA, datiEnte, isDatoEnte } from './logica/preset.js';
+import { PRESET, getPreset, preselect, FIRMA, datiEnte, isDatoEnte, presetConsigliato } from './logica/preset.js';
 import { VOCI, sanitize } from './logica/sanifica.js';
 import { LIVELLI } from './logica/comprimi.js';
 import { openDecrypted, PasswordError } from './logica/cifratura.js';
@@ -88,7 +88,7 @@ export function operazioniSicurezza(app) {
     {
       id: 'oscura-modelli', label: 'Oscura dati personali (Redazione)', description: 'Trova e oscura davvero codici fiscali, IBAN, email, telefoni… con verifica obbligatoria',
       fields: [
-        { name: 'modello', label: 'Modello pronto', type: 'select', value: '', options: [{ value: '', label: 'Scelgo io i dati (caselle qui sotto)' }, ...PRESET.map((p) => ({ value: p.id, label: p.nome }))], help: 'Con un modello pronto le caselle qui sotto non contano. «Incarichi e assegni»: oscura indirizzo, telefono, email personale, nascita, codice fiscale, IBAN e firma; lascia nome, partita IVA e compenso.' },
+        { name: 'modello', label: 'Modello pronto', type: 'select', value: '', options: [{ value: '', label: 'Scelgo io i dati (caselle qui sotto)' }, { value: 'auto', label: 'Scegli da solo (incarichi e assegni riconosciuti dal testo)' }, ...PRESET.map((p) => ({ value: p.id, label: p.nome }))], help: 'Con un modello pronto le caselle qui sotto non contano. «Incarichi e assegni»: oscura indirizzo, telefono, email personale, nascita, codice fiscale, IBAN e firma; lascia nome, partita IVA e compenso.' },
         ...MODELLI.map((m) => ({ name: 'm_' + m.id, label: m.label, type: 'checkbox', value: ['cf', 'iban', 'email', 'tel'].includes(m.id) })),
         { name: 'parole', label: 'Altre parole da oscurare (separate da virgola, es. Mario Rossi)', type: 'text', value: '' },
         { name: 'etichetta', label: 'Testo sui riquadri (facoltativo)', type: 'text', value: '' },
@@ -98,11 +98,17 @@ export function operazioniSicurezza(app) {
           { value: 'ferma', label: 'Non salvare il file e segnalarlo' },
           { value: 'ignora', label: 'Ignorale (i dati nelle scansioni restano visibili)' }] },
       ],
-      summary: (p) => (getPreset(p.modello) ? `Oscura con il modello «${getPreset(p.modello).nome}»` : `Oscura: ${[...MODELLI.filter((m) => p['m_' + m.id]).map((m) => m.label), p.parole ? 'parole scelte' : null].filter(Boolean).join(', ') || 'niente'}`),
-      validate: (p) => (getPreset(p.modello) || MODELLI.some((m) => p['m_' + m.id]) || String(p.parole || '').trim() ? null : 'Scegli un modello pronto, almeno un tipo di dato o una parola.'),
+      summary: (p) => (p.modello === 'auto' ? 'Oscura con il modello adatto al documento' : getPreset(p.modello) ? `Oscura con il modello «${getPreset(p.modello).nome}»` : `Oscura: ${[...MODELLI.filter((m) => p['m_' + m.id]).map((m) => m.label), p.parole ? 'parole scelte' : null].filter(Boolean).join(', ') || 'niente'}`),
+      validate: (p) => (p.modello === 'auto' || getPreset(p.modello) || MODELLI.some((m) => p['m_' + m.id]) || String(p.parole || '').trim() ? null : 'Scegli un modello pronto, almeno un tipo di dato o una parola.'),
       async runBytes(bytes, p, ctx = {}) {
         const { pdfjs } = app.lib;
-        const preset = getPreset(p.modello);
+        let preset = getPreset(p.modello);
+        if (p.modello === 'auto') {
+          // legge l'inizio del documento per capire se è un incarico o un assegno
+          const t0 = pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false, ...PDFJS_ASSETS });
+          try { const d0 = await t0.promise; let testo = ''; for (let i = 1; i <= Math.min(3, d0.numPages); i++) testo += (await (await d0.getPage(i)).getTextContent()).items.map((x) => x.str).join(' ') + '\n'; preset = getPreset(presetConsigliato({ testo }) || 'dati'); }
+          catch { preset = getPreset('dati'); } finally { await t0.destroy(); }
+        }
         const matchers = buildMatchers({ models: preset ? preset.cerca : MODELLI.filter((m) => p['m_' + m.id]).map((m) => m.id), terms: String(p.parole || '').split(/[,;\n]/), wholeWord: true });
         await apri(bytes); // controlla cifratura e leggibilità con messaggi chiari
         let cur = bytes; let ocrNote = '';
@@ -139,7 +145,7 @@ export function operazioniSicurezza(app) {
           }
           const per = {};
           for (const h of r.found.hits) per[h.matcher] = (per[h.matcher] || 0) + 1;
-          ctx.note = ocrNote + `oscurati ${r.found.hits.length} dati (${Object.entries(per).map(([k, n]) => `${k}: ${n}`).join(', ')}) su ${res.pages} pagine; verifica superata` + (preset?.firma && !per[FIRMA] ? '; nessuna firma riconosciuta come immagine: controllare a mano' : '') + (r.found.textless.length ? `; ${r.found.textless.length} pagine senza testo ignorate` : '');
+          ctx.note = ocrNote + (p.modello === 'auto' ? `modello «${preset.nome}»; ` : '') + `oscurati ${r.found.hits.length} dati (${Object.entries(per).map(([k, n]) => `${k}: ${n}`).join(', ')}) su ${res.pages} pagine; verifica superata` + (preset?.firma && !per[FIRMA] ? '; nessuna firma riconosciuta come immagine: controllare a mano' : '') + (r.found.textless.length ? `; ${r.found.textless.length} pagine senza testo ignorate` : '');
           return res.out;
         } finally { await r.task.destroy(); }
       },

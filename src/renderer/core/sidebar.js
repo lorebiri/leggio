@@ -9,8 +9,31 @@ export class Sidebar {
     this.pageActions = []; // azioni nel menu contestuale delle miniature
   }
 
-  /** def: { id, title, icon, order, render(container, app) → opzionale cleanup(); onDocument?(doc) } */
-  registerPanel(def) { this.panels.set(def.id, { order: 50, ...def }); this.#renderRail(); }
+  /**
+   * def: { id, title, railLabel, icon, order, render(container, app) → opzionale cleanup(); onDocument?(doc),
+   *        visible?(doc, app) → boolean | Promise<boolean> } — con visible il pannello compare nella colonna
+   *        solo quando serve (es. «Livelli» solo se il documento ha livelli).
+   */
+  registerPanel(def) {
+    const d = { order: 50, ...def };
+    if (d.id === 'layers' && !d.visible) d.visible = hasLayers; // in secondo piano: solo se il documento ha livelli
+    this.panels.set(d.id, d); this.#renderRail();
+  }
+
+  /** Ricalcola i pannelli visibili per il documento attivo (chiamato al cambio di documento). */
+  async updateVisibility(doc = this.app.activeDoc) {
+    const vis = new Map();
+    for (const p of this.panels.values()) {
+      if (!p.visible) continue;
+      let v = false;
+      try { v = doc ? !!(await p.visible(doc, this.app)) : false; } catch { v = false; }
+      vis.set(p.id, v);
+    }
+    if (doc !== this.app.activeDoc) return;
+    this.visibility = vis;
+    if (this.current && vis.get(this.current) === false && !this.app.el.root.classList.contains('sidebar-closed')) this.show('thumbs');
+    else this.#renderRail();
+  }
 
   /** Azione nel menu contestuale delle miniature. def: { label, icon, run(app, pageIndices), danger, group } */
   registerPageAction(def) { this.pageActions.push(def); }
@@ -18,6 +41,7 @@ export class Sidebar {
   #renderRail() {
     this.rail.innerHTML = '';
     for (const p of [...this.panels.values()].sort((a, b) => a.order - b.order)) {
+      if (p.visible && this.visibility?.get(p.id) !== true) continue;
       const b = h('button', { class: 'rail-btn' + (this.current === p.id ? ' active' : ''), title: p.title, 'aria-label': p.title, 'aria-pressed': String(this.current === p.id), onclick: () => this.toggle(p.id), html: icon(p.icon, 20) });
       // etichetta breve sotto l'icona (Impostazioni › «Mostra i nomi sotto le icone»); def.railLabel per sceglierla
       b.append(h('span', { class: 'rail-label', 'aria-hidden': 'true' }, p.railLabel || railLabel(p.title)));
@@ -247,4 +271,14 @@ export function railLabel(title) {
   if (w.join(' ').length <= 12) return w.join(' ');
   const keep = w.filter((x, i) => i === 0 || !/^(il|lo|la|i|gli|le|un|una|di|del|della|dei|delle|e|in|da|con|per|a|al|alla)$/i.test(x));
   return keep.slice(0, 2).join(' ');
+}
+
+/** Il documento ha livelli (contenuto opzionale)? */
+export async function hasLayers(doc) {
+  if (!doc?.pdf) return false;
+  if (doc.data.__hasLayersVersion === doc.version) return doc.data.__hasLayers;
+  const cfg = await doc.pdf.getOptionalContentConfig();
+  const r = !!cfg?.getOrder?.()?.length;
+  doc.data.__hasLayers = r; doc.data.__hasLayersVersion = doc.version;
+  return r;
 }
