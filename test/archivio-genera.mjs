@@ -280,7 +280,12 @@ for (const [tipo, quota] of piano) {
   for (let k = 0; k < n; k++, i++) {
     if (tipo === 'fattura') await scrivi(await fattura());
     else if (tipo === 'nota') await scrivi(await fattura(true));
-    else if (tipo === 'xml') await scrivi(xmlFattura());
+    else if (tipo === 'xml') {
+      const x = xmlFattura(); await scrivi(x);
+      // metà con la ricevuta di consegna dello SdI accanto (data di ricezione esatta)
+      if (rnd() < 0.5) { const base = x.nome.replace(/\.xml$/i, ''); const dt = (x.bytes.toString().match(/<Data>(\d{4}-\d{2}-\d{2})/) || [])[1] || '2026-01-01';
+        await scrivi({ sub: x.sub, nome: `${base}_RC_001.xml`, bytes: Buffer.from(`<?xml version="1.0"?><ns3:RicevutaConsegna xmlns:ns3="http://www.fatturapa.gov.it/sdi/messaggi/v1.0"><IdentificativoSdI>${int(100000, 999999)}</IdentificativoSdI><NomeFile>${x.nome}</NomeFile><DataOraRicezione>${iso(giorni(new Date(dt + 'T00:00:00Z'), 1))}T10:00:00.000+01:00</DataOraRicezione><DataOraConsegna>${iso(giorni(new Date(dt + 'T00:00:00Z'), 1))}T10:05:00.000+01:00</DataOraConsegna></ns3:RicevutaConsegna>`) }); }
+    }
     else if (tipo === 'p7m') { const x = rnd() < 0.5 ? xmlFattura() : { ...(await contratto(0)), sub: 'Firmati' }; await scrivi({ ...x, nome: x.nome + '.p7m', bytes: firmaP7m(x.bytes) }); }
     else if (tipo === 'durc') await scrivi(await durc(k));
     else if (tipo === 'ordine') await scrivi(await ordine());

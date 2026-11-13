@@ -5,7 +5,7 @@ import { disegnaOggi } from './oggi.js';
 import { apriDocumento, dialogoStato, dialogoEtichette, esportaRegistro, azioniGuidate, copieConNomeProposto, fattureInPdf, stampaSelezionati, firmaSelezionati } from './azioni.js';
 import { apriCartelle } from './cartelle.js';
 import { apriScheda, testoSemaforo } from './scheda.js';
-import { TIPI, TIPO_LABEL } from '../lib/estrai.js';
+import { TIPI, TIPO_LABEL, etichettaFirma } from '../lib/estrai.js';
 import { VOCI_STATO } from '../lib/stati.js';
 import { ORDINAMENTI } from '../lib/motore.js';
 import { euro, dataIt, dataDaTesto } from '../lib/testo.js';
@@ -17,6 +17,7 @@ const SEGNALI = [
   { value: '', label: 'Tutti i documenti' },
   { value: 'scansione', label: 'Scansioni senza testo (da passare all\'OCR)' },
   { value: 'firmato', label: 'Con firma digitale' },
+  { value: 'firma-non-valida', label: 'Con firma NON valida' },
   { value: 'protetto', label: 'Protetti da password' },
   { value: 'errore', label: 'Non letti (danneggiati o illeggibili)' },
   { value: 'senza-dati', label: 'Senza dati riconosciuti' },
@@ -80,13 +81,13 @@ export function apriVista(app, A, opts = {}) {
   const campo = (label, input) => h('label', { class: 'ar-campo' }, h('span', {}, label), input);
   // i filtri meno usati stanno in «Altri filtri»: con i caratteri grandi la lista deve restare visibile
   const altri = h('div', { class: 'ar-filtri ar-filtri-altri', hidden: !app.settings.get('archivio.altriFiltri', false) },
-    campo('Protocollo dal', fPDal), campo('al', fPAl), campo('UOR', fUor), campo('Fornitore', fForn), campo('Data dal', fDal), campo('al', fAl), campo('CIG / CUP', fCig), campo('Cartella', fCartella), campo('Mostra', fSegnale), dlForn);
+    campo('N. protocollo', fProt), campo('Protocollo dal', fPDal), campo('al', fPAl), campo('UOR', fUor), campo('Fornitore', fForn), campo('Data dal', fDal), campo('al', fAl), campo('CIG / CUP', fCig), campo('Cartella', fCartella), campo('Mostra', fSegnale), dlForn);
   const altriBtn = h('button', { class: 'btn', 'aria-expanded': String(!altri.hidden), onclick: () => { altri.hidden = !altri.hidden; altriBtn.setAttribute('aria-expanded', String(!altri.hidden)); app.settings.set('archivio.altriFiltri', !altri.hidden); aggiornaAltri(); } });
   const aggiornaAltri = () => {
-    const n = [fPDal.value.trim(), fPAl.value.trim(), fUor.value.trim(), fForn.value.trim(), fDal.value.trim(), fAl.value.trim(), fCig.value.trim(), fCartella.value, fSegnale.value].filter(Boolean).length;
+    const n = [fProt.value.trim(), fPDal.value.trim(), fPAl.value.trim(), fUor.value.trim(), fForn.value.trim(), fDal.value.trim(), fAl.value.trim(), fCig.value.trim(), fCartella.value, fSegnale.value].filter(Boolean).length;
     altriBtn.textContent = (altri.hidden ? 'Altri filtri' : 'Meno filtri') + (n ? ` (${n} attiv${n === 1 ? 'o' : 'i'})` : '');
   };
-  const filtri = h('div', {}, h('div', { class: 'ar-filtri' }, campo('N. protocollo', fProt), campo('Tipo', fTipo), campo('Stato', fStato), campo('Ordina per', fOrdine), altriBtn, azzera), altri);
+  const filtri = h('div', {}, h('div', { class: 'ar-filtri' }, campo('Tipo', fTipo), campo('Stato', fStato), campo('Ordina per', fOrdine), altriBtn, azzera), altri);
   const conteggio = h('div', { class: 'ar-conteggio', role: 'status', 'aria-live': 'polite' });
   const selInfo = h('span', { class: 'ar-selinfo' });
   const tuttiChk = h('input', { type: 'checkbox', 'aria-label': 'Seleziona tutti i risultati', onchange: () => { if (tuttiChk.checked) st.righe.forEach((r) => st.sel.add(r.id)); else st.sel.clear(); aggiornaSel(); lista.ridisegna(); } });
@@ -178,7 +179,7 @@ export function apriVista(app, A, opts = {}) {
       r.segnaturaDaLeggere ? chip('Protocollo: da leggere', 'neutro') : null,
       r.segnaturaNonLetta ? chip('Segnatura non letta', 'warn') : null,
       r.scansione ? chip('Scansione: da OCR', 'warn') : null,
-      r.firme ? chip(r.firme === 1 ? 'Firmato digitalmente' : `${r.firme} firme`, 'firma') : null,
+      (() => { const e = etichettaFirma(r); if (!e) return null; const x = chip(e.testo, e.classe); x.title = e.titolo; return x; })(),
       r.protetto ? chip('Protetto da password', 'warn') : null,
       r.errore ? chip(r.errore.length > 60 ? r.errore.slice(0, 58) + '…' : r.errore, 'err') : null,
       r.offline ? chip('Cartella non raggiungibile', 'err') : null,
@@ -293,7 +294,7 @@ export function apriVista(app, A, opts = {}) {
     st.filtro = {};
     if (f.tipo) fTipo.value = f.tipo;
     if (f.fornitore) fForn.value = f.fornitore;
-    if (f.protocollo) fProt.value = f.protocollo;
+    if (f.protocollo) { fProt.value = f.protocollo; altri.hidden = false; }
     if (f.pronta) fSegnale.value = 'pagamento:' + f.pronta;
     if (f.stato) fStato.value = f.stato;
     if (f.segnale) fSegnale.value = f.segnale;
@@ -314,6 +315,10 @@ export function apriVista(app, A, opts = {}) {
     }
   });
   const offDoc = [app.bus.on('document:loaded', () => api.chiudi()), app.bus.on('document:activated', ({ doc }) => { if (doc) api.chiudi(); })];
+  // un altro strumento a tutta area (pratica di missione, azioni guidate…) prende il posto dell'archivio:
+  // non si lasciano pannelli sovrapposti
+  const altroPannello = new MutationObserver((muts) => { if (muts.some((m) => [...m.addedNodes].some((n) => n.nodeType === 1 && n !== el && n.matches?.('.av-pane, section[role=region]')))) api.chiudi(); });
+  altroPannello.observe(stage, { childList: true });
   const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('.backdrop') && el.isConnected) { e.stopPropagation(); api.chiudi(); } };
   document.addEventListener('keydown', onKey, true);
 
@@ -325,7 +330,8 @@ export function apriVista(app, A, opts = {}) {
     },
     chiudi() {
       if (!el.isConnected) return;
-      el.remove(); off(); offDoc.forEach((f) => f?.()); lista.distruggi(); document.removeEventListener('keydown', onKey, true);
+      el.remove(); off(); offDoc.forEach((f) => f?.()); lista.distruggi(); altroPannello.disconnect(); document.removeEventListener('keydown', onKey, true);
+      if (app.el.right.querySelector('.ar-scheda-doc')) app.closeRightPanel(); // la Scheda appartiene all'archivio
       if (corrente === api) corrente = null;
     },
     get stato() { return st; },

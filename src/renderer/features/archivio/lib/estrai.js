@@ -5,7 +5,33 @@ import { analizza, trovaDate } from '../../avanzati/lib/rinomina.js';
 import { numeroIt } from './testo.js';
 
 /** Versione delle regole di estrazione: se cambia, i documenti vengono riletti alla prossima scansione. */
-export const VERSIONE_ESTRAZIONE = 6; // 6: IBAN, tracciabilità, incarichi, data di fine // 4: segnatura di protocollo (Titulus) nel testo; 5: striscia-immagine
+export const VERSIONE_ESTRAZIONE = 8; // 7: verifica delle firme .p7m; 8: file SdI (ricezione)
+
+/**
+ * Esito della verifica di una busta .p7m (risultato di openP7m con verify: true):
+ * 'non-valida' se una firma non è integra (documento alterato o firma rovinata), 'valida' se tutte sono integre,
+ * 'non-verificata' altrimenti (es. algoritmo non supportato, solo marca temporale).
+ */
+export function esitoFirmeP7m(result) {
+  const tutte = [];
+  const giro = (s) => { tutte.push(s); (s.counterSigners || []).forEach(giro); };
+  for (const l of result?.levels || []) for (const s of l.signers || []) giro(s);
+  if (!tutte.length) return 'non-verificata';
+  if (tutte.some((s) => s.integrity === 'invalid')) return 'non-valida';
+  if (tutte.every((s) => s.integrity === 'valid')) return 'valida';
+  return 'non-verificata';
+}
+
+/**
+ * Etichetta della firma per l'elenco: «Firmato digitalmente» SOLO se la firma è stata verificata integra.
+ * → { testo, classe } | null
+ */
+export function etichettaFirma(r) {
+  if (!r?.firme) return null;
+  if (r.firmaEsito === 'non-valida') return { testo: 'Firma non valida', classe: 'err', titolo: 'La verifica della busta .p7m è fallita: il documento potrebbe essere stato modificato dopo la firma. Aprilo per i dettagli.' };
+  if (r.firmaEsito === 'valida') return { testo: r.firme === 1 ? 'Firmato digitalmente' : `Firmato digitalmente (${r.firme} firme)`, classe: 'firma', titolo: 'Firma integra. La validità del certificato (revoca, certificatore) si controlla all\'apertura.' };
+  return { testo: r.firme === 1 ? 'Contiene una firma (da verificare)' : `Contiene ${r.firme} firme (da verificare)`, classe: 'neutro', titolo: 'Firma nel PDF: Leggio la verifica quando apri il documento.' };
+} // 4: segnatura di protocollo (Titulus) nel testo; 5: striscia-immagine
 
 export const TIPI = [
   { id: 'fattura', label: 'Fattura' },
@@ -156,6 +182,23 @@ export function trovaScadenza(testo, tipo) {
     : /((?:data\s+)?scadenza(?:\s+(?:del\s+)?pagamento)?|da\s+pagare\s+entro\s+il|pagamento\s+entro\s+il)[^0-9]{0,30}(\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}|\d{4}-\d{2}-\d{2})/i;
   const m = t.match(pat);
   return m ? (trovaDate(m[2])[0]?.iso || '') : '';
+}
+
+/** File dello SdI accanto alle fatture (metadati _MT_, ricevute _RC_, notifiche…): nome della fattura a cui si riferisce. */
+export const RE_FILE_SDI = /^(.+?)_(MT|RC|NS|MC|NE|DT|AT|EC|SE)_\d{3}\.xml(\.p7m)?$/i;
+/** Chiave per abbinare una fattura ai suoi file SdI: nome senza estensioni (.xml, .p7m), minuscolo. */
+export const chiaveSdi = (nome) => String(nome || '').replace(/(\.xml)?(\.p7m)*$/i, '').toLowerCase();
+/**
+ * Legge un file SdI (metadati o ricevuta). → { fattura (chiave), ricezione (ISO) } o null.
+ * La data è DataOraRicezione (o DataOraConsegna) se c'è. Il nome della fattura: <NomeFile> o il nome del file.
+ */
+export function leggiFileSdi(nome, testoXml) {
+  const m = RE_FILE_SDI.exec(String(nome || ''));
+  if (!m) return null;
+  const t = String(testoXml || '');
+  const d = t.match(/<(?:\w+:)?DataOra(?:Ricezione|Consegna)>\s*(\d{4}-\d{2}-\d{2})/);
+  const nf = t.match(/<(?:\w+:)?NomeFile>\s*([^<\s]+)\s*</);
+  return { fattura: chiaveSdi(nf ? nf[1] : m[1]), ricezione: d ? d[1] : '' };
 }
 
 /** Controllo dell'IBAN (mod 97). */

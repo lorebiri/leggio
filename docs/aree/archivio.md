@@ -304,7 +304,7 @@ nulla: «Niente da fare in archivio oggi»); ogni voce si apre con un clic.
 - **Firma…**: `app.services.firmaFile(selezionati)` dell'area moduli (un certificato, un PIN, risultati solo se qualcosa
   non va). Per ogni file firmato arriva `archivio:stato` (`imposta: 'firmato'`) e l'originale diventa «Firmato»; le copie
   `_firmato` accanto agli originali vengono indicizzate all'aggiornamento successivo.
-- Servizi nuovi per le altre aree: `app.services.apriArchivio({ q, filtro, scheda })`,
+- Servizi nuovi per le altre aree: `app.services.ibanNoti(piva)`, `app.services.apriArchivio({ q, filtro, scheda })`,
   `app.services.apriDocumentoArchivio(id | percorso, { pagina, q })` (sempre in sola lettura).
 - Nuovi tipi riconosciuti: **Tracciabilità (conto dedicato)**, **Incarico o assegno**; i documenti MePA (documento di
   stipula, trattativa diretta, RdO) sono «Ordine o determina». Nuovi stati: «Non da protocollare», «Da pubblicare».
@@ -320,6 +320,37 @@ nulla: «Niente da fare in archivio oggi»); ogni voce si apre con un clic.
 Generatore: `test/archivio-genera.mjs` crea ora pratiche d'acquisto con lo stesso CIG (determina, ordine o stipula
 MePA, fatture), dichiarazioni di tracciabilità con IBAN validi (alcune fatture con IBAN diverso), incarichi con data di
 fine, documenti MePA firmati e qualche **numero di protocollo ripetuto** (anomalia).
+
+## Quarto giro della segretaria: correzioni (13/11/2026)
+- **Firma nell'elenco = esito della verifica.** Le buste .p7m si verificano durante l'indicizzazione (integrità
+  crittografica, nel worker): «Firmato digitalmente» solo se integra, **«Firma non valida» in rosso** se un byte è stato
+  cambiato, «Contiene una firma (da verificare)» per le firme nei PDF (verificate all'apertura). Revoca e certificatori
+  restano nella verifica all'apertura. Filtro «Con firma NON valida», colonna «Esito firme» nel registro.
+  `lib/estrai.js › esitoFirmeP7m, etichettaFirma`; test con un .p7m alterato. Provato nell'app: il file alterato è
+  «Firma non valida», l'originale «Firmato digitalmente».
+- **«Oggi» in un solo posto**: la scheda «Oggi» dell'archivio, che si apre da sola all'avvio se non ci sono documenti
+  aperti (impostazione «all'avvio mostra Oggi», attiva). Nella schermata iniziale e nel pannello Archivio c'è solo il
+  link «Oggi: N cose da fare».
+- **N. protocollo** è tra gli «Altri filtri»; nella ricerca generale «prot. 4149», «protocollo n. 4149/2026» o il
+  numero da solo trovano il documento.
+- **IBAN**: `app.services.ibanNoti(piva) → [{ iban, data, dal, fonte, documenti }]` (fatture e dichiarazioni di
+  tracciabilità indicizzate). Nella Scheda: avviso se il fornitore ha usato più IBAN, e nel semaforo di pagamento
+  «IBAN cambiato rispetto alla fattura precedente» (giallo).
+- **Fascicolo della pratica**: si apre in una scheda nuova (non salvata); lo si salva dopo con «Salva con nome».
+- **Pannelli**: se si apre un altro strumento a tutta area l'archivio si chiude, e con lui la sua Scheda a destra.
+- **Sola lettura su ogni apertura** (`lib/apertura.js › apriInSolaLettura`, test `test/archivio-apertura.test.js`):
+  i PDF con `app.openPath(path, { readOnly: true })`; .p7m, fatture XML e .eml con `app.openFile(…, { readOnly: true })`,
+  che passa le opzioni al gestore dell'area avanzati. Poiché oggi quei gestori ignorano le opzioni, ogni documento
+  aperto durante la chiamata (PDF contenuto nel .p7m, fattura impaginata) viene marcato in sola lettura. Vale per
+  elenco, «Oggi», Scheda, Pratica e `apriDocumentoArchivio`. Provato nell'app: PDF, PDF da .p7m e fattura XML
+  propongono «Lavora su una copia» alla prima modifica.
+- **Data di ricezione SdI**: i file dello SdI accanto alle fatture (`…_MT_001.xml`, `…_RC_001.xml`…) danno
+  `DataOraRicezione` (o `DataOraConsegna`): il campo `ricezione` della fattura è esatto, non più stimato. Questi file
+  non compaiono nell'elenco (servono solo alla data).
+- Servizi: `app.services.ibanFornitore(piva, { escludi })` → `[{ iban, data, fonte, path }]` (`ibanNoti` resta);
+  il fascicolo della Pratica usa `app.services.apriFascicolo` (scheda «non salvata»).
+- Non fatto (core): l'icona Archivio con il numerino; il messaggio tecnico «file non aperto né scelto dall'utente» al
+  salvataggio è del nucleo.
 
 ## Per le altre aree
 - **Evento `archivio:stato`** (lo emette l'area avanzati quando appone la segnatura di Titulus su una copia o la

@@ -28,6 +28,7 @@ export const COLONNE_REGISTRO = [
   { id: 'etichette', titolo: 'Etichette', val: (r) => (r.stato?.etichette || []).join(', ') },
   { id: 'nota', titolo: 'Nota', val: (r) => r.stato?.nota || '' },
   { id: 'firme', titolo: 'Firme', tipo: 'numero', val: (r) => r.firme || 0 },
+  { id: 'esito_firme', titolo: 'Esito firme', val: (r) => (!r.firme ? '' : r.firmaEsito === 'valida' ? 'integra' : r.firmaEsito === 'non-valida' ? 'NON valida' : 'da verificare') },
   { id: 'pagine', titolo: 'Pagine', tipo: 'numero', val: (r) => r.pagine ?? null },
   { id: 'nome', titolo: 'Nome del file', val: (r) => r.nome || '' },
   { id: 'percorso', titolo: 'Percorso', val: (r) => r.path || r.rel || '' },

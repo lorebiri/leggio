@@ -8,6 +8,7 @@ import { dataDaTesto } from '../lib/testo.js';
 import { registroCsv, registroXlsx } from '../lib/esporta.js';
 import { TIPO_LABEL } from '../lib/estrai.js';
 import { isDesktop } from '../store.js';
+import { apriInSolaLettura } from '../lib/apertura.js';
 import { openP7m, looksLikeP7m } from '../../avanzati/lib/cades.js';
 import { parseFattura, fatturaDocument, nomeProposto as nomeFatturaPdf, isFattura } from '../../avanzati/lib/fattura.js';
 
@@ -16,15 +17,8 @@ const MAX_ELABORA = 300 * 1024 * 1024;
 /** Apre un documento dell'archivio in sola lettura, alla pagina della ricerca. */
 export async function apriDocumento(app, A, riga, { q, pagina } = {}) {
   if (riga.offline) { app.ui.toast(`La cartella di «${riga.nome}» non è raggiungibile in questo momento.`, { kind: 'warning', timeout: 7000 }); return; }
-  const opts = { readOnly: true };
-  if (pagina) opts.page = pagina;
-  if (q && String(q).trim()) opts.search = String(q).trim().replace(/^"|"$/g, '');
   try {
-    if (riga.ext === 'pdf' && isDesktop()) await app.openPath(riga.path, opts);
-    else {
-      const bytes = await A.leggiBytes(riga.path);
-      await app.openFile({ path: isDesktop() ? riga.path : null, name: riga.nome, bytes }, opts);
-    }
+    await apriInSolaLettura({ app, desktop: isDesktop(), leggiBytes: (p) => A.leggiBytes(p) }, riga, { q, pagina });
   } catch (e) { app.reportError(e, `Impossibile aprire «${riga.nome}»`); }
 }
 

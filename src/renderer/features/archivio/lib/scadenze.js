@@ -121,6 +121,13 @@ export function riepilogoOggi({ records, stati, impostazioni = {}, ultimaApertur
   };
 }
 
+/** Quante «cose da fare» ci sono in Oggi (per il link nella schermata iniziale e nel pannello). */
+export function contaDaFare(o) {
+  const c = o?.conteggi || {};
+  return (c.anomalie || 0) + (c.sdi || 0) + (c.inScadenza || 0) + (c.fatture || 0) + (o?.durc?.length || 0)
+    + (c.daProtocollare || 0) + (c.nonProtocollati || 0) + (c.daFirmare || 0) + (c.pubblicazioni || 0);
+}
+
 /** ISO + n mesi (fine mese gestita: 31/01 + 1 mese = 28 o 29/02). */
 export function aggiungiMesi(iso, n) {
   const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);

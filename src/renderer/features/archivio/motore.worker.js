@@ -4,7 +4,7 @@ import { Motore } from './lib/motore.js';
 import { Blocchi, leggiBlocco, manifestoValido } from './lib/blocchi.js';
 import { applica, esportaJson, esportaCsv, importa, unisci, ripulisci } from './lib/stati.js';
 import { riepilogoOggi } from './lib/scadenze.js';
-import { VERSIONE_ESTRAZIONE } from './lib/estrai.js';
+import { VERSIONE_ESTRAZIONE, chiaveSdi } from './lib/estrai.js';
 
 const M = new Motore();
 const B = new Blocchi();
@@ -20,7 +20,24 @@ function indicizzaImpronta(r, via = false) {
   s.add(r.id);
 }
 
+// data di ricezione SdI dai file dello SdI accanto alle fatture (metadati, ricevute): chiave fattura → data
+const ricezioni = new Map();
+function ricezionePer(r) { return r.contenuto === 'fattura' ? ricezioni.get(chiaveSdi(r.nome)) || '' : ''; }
+function collegaRicezioni({ persisti = true } = {}) {
+  for (const r of M.rec.values()) {
+    const d = ricezionePer(r);
+    if (d && r.ricezione !== d) { r.ricezione = d; if (persisti) B.metti(r.id); }
+  }
+}
+
 function metti(doc, { persisti = true } = {}) {
+  if (doc.sdiFattura && doc.sdiRicezione) {
+    const prima = ricezioni.get(doc.sdiFattura);
+    if (!prima || doc.sdiRicezione < prima) ricezioni.set(doc.sdiFattura, doc.sdiRicezione);
+    const f = [...M.rec.values()].find((r) => r.contenuto === 'fattura' && chiaveSdi(r.nome) === doc.sdiFattura);
+    if (f && f.ricezione !== ricezioni.get(doc.sdiFattura)) { f.ricezione = ricezioni.get(doc.sdiFattura); M.metti(f); if (persisti) B.metti(f.id); }
+  }
+  if (doc.contenuto === 'fattura' && !doc.ricezione) { const d = ricezionePer(doc); if (d) doc.ricezione = d; }
   const prima = M.get(doc.id);
   let statiCambiati = false;
   if (prima) {
@@ -66,6 +83,7 @@ const H = {
   },
   'carica-fine'({ manifesto, blocchi }) {
     B.carica(manifesto, blocchi);
+    collegaRicezioni();
     return { n: M.size, rovinate };
   },
   stati({ testo }) {
@@ -195,6 +213,8 @@ const H = {
   /** Testo (limitato) dei documenti, per le liste di controllo della pratica. */
   testi({ ids, max = 30000 }) { return ids.map((id) => { const r = M.get(id); return r ? { id, nome: r.nome, testo: String(r.testo || '').slice(0, max) } : null; }).filter(Boolean); },
   fornitore({ piva }) { return M.fornitore(piva); },
+  'iban-noti'({ piva }) { return M.ibanNoti(piva); },
+  'iban-fornitore'({ piva, escludi }) { return M.ibanFornitore(piva, escludi ? chiaveId(escludi) : null); },
   info() { return { documenti: M.size, stati: M.stati.size, impronte: perImpronta.size }; },
 };
 
