@@ -99,11 +99,30 @@ function pdfStr(s) {
   return '<' + hex.toUpperCase() + '>';
 }
 
-export function toFDF(data, pdfFileName) {
+/** Nome PDF scritto come Acrobat: caratteri non ASCII e delimitatori in #xx sui byte UTF-8. */
+function pdfName(s) {
+  let out = '/';
+  for (const b of new TextEncoder().encode(String(s))) {
+    const c = String.fromCharCode(b);
+    out += b > 0x20 && b < 0x7f && !/[\s/()<>[\]{}%#]/.test(c) ? c : '#' + b.toString(16).padStart(2, '0').toUpperCase();
+  }
+  return out;
+}
+/** Valore «attivo» di una casella: quello vero del campo (es. /Sì), se il chiamante lo conosce, altrimenti /Yes. */
+function onName(onValues, k) {
+  const o = onValues?.[k];
+  if (o && typeof o === 'object' && typeof o.pdf === 'string' && /^\/[^\s/()<>[\]{}%]*$/.test(o.pdf)) return o.pdf;
+  const t = o && typeof o === 'object' ? o.text : o;
+  return t ? pdfName(t) : '/Yes';
+}
+const onText = (onValues, k) => { const o = onValues?.[k]; const t = o && typeof o === 'object' ? o.text : o; return t ? String(t) : 'Yes'; };
+
+/** onValues (facoltativo): { nomeCampo: { pdf:'/S#EC', text:'Sì' } } valori «attivi» veri delle caselle. */
+export function toFDF(data, pdfFileName, onValues) {
   const d = clean(data);
   const fields = Object.entries(d).map(([k, v]) => {
     let val;
-    if (typeof v === 'boolean') val = v ? '/Yes' : '/Off';
+    if (typeof v === 'boolean') val = v ? onName(onValues, k) : '/Off';
     else if (Array.isArray(v)) val = '[' + v.map(pdfStr).join(' ') + ']';
     else val = pdfStr(v);
     return `<< /T ${pdfStr(k)} /V ${val} >>`;
@@ -180,7 +199,8 @@ function fdfReader(src) {
     if (c === '/') {
       i++; let n = '';
       while (i < src.length && !DELIM.test(src[i])) n += src[i++];
-      return { n: n.replace(/#([0-9a-fA-F]{2})/g, (_, x) => String.fromCharCode(parseInt(x, 16))) };
+      // i byte #xx dei nomi sono di solito UTF-8 (Acrobat scrive «Sì» come /S#C3#AC)
+      return { n: decodeBytes(n.replace(/#([0-9a-fA-F]{2})/g, (_, x) => String.fromCharCode(parseInt(x, 16)))) };
     }
     let w = '';
     while (i < src.length && !DELIM.test(src[i])) w += src[i++];
@@ -228,10 +248,10 @@ function xmlUnesc(s) {
   });
 }
 
-export function toXFDF(data, pdfFileName) {
+export function toXFDF(data, pdfFileName, onValues) {
   const d = clean(data);
   const fields = Object.entries(d).map(([k, v]) => {
-    const vals = typeof v === 'boolean' ? [v ? 'Yes' : 'Off'] : Array.isArray(v) ? v : [v];
+    const vals = typeof v === 'boolean' ? [v ? onText(onValues, k) : 'Off'] : Array.isArray(v) ? v : [v];
     return `    <field name="${xmlEsc(k)}">${vals.map((x) => `<value>${xmlEsc(x)}</value>`).join('')}</field>`;
   });
   return `<?xml version="1.0" encoding="UTF-8"?>\n<xfdf xmlns="http://ns.adobe.com/xfdf/" xml:space="preserve">\n  <fields>\n${fields.join('\n')}\n  </fields>\n${pdfFileName ? `  <f href="${xmlEsc(pdfFileName)}"/>\n` : ''}</xfdf>\n`;
@@ -288,12 +308,12 @@ export function parseAny(text, fileName) {
   return { format: f, data: { json: parseJSON, csv: parseCSV, fdf: parseFDF, xfdf: parseXFDF }[f](text) };
 }
 
-export function serialize(format, data, pdfFileName) {
+export function serialize(format, data, pdfFileName, onValues) {
   switch (format) {
     case 'json': return toJSON(data, pdfFileName ? { documento: pdfFileName } : {});
     case 'csv': return toCSV(data);
-    case 'fdf': return toFDF(data, pdfFileName);
-    case 'xfdf': return toXFDF(data, pdfFileName);
+    case 'fdf': return toFDF(data, pdfFileName, onValues);
+    case 'xfdf': return toXFDF(data, pdfFileName, onValues);
     default: throw new Error('Formato non supportato: ' + format);
   }
 }

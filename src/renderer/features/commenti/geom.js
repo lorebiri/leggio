@@ -62,16 +62,38 @@ export function pairs(flat) {
 }
 export const flattenPts = (pts) => pts.flatMap((p) => [r2(p[0]), r2(p[1])]);
 
+/** Rotazione della pagina normalizzata a 0/90/180/270. */
+export function normRotation(rot) { return ((Math.round((Number(rot) || 0) / 90) * 90) % 360 + 360) % 360; }
+/**
+ * Punto PDF → riferimento "a schermo" di una pagina con /Rotate rot (la pagina appare ruotata in senso orario):
+ * nel nuovo riferimento il testo diritto sullo schermo va da sinistra a destra e verso l'alto ha y crescente.
+ */
+export function toUpright(p, rot) {
+  const [x, y] = p;
+  return rot === 90 ? [y, -x] : rot === 180 ? [-x, -y] : rot === 270 ? [-y, x] : [x, y];
+}
+export function fromUpright(p, rot) { return toUpright(p, (360 - rot) % 360); }
+const rectVia = (r, f) => normRect([...f([r[0], r[1]]), ...f([r[2], r[3]])]);
+export const rectToUpright = (r, rot) => rectVia(r, (p) => toUpright(p, rot));
+export const rectFromUpright = (r, rot) => rectVia(r, (p) => fromUpright(p, rot));
+
 /**
  * Unisce i rettangoli della selezione di testo (spazio PDF) in righe.
- * rects: [[x1,y1,x2,y2]…] → righe [[x1,y1,x2,y2]…] dall'alto in basso.
+ * rects: [[x1,y1,x2,y2]…] → righe [[x1,y1,x2,y2]…] dall'alto in basso (come appaiono sullo schermo).
+ * rotation: /Rotate della pagina (sulle pagine ruotate le righe sono verticali nello spazio PDF).
  */
-export function mergeLineRects(rects) {
-  const rs = (rects || []).map(normRect).filter((r) => r && r[2] - r[0] > 0.2 && r[3] - r[1] > 0.2);
+export function mergeLineRects(rects, rotation = 0) {
+  const rot = normRotation(rotation);
+  const rs = (rects || []).map(normRect).filter((r) => r && r[2] - r[0] > 0.2 && r[3] - r[1] > 0.2).map((r) => rectVia(r, (p) => toUpright(p, rot)));
   if (!rs.length) return [];
-  const hs = rs.map((r) => r[3] - r[1]).sort((a, b) => a - b);
+  // spessore = lato corto: non dipende dal verso del testo
+  const th = (r) => Math.min(r[2] - r[0], r[3] - r[1]);
+  const hs = rs.map(th).sort((a, b) => a - b);
   const med = hs[Math.floor(hs.length / 2)];
-  const ok = rs.filter((r) => r[3] - r[1] <= med * 3);
+  // si scartano solo i riquadri spuri (molto spessi E che contengono altri pezzi della selezione, es. un
+  // contenitore grande quanto la pagina): un titolo più alto del testo normale resta evidenziato
+  const inside = (r, o) => { const cx = (o[0] + o[2]) / 2, cy = (o[1] + o[3]) / 2; return cx > r[0] && cx < r[2] && cy > r[1] && cy < r[3]; };
+  const ok = rs.filter((r) => th(r) <= med * 3 || !rs.some((o) => o !== r && th(o) <= med * 3 && inside(r, o)));
   ok.sort((a, b) => (b[1] + b[3]) / 2 - (a[1] + a[3]) / 2 || a[0] - b[0]);
   const lines = [];
   for (const r of ok) {
@@ -85,21 +107,32 @@ export function mergeLineRects(rects) {
     if (line) { line[0] = Math.min(line[0], r[0]); line[1] = Math.min(line[1], r[1]); line[2] = Math.max(line[2], r[2]); line[3] = Math.max(line[3], r[3]); }
     else lines.push([...r]);
   }
-  return lines.sort((a, b) => b[3] - a[3] || a[0] - b[0]);
+  return lines.sort((a, b) => b[3] - a[3] || a[0] - b[0]).map((l) => rectVia(l, (p) => fromUpright(p, rot)));
 }
 
-/** Righe → QuadPoints nell'ordine usato da Acrobat: alto-sx, alto-dx, basso-sx, basso-dx. */
-export function linesToQuadPoints(lines) {
-  return lines.flatMap(([x1, y1, x2, y2]) => [x1, y2, x2, y2, x1, y1, x2, y1].map(r2));
+/**
+ * Righe → QuadPoints nell'ordine usato da Acrobat: alto-sx, alto-dx, basso-sx, basso-dx
+ * (riferiti al testo come appare sullo schermo: su una pagina ruotata il "basso" non è la y minima).
+ */
+export function linesToQuadPoints(lines, rotation = 0) {
+  const rot = normRotation(rotation);
+  return lines.flatMap((l) => {
+    const [x1, y1, x2, y2] = rectVia(l, (p) => toUpright(p, rot));
+    return [[x1, y2], [x2, y2], [x1, y1], [x2, y1]].flatMap((p) => fromUpright(p, rot)).map(r2);
+  });
 }
-/** QuadPoints → quadrilateri [{tl,tr,bl,br}]. Accetta anche ordini non standard. */
-export function quadsFromPoints(qp) {
+/**
+ * QuadPoints → quadrilateri [{tl,tr,bl,br}] (punti PDF). Accetta anche ordini non standard.
+ * rotation: /Rotate della pagina; alto/basso/sinistra/destra sono quelli visti sullo schermo.
+ */
+export function quadsFromPoints(qp, rotation = 0) {
+  const rot = normRotation(rotation);
   const p = pairs(qp); const out = [];
   for (let i = 0; i + 3 < p.length; i += 4) {
-    const s = p.slice(i, i + 4).sort((a, b) => b[1] - a[1]);
-    const top = s.slice(0, 2).sort((a, b) => a[0] - b[0]);
-    const bot = s.slice(2).sort((a, b) => a[0] - b[0]);
-    out.push({ tl: top[0], tr: top[1], bl: bot[0], br: bot[1] });
+    const s = p.slice(i, i + 4).map((pt) => ({ pt, u: toUpright(pt, rot) })).sort((a, b) => b.u[1] - a.u[1]);
+    const top = s.slice(0, 2).sort((a, b) => a.u[0] - b.u[0]);
+    const bot = s.slice(2).sort((a, b) => a.u[0] - b.u[0]);
+    out.push({ tl: top[0].pt, tr: top[1].pt, bl: bot[0].pt, br: bot[1].pt });
   }
   return out;
 }

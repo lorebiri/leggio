@@ -1,7 +1,7 @@
 // Area «commenti» — generazione degli aspetti (/AP /N) delle annotazioni come operatori PDF.
 // Logica pura: riceve una "spec" normalizzata e oggetti font (encodeText, widthOfTextAtSize)
 // e restituisce { content, bbox, gs, fonts, xobjects }. annots.js trasforma il risultato in oggetti PDF.
-import { r2, quadsFromPoints, smoothPathOps, ellipseOps, cloudPathOps, rectVertices, lineEndingOps, wrapText, normRect, inflate } from './geom.js';
+import { r2, quadsFromPoints, smoothPathOps, ellipseOps, cloudPathOps, rectVertices, lineEndingOps, wrapText, normRect, inflate, normRotation } from './geom.js';
 
 const col = (c, op) => (c && c.length >= 3 ? `${r2(c[0])} ${r2(c[1])} ${r2(c[2])} ${op}` : '');
 const P = (p) => `${r2(p[0])} ${r2(p[1])}`;
@@ -58,6 +58,18 @@ const enc = (font, s) => font.encodeText(safeText(font, s)).toString();
  */
 export function buildAppearance(spec, fonts = {}) {
   const t = spec.type;
+  const rot = normRotation(spec.rotation);
+  if (rot && (t === 'FreeText' || t === 'Stamp')) {
+    // pagina ruotata: si disegna diritto in un riquadro locale e /Matrix lo ruota come la pagina,
+    // così testo e timbro appaiono diritti sullo schermo (apMatrix e i lettori lo portano nel /Rect)
+    const r = normRect(spec.rect) || [0, 0, 1, 1];
+    const swap = rot === 90 || rot === 270;
+    const W = swap ? r[3] - r[1] : r[2] - r[0], H = swap ? r[2] - r[0] : r[3] - r[1];
+    const inner = buildAppearance({ ...spec, rotation: 0, rect: [0, 0, W, H] }, fonts);
+    if (!inner) return null;
+    const a = (rot * Math.PI) / 180, c = Math.round(Math.cos(a)), s = Math.round(Math.sin(a));
+    return { ...inner, matrix: [c, s, -s, c, 0, 0] };
+  }
   const op = spec.opacity ?? 1;
   const w = Number.isFinite(spec.width) ? spec.width : 1;
   const gs = { CA: op, ca: op };
@@ -70,30 +82,30 @@ export function buildAppearance(spec, fonts = {}) {
     case 'Highlight': {
       gs.BM = 'Multiply';
       content = `/GS0 gs ${col(spec.color || [1, 0.83, 0], 'rg')} `;
-      for (const q of quadsFromPoints(spec.quadPoints)) {
-        // leggero arrotondamento ai lati come Acrobat
-        const h = q.tl[1] - q.bl[1]; const k = h * 0.12;
-        content += `${P(q.bl)} m ${P(q.br)} l ${r2(q.br[0] + k)} ${r2(q.br[1] + h / 2)} ${P(q.tr)} v ${P(q.tl)} l ${r2(q.bl[0] - k)} ${r2(q.bl[1] + h / 2)} ${P(q.bl)} v f `;
+      for (const q of quadsFromPoints(spec.quadPoints, spec.rotation)) {
+        // leggero arrotondamento ai lati come Acrobat (lungo il verso del testo, anche su pagine ruotate)
+        const { h, dir, up } = quadAxes(q); const k = h * 0.12;
+        const side = (p, s) => P([p[0] + dir[0] * k * s + up[0] * h / 2, p[1] + dir[1] * k * s + up[1] * h / 2]);
+        content += `${P(q.bl)} m ${P(q.br)} l ${side(q.br, 1)} ${P(q.tr)} v ${P(q.tl)} l ${side(q.bl, -1)} ${P(q.bl)} v f `;
       }
       break;
     }
     case 'Underline': case 'StrikeOut': case 'Squiggly': {
       content = `/GS0 gs ${col(spec.color || [0, 0, 0], 'RG')} `;
-      for (const q of quadsFromPoints(spec.quadPoints)) {
-        const h = q.tl[1] - q.bl[1];
+      for (const q of quadsFromPoints(spec.quadPoints, spec.rotation)) {
+        // dir = verso del testo, up = verso l'alto della riga: le linee seguono il testo anche su pagine ruotate
+        const { h, len, dir, up } = quadAxes(q);
+        const at = (p, d, u) => P([p[0] + dir[0] * d + up[0] * u, p[1] + dir[1] * d + up[1] * u]);
         const lw = Math.max(0.5, h / 16);
         if (t === 'StrikeOut') {
-          const y1 = q.bl[1] + h * 0.42, y2 = q.br[1] + h * 0.42;
-          content += `${r2(lw)} w ${r2(q.bl[0])} ${r2(y1)} m ${r2(q.br[0])} ${r2(y2)} l S `;
+          content += `${r2(lw)} w ${at(q.bl, 0, h * 0.42)} m ${at(q.br, 0, h * 0.42)} l S `;
         } else if (t === 'Underline') {
-          const y = q.bl[1] + lw * 1.2;
-          content += `${r2(lw)} w ${r2(q.bl[0])} ${r2(y)} m ${r2(q.br[0])} ${r2(q.br[1] + lw * 1.2)} l S `;
+          content += `${r2(lw)} w ${at(q.bl, 0, lw * 1.2)} m ${at(q.br, 0, lw * 1.2)} l S `;
         } else {
           const amp = Math.max(1, h / 12), step = amp * 2.2;
-          const y0 = q.bl[1] + amp;
-          content += `${r2(lw)} w 1 J 1 j ${r2(q.bl[0])} ${r2(y0)} m `;
-          let up = true;
-          for (let x = q.bl[0] + step; x < q.br[0] + step; x += step) { content += `${r2(Math.min(x, q.br[0]))} ${r2(y0 + (up ? amp : -amp))} l `; up = !up; }
+          content += `${r2(lw)} w 1 J 1 j ${at(q.bl, 0, amp)} m `;
+          let up2 = true;
+          for (let d = step; d < len + step; d += step) { content += `${at(q.bl, Math.min(d, len), amp + (up2 ? amp : -amp))} l `; up2 = !up2; }
           content += 'S ';
         }
       }
@@ -154,7 +166,7 @@ export function buildAppearance(spec, fonts = {}) {
       else path = pts.map((p, i) => `${P(p)} ${i ? 'l' : 'm'}`).join(' ') + (t === 'Polygon' ? ' h' : '');
       content = `/GS0 gs 1 j ${r2(w)} w ${dash}${col(spec.color, 'RG')} ${col(spec.interior, 'rg')} ${path} ${t === 'Polygon' ? paintOp(spec, w) : (w > 0 && spec.color ? 'S' : 'n')} `;
       if (t === 'PolyLine' && pts.length > 1 && spec.lineEnding) content += endings(spec, pts[0], pts[1], pts[pts.length - 1], pts[pts.length - 2], w);
-      if (spec.measureLabel && fonts.regular) { const c = centroid(pts); content += labelOps(fonts.regular, spec.measureLabel, c, spec.color); fontsUsed.F1 = 'regular'; }
+      if (spec.measureLabel && fonts.regular) { const c = centroid(pts); content += labelOps(fonts.regular, spec.measureLabel, c, spec.color, (rot * Math.PI) / 180, rot); fontsUsed.F1 = 'regular'; }
       bbox = inflate(bbox, w * 2 + (spec.cloud ? cloudInset(spec.cloud, w) : 0));
       break;
     }
@@ -163,7 +175,7 @@ export function buildAppearance(spec, fonts = {}) {
       content = `/GS0 gs 1 J 1 j ${r2(w)} w ${dash}${col(spec.color, 'RG')} ${col(spec.color, 'rg')} ${r2(ax)} ${r2(ay)} m ${r2(bx)} ${r2(by)} l S `;
       content += endings(spec, [ax, ay], [bx, by], [bx, by], [ax, ay], w);
       if (spec.measureLabel && fonts.regular) {
-        content += labelOps(fonts.regular, spec.measureLabel, [(ax + bx) / 2, (ay + by) / 2], spec.color, Math.atan2(by - ay, bx - ax));
+        content += labelOps(fonts.regular, spec.measureLabel, [(ax + bx) / 2, (ay + by) / 2], spec.color, Math.atan2(by - ay, bx - ax), rot);
         fontsUsed.F1 = 'regular';
       }
       break;
@@ -202,6 +214,17 @@ export function buildAppearance(spec, fonts = {}) {
   return { content: content.trim(), bbox: bbox.map(r2), gs, fonts: fontsUsed, xobjects };
 }
 
+/** Assi di un quadrilatero: altezza h, lunghezza len, verso del testo dir e verso l'alto up (unitari). */
+function quadAxes(q) {
+  const vx = q.br[0] - q.bl[0], vy = q.br[1] - q.bl[1];
+  const len = Math.hypot(vx, vy);
+  const dir = len ? [vx / len, vy / len] : [1, 0];
+  const ux = q.tl[0] - q.bl[0], uy = q.tl[1] - q.bl[1];
+  const h = Math.hypot(ux, uy);
+  const up = h ? [ux / h, uy / h] : [-dir[1], dir[0]];
+  return { h, len, dir, up };
+}
+
 /** Quanto sporgono gli archi della nuvola (stessa formula di cloudPathOps). */
 export function cloudInset(intensity, w) { if (!intensity) return 0; const arc = Math.max(4, 6 * intensity + w * 2); return arc * 0.85 + w / 2; }
 function paintOp(spec, w) {
@@ -231,12 +254,16 @@ function ellipsePoints([x1, y1, x2, y2], n = 16) {
   return Array.from({ length: n }, (_, i) => [cx + rx * Math.cos((i / n) * 2 * Math.PI), cy + ry * Math.sin((i / n) * 2 * Math.PI)]);
 }
 function centroid(pts) { const n = pts.length || 1; return [pts.reduce((s, p) => s + p[0], 0) / n, pts.reduce((s, p) => s + p[1], 0) / n]; }
-/** Etichetta di misura su sfondo bianco, opzionalmente ruotata lungo la linea. */
-function labelOps(font, text, [cx, cy], color, angle = 0) {
+/** Etichetta di misura su sfondo bianco, opzionalmente ruotata lungo la linea; rot = /Rotate della pagina. */
+function labelOps(font, text, [cx, cy], color, angle = 0, rot = 0) {
   const fs = 9;
   const t = safeText(font, text);
   const tw = font.widthOfTextAtSize(t, fs);
-  let a = angle; if (a > Math.PI / 2) a -= Math.PI; if (a < -Math.PI / 2) a += Math.PI;
+  // l'angolo si raddrizza rispetto allo schermo (mai a testa in giù), poi si riporta nello spazio PDF
+  const R = (rot * Math.PI) / 180;
+  let a = angle - R; while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI;
+  if (a > Math.PI / 2) a -= Math.PI; if (a < -Math.PI / 2) a += Math.PI;
+  a += R;
   const c = Math.cos(a), s = Math.sin(a);
   return `q ${r2(c)} ${r2(s)} ${r2(-s)} ${r2(c)} ${r2(cx)} ${r2(cy)} cm 1 1 1 rg ${r2(-tw / 2 - 2)} 2 ${r2(tw + 4)} ${fs + 2} re f ` +
     `BT /F1 ${fs} Tf ${col(color || [0, 0, 0], 'rg')} 1 0 0 1 ${r2(-tw / 2)} 4.5 Tm ${enc(font, t)} Tj ET Q `;

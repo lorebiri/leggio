@@ -81,10 +81,15 @@ export function rangeRects(pt, start, end) {
     const p = pt.items[idx]; if (!p) continue;
     // margine orizzontale generoso (0,2 em): meglio coprire un po' di spazio che lasciare scoperto un carattere
     const ext = p.g.size * 0.2;
-    rects.push(padRect(spanRect(p.g, charPos(p.widths, k0) - ext, charPos(p.widths, k1) + ext), p.g.size * 0.08));
+    const r = padRect(spanRect(p.g, charPos(p.widths, k0) - ext, charPos(p.widths, k1) + ext), p.g.size * 0.08);
+    r.stimato = true; // calcolato con le stesse larghezze stimate delle parole (vedi wordsOutside)
+    rects.push(r);
   }
   return rects;
 }
+
+/** Segna un rettangolo come ottenuto dalla ricerca nel testo (posizione stimata, coerente con pageWords). */
+export function markEstimated(r) { const o = r.slice(); o.stimato = true; return o; }
 
 export function padRect(r, m) { return [r[0] - m, r[1] - m, r[2] + m, r[3] + m]; }
 export function normRect(r) { return [Math.min(r[0], r[2]), Math.min(r[1], r[3]), Math.max(r[0], r[2]), Math.max(r[1], r[3])]; }
@@ -99,16 +104,32 @@ export function pageWords(items, styles) {
     if (typeof it.str !== 'string' || !it.str.trim()) continue;
     const g = itemGeometry(it);
     const widths = estimateWidths(it, g);
+    // fascia reale dell'elemento (larghezza esatta da pdf.js), ristretta in verticale come coreRect
+    const band = shrinkV(spanRect(g, 0, g.width), g);
     const re = /\S+/g; let m;
     while ((m = re.exec(it.str))) {
       const x0 = charPos(widths, m.index); const x1 = charPos(widths, m.index + m[0].length);
       words.push({
         text: m[0], rect: spanRect(g, x0, x1), size: g.size, width: Math.max(0.01, x1 - x0), dir: g.dir,
         origin: [g.origin[0] + g.dir[0] * x0, g.origin[1] + g.dir[1] * x0],
+        // dove può trovarsi davvero la parola, tenendo conto dell'errore della stima delle larghezze
+        incerto: { band, rect: shrinkV(spanRect(g, posMin(x0, g.width) - g.size, posMax(x1, g.width) + g.size), g) },
       });
     }
   }
   return words;
+}
+
+// Errore massimo ammesso sulla larghezza stimata di ogni carattere (rapporto reale/stimata): le stime
+// sono normalizzate sulla larghezza esatta dell'elemento, quindi gli estremi dell'elemento sono certi.
+const ERR_MIN = 0.55; const ERR_MAX = 1.8;
+/** Posizione reale minima / massima di un punto stimato a distanza s dall'inizio (elemento largo W). */
+function posMin(s, W) { return Math.max(0, ERR_MIN * s, W - ERR_MAX * (W - s)); }
+function posMax(s, W) { return Math.min(W, ERR_MAX * s, W - ERR_MIN * (W - s)); }
+function shrinkV(r, g) {
+  // restringe solo nel verso perpendicolare alla riga: le righe adiacenti non vengono toccate
+  const dy = g.size * 0.3;
+  return Math.abs(g.dir[0]) >= Math.abs(g.dir[1]) ? [r[0], r[1] + dy, r[2], r[3] - dy] : [r[0] + dy, r[1], r[2] - dy, r[3]];
 }
 
 /** Riquadro "interno" della parola: i margini delle aree oscurate che sfiorano una parola vicina non la tolgono. */
@@ -119,5 +140,15 @@ export function coreRect(w) {
 }
 /** La parola tocca un'area da oscurare? (una parola coperta anche solo in parte viene tolta tutta) */
 export function wordHit(w, rects) { return intersectsAny(coreRect(w), rects); }
+/**
+ * La parola POTREBBE stare sotto un'area disegnata dall'utente? Le aree disegnate seguono i glifi reali,
+ * le parole invece hanno posizioni stimate: se l'elemento di testo (larghezza esatta) tocca l'area, si toglie
+ * ogni parola il cui intervallo possibile (stima ± errore massimo, più 1 em) la tocca. Meglio perdere
+ * qualche parola ricercabile che lasciare nel livello invisibile un dato oscurato.
+ */
+export function wordMaybeHit(w, rects) {
+  if (!w.incerto) return false;
+  return rects.some((r) => !r.stimato && intersects(w.incerto.band, r) && intersects(w.incerto.rect, r));
+}
 /** Parole che NON toccano nessuna area da oscurare. */
-export function wordsOutside(words, rects) { return words.filter((w) => !wordHit(w, rects)); }
+export function wordsOutside(words, rects) { return words.filter((w) => !wordHit(w, rects) && !wordMaybeHit(w, rects)); }

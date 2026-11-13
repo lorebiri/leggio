@@ -1,5 +1,5 @@
 // Proteggi con password, Rimuovi protezione, e ri-cifratura automatica al salvataggio.
-import { encryptBytes, openDecrypted, passwordStrength, fromPValue, describePermissions, hasRestrictions, TUTTI_PERMESSI, PasswordError, ALGORITMI } from './logica/cifratura.js';
+import { encryptBytes, openDecrypted, passwordStrength, fromPValue, describePermissions, hasRestrictions, TUTTI_PERMESSI, PasswordError, ALGORITMI, passwordAlgorithmProblem } from './logica/cifratura.js';
 import { encryptionInfo } from './logica/pdfutil.js';
 import { PDFDocument } from '@cantoo/pdf-lib';
 import { st, copyName, salvaCopia, looksEncrypted, boxAvviso } from './comune.js';
@@ -85,6 +85,8 @@ async function askProtection(app, { title = 'Proteggi con password', preset = {}
         if (pw.value !== pw.confirm) return 'Le due password di apertura non coincidono.';
         if (pw.value.length < 4) return 'La password di apertura è troppo corta (almeno 4 caratteri, meglio 12).';
       }
+      const alg = passwordAlgorithmProblem(x.useOpen ? pw.value : '', x.algorithm) || passwordAlgorithmProblem(x.useRestr ? x.owner : '', x.algorithm, true);
+      if (alg) return alg;
       if (x.useRestr && x.owner && x.useOpen && x.owner === pw.value) return 'La password per le autorizzazioni deve essere diversa da quella di apertura.';
       if (x.useRestr && !hasRestrictions(x.perm)) return 'Hai consentito tutto: togli la spunta da almeno un permesso, oppure non limitare.';
       return null;

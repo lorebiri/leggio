@@ -79,7 +79,7 @@ export const ENCODINGS = { WinAnsiEncoding: buildWinAnsi(), StandardEncoding: bu
 /** Unicode → codice WinAnsi (o -1). */
 export function winAnsiCode(ch) {
   const c = ch.charCodeAt(0);
-  if (ch.length !== 1) return -1;
+  if (ch.length !== 1 || c < 32) return -1; // caratteri di controllo (anche '\0', che nella tabella è uno «0» = vuoto)
   if ((c >= 32 && c < 127) || (c >= 0xA0 && c <= 0xFF)) return c;
   const i = WIN_HIGH_U.indexOf(c);
   return i > 0 || (i === 0 && c === 0x20AC) ? 0x80 + i : -1;

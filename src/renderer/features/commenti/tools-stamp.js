@@ -1,7 +1,7 @@
 // Area «commenti» — Timbri: predefiniti in italiano, personalizzati con campi automatici
 // ({data} {ora} {anno} {autore} {numero}), da immagine; timbro su più file nella stessa posizione.
 import { STAMPS, stampSize, safeText } from './appearance.js';
-import { createAnnot, getFonts } from './annots.js';
+import { createAnnot, getFonts, pageRotation } from './annots.js';
 import { fillStampFields, hexToRgb, rgbToHex, normRect } from './geom.js';
 import { S, setS, author, edit, overlayOf, eventPoint, previewSvg, svgEl } from './ui-common.js';
 
@@ -33,16 +33,22 @@ function dataUrlBytes(url) {
   return { bytes: out, type: /jpe?g/i.test(head) ? 'jpg' : 'png' };
 }
 
+/** Larghezza e altezza nello spazio PDF di un timbro che sullo schermo è w × h (pagine ruotate di 90°/270°). */
+function upright(pdfDoc, pageIndex, w, h) {
+  const rot = pageRotation(pdfDoc, pageIndex);
+  return rot === 90 || rot === 270 ? [h, w] : [w, h];
+}
+
 /** Scrive un timbro centrato in (cx, cy) PDF sulla pagina. size: 0.6..2 */
 export async function placeStamp(pdfDoc, pageIndex, st, resolved, { cx, cy, size = 1, rect, who }) {
   if (st.image) {
     const { bytes, type } = dataUrlBytes(st.image);
-    const w = (st.w || 120) * size, h = (st.h || 120) * size;
+    const [w, h] = upright(pdfDoc, pageIndex, (st.w || 120) * size, (st.h || 120) * size);
     return createAnnot(pdfDoc, pageIndex, { type: 'Stamp', rect: rect || [cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2], icon: 'Leggio.Immagine', text: st.label || 'Timbro', subject: 'Timbro' }, { author: who, imageBytes: bytes, imageType: type });
   }
-  const { bold } = await getFonts(pdfDoc);
+  const { bold } = await getFonts(pdfDoc, [resolved.label, resolved.sub].filter(Boolean).join(' '), { bold: true });
   const { w, h } = stampSize(safeText(bold, resolved.label), resolved.sub ? safeText(bold, resolved.sub) : '', bold);
-  const W = w * size, Hh = h * size;
+  const [W, Hh] = upright(pdfDoc, pageIndex, w * size, h * size);
   const r = rect || [cx - W / 2, cy - Hh / 2, cx + W / 2, cy + Hh / 2];
   return createAnnot(pdfDoc, pageIndex, { type: 'Stamp', rect: r, stamp: resolved, icon: st.name || 'Leggio.Personalizzato', text: [resolved.label, resolved.sub].filter(Boolean).join(' — '), subject: 'Timbro' }, { author: who });
 }

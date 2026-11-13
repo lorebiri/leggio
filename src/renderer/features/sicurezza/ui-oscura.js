@@ -1,7 +1,7 @@
 // Oscura (Redazione): segna aree, testo selezionato, risultati di ricerca, pagine intere; poi applica
 // un oscuramento VERO (il contenuto sotto viene eliminato) e verifica il risultato.
 import { MODELLI, buildMatchers, findMatches } from './logica/modelli.js';
-import { buildPageText, rangeRects, normRect, padRect } from './logica/testo.js';
+import { buildPageText, rangeRects, normRect, padRect, markEstimated } from './logica/testo.js';
 import { viewportRect, measureChars } from './codec.js';
 import { applyRedaction, hasImages, findSignatures } from './redigi.js';
 import { getPreset, preselect, FIRMA, datiEnte, isDatoEnte, presetConsigliato } from './logica/preset.js';
@@ -331,7 +331,8 @@ async function applyRedactions(app) {
   const bytes = await app.currentBytes(doc);
   const nSig = signatureCount(bytes);
   const byPage = new Map();
-  for (const m of on) { if (!byPage.has(m.page)) byPage.set(m.page, []); byPage.get(m.page).push(m.rect); }
+  // le aree trovate con la ricerca hanno la stessa posizione stimata delle parole; quelle disegnate no
+  for (const m of on) { if (!byPage.has(m.page)) byPage.set(m.page, []); byPage.get(m.page).push(m.source === 'ricerca' ? markEstimated(m.rect) : m.rect); }
   const v = await app.ui.dialog({
     title: 'Applica oscuramento', okLabel: 'Oscura definitivamente', danger: true, width: 520,
     body: app.ui.h('div', {},

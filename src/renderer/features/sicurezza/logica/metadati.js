@@ -1,5 +1,5 @@
 // Proprietà del documento (Info + XMP) e impostazioni di apertura (vista iniziale). Logica pura.
-import { PDFArray, PDFNumber, PDFRef, PDFName, PDFDict } from '@cantoo/pdf-lib';
+import { PDFArray, PDFNumber, PDFRef, PDFName, PDFDict, PDFHexString } from '@cantoo/pdf-lib';
 import { N, lookupDict, lookupArray, nameOf, num } from './pdfutil.js';
 
 export const LAYOUT = [
@@ -94,7 +94,8 @@ export function writeProperties(pdfDoc, v) {
   setOrDelete('Title', v.title, (x) => pdfDoc.setTitle(x, { showInWindowTitleBar: !!v.displayDocTitle }));
   setOrDelete('Author', v.author, (x) => pdfDoc.setAuthor(x));
   setOrDelete('Subject', v.subject, (x) => pdfDoc.setSubject(x));
-  setOrDelete('Keywords', v.keywords, (x) => pdfDoc.setKeywords(String(x).split(/[,;]\s*/).filter(Boolean)));
+  // scritte così come sono (pdf-lib setKeywords unirebbe le parole con uno spazio, perdendo le virgole)
+  setOrDelete('Keywords', v.keywords, (x) => info.set(N('Keywords'), PDFHexString.fromText(String(x))));
   setOrDelete('Creator', v.creator, (x) => pdfDoc.setCreator(x));
   setOrDelete('Producer', v.producer, (x) => pdfDoc.setProducer(x));
   const cd = date(v.creationDate); const md = date(v.modDate);

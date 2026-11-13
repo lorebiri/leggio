@@ -114,8 +114,23 @@ export function encryptDoc(pdfDoc, { userPassword = '', ownerPassword = '', perm
   if (userPassword && owner === userPassword && hasRestrictions(permissions)) {
     throw new Error('La password per le autorizzazioni deve essere diversa da quella di apertura, altrimenti chi apre il file può togliere le restrizioni.');
   }
+  const bad = passwordAlgorithmProblem(userPassword, algorithm) || passwordAlgorithmProblem(ownerPassword, algorithm, true);
+  if (bad) throw new Error(bad);
   pdfDoc.encrypt({ userPassword: userPassword || undefined, ownerPassword: owner, permissions: toLibPermissions(permissions), algorithm });
   return { ownerPassword: owner };
+}
+
+/**
+ * AES-128 (compatibilità con programmi vecchi) accetta solo caratteri Latin-1 nella password: «€», alfabeto
+ * cirillico o greco, ideogrammi e lettere accentate «scomposte» (e + accento) non si possono usare.
+ * → messaggio in italiano, oppure null se va bene.
+ */
+export function passwordAlgorithmProblem(pw, algorithm, owner = false) {
+  if (algorithm !== 'AES-128' || !pw) return null;
+  const bad = [...new Set([...String(pw)].filter((ch) => ch.codePointAt(0) > 0xff))];
+  if (!bad.length) return null;
+  const which = bad.map((ch) => (/\p{M}/u.test(ch) ? 'accento separato dalla lettera' : `«${ch}»`)).slice(0, 4).join(', ');
+  return `La password ${owner ? 'per le autorizzazioni ' : 'di apertura '}contiene caratteri (${which}) che la cifratura AES-128 per programmi vecchi non supporta. Usa la cifratura AES-256 (consigliata), oppure una password con sole lettere, numeri e simboli comuni.`;
 }
 
 // Elaborazione in blocco: derivare le chiavi AES-256 (revisione 6) richiede centinaia di hash SHA-2 in

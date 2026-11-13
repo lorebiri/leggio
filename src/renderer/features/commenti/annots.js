@@ -4,7 +4,8 @@
 // così le vedono allo stesso modo Acrobat, Anteprima, i browser e pdf.js.
 import { PDFName, PDFNumber, PDFString, PDFHexString, PDFArray, PDFDict, PDFRef, PDFStream, PDFBool, StandardFonts } from '@cantoo/pdf-lib';
 import { buildAppearance, safeText } from './appearance.js';
-import { normRect, rectFromPoints, pairs, quadsBounds, inflate, pdfDate, newName, r2, flattenPts, wrapText } from './geom.js';
+import { normRect, rectFromPoints, pairs, quadsBounds, inflate, pdfDate, newName, r2, flattenPts, wrapText, normRotation, rectToUpright, rectFromUpright } from './geom.js';
+import { embedUnicodeFont } from '../modifica/unicodefont.js';
 
 /** Tipi considerati "commenti" (si escludono Link, Widget, Popup e simili). */
 export const COMMENT_TYPES = new Set(['Text', 'FreeText', 'Line', 'Square', 'Circle', 'Polygon', 'PolyLine', 'Highlight', 'Underline', 'Squiggly', 'StrikeOut', 'Stamp', 'Caret', 'Ink', 'FileAttachment', 'Sound']);
@@ -198,42 +199,78 @@ export function findAnnot(pdfDoc, target) {
 
 // ---------------------------------------------------------------- scrittura
 const fontCache = new WeakMap();
-export async function getFonts(pdfDoc) {
+const uniCache = new WeakMap();
+let unicodeLoader = null;
+/** Imposta chi fornisce i byte del font Unicode ({ bold }) → Uint8Array; senza, il testo non latino diventa «?». */
+export function setUnicodeFontLoader(fn) { unicodeLoader = typeof fn === 'function' ? fn : null; }
+/**
+ * Font per gli aspetti. Con un testo che Helvetica non sa scrivere (greco, cirillico…) e un font Unicode
+ * disponibile, usa quello per la variante richiesta (regular, o bold per i timbri), incorporato una sola volta
+ * per documento (vedi modifica/unicodefont.js).
+ */
+export async function getFonts(pdfDoc, text = '', { bold = false } = {}) {
   let f = fontCache.get(pdfDoc);
   if (!f) {
     f = { regular: await pdfDoc.embedFont(StandardFonts.Helvetica), bold: await pdfDoc.embedFont(StandardFonts.HelveticaBold) };
     fontCache.set(pdfDoc, f);
   }
-  return f;
+  const plain = String(text).replace(/\t/g, ' ');
+  if (!text || !unicodeLoader || safeText(f.regular, plain) === plain) return f;
+  // si incorpora solo la variante che serve (pdf-lib salva tutti i font incorporati, anche se inutilizzati)
+  let u = uniCache.get(pdfDoc);
+  if (!u) { u = {}; uniCache.set(pdfDoc, u); }
+  const key = bold ? 'bold' : 'regular';
+  if (!(key in u)) {
+    try { u[key] = await embedUnicodeFont(pdfDoc, await unicodeLoader({ bold }), bold ? 'Ub' : 'U'); }
+    catch { u[key] = null; } // font non disponibile: si resta su Helvetica
+  }
+  return u[key] ? { ...f, [key]: u[key] } : f;
 }
+/** Testo che l'aspetto della spec deve scrivere (per scegliere il font). */
+function specText(spec) { return [spec.type === 'FreeText' ? spec.text : '', spec.stamp?.label, spec.stamp?.sub, spec.measureLabel].filter(Boolean).join(' '); }
 
 /** Casella di testo: allunga il rettangolo verso il basso finché tutto il testo ci sta (bordo superiore fisso). */
-export async function fitFreeText(pdfDoc, spec) {
+export async function fitFreeText(pdfDoc, spec, rotation = 0) {
   if (spec.type !== 'FreeText' || !spec.text) return spec;
-  const { regular } = await getFonts(pdfDoc);
+  const { regular } = await getFonts(pdfDoc, spec.text);
   const fs = spec.fontSize || 12, pad = 2 + (spec.borderWidth ?? 1);
-  const [x1, y1, x2, y2] = spec.rect;
+  // nel riferimento dello schermo: su una pagina ruotata il "basso" non è la y minima
+  const rot = normRotation(rotation);
+  const [x1, y1, x2, y2] = rectToUpright(spec.rect, rot);
   const lines = wrapText(safeText(regular, spec.text), x2 - x1 - pad * 2, (t) => regular.widthOfTextAtSize(t, fs));
   const need = lines.length * fs * 1.18 + pad * 2;
-  if (y2 - y1 < need) spec.rect = [x1, y2 - need, x2, y2];
+  if (y2 - y1 < need) spec.rect = rectFromUpright([x1, y2 - need, x2, y2], rot);
   return spec;
 }
 
 /** Crea e assegna /AP /N al dizionario. spec.imageRef per i timbri da immagine. */
-export async function writeAppearance(pdfDoc, dict, spec) {
+export async function writeAppearance(pdfDoc, dict, spec, pageIndex) {
   const ctx = pdfDoc.context;
-  const fonts = await getFonts(pdfDoc);
-  const ap = buildAppearance(spec, fonts);
+  const fonts = await getFonts(pdfDoc, specText(spec), { bold: spec.type === 'Stamp' });
+  const ap = buildAppearance({ ...spec, rotation: spec.rotation ?? pageRotation(pdfDoc, pageIndex, dict) }, fonts);
   if (!ap) return false;
   const gs = { Type: 'ExtGState', CA: r2(ap.gs.CA), ca: r2(ap.gs.ca) };
   if (ap.gs.BM) gs.BM = ap.gs.BM;
   const res = { ExtGState: { GS0: gs } };
   if (Object.keys(ap.fonts).length) { res.Font = {}; for (const [k, v] of Object.entries(ap.fonts)) res.Font[k] = fonts[v].ref; }
   if (ap.xobjects.Im0 && spec.imageRef) res.XObject = { Im0: spec.imageRef };
-  const stream = ctx.flateStream(ap.content, { Type: 'XObject', Subtype: 'Form', FormType: 1, BBox: ap.bbox, Matrix: [1, 0, 0, 1, 0, 0], Resources: res });
+  // Matrix: rotazione per le caselle di testo e i timbri sulle pagine ruotate (diritti sullo schermo)
+  const stream = ctx.flateStream(ap.content, { Type: 'XObject', Subtype: 'Form', FormType: 1, BBox: ap.bbox, Matrix: ap.matrix || [1, 0, 0, 1, 0, 0], Resources: res });
   const sref = ctx.register(stream);
   dict.set(N('AP'), ctx.obj({ N: sref }));
   return true;
+}
+
+/** /Rotate della pagina dell'annotazione (0/90/180/270): dall'indice o, se manca, dalla chiave /P. */
+export function pageRotation(pdfDoc, pageIndex, dict) {
+  try {
+    let page = Number.isInteger(pageIndex) ? pdfDoc.getPage(pageIndex) : null;
+    if (!page && dict) {
+      const pref = get(dict, 'P');
+      page = pref instanceof PDFRef ? pdfDoc.getPages().find((pg) => pg.ref === pref || (pg.ref.objectNumber === pref.objectNumber && pg.ref.generationNumber === pref.generationNumber)) : null;
+    }
+    return normRotation(page?.getRotation().angle || 0);
+  } catch { return 0; }
 }
 
 function flagsFor(spec) {
@@ -292,7 +329,7 @@ export async function createAnnot(pdfDoc, pageIndex, spec0, opts = {}) {
   if (!spec.rect) spec.rect = geometryBounds(spec);
   spec.rect = normRect(spec.rect);
   if (!spec.rect) throw new Error('Posizione dell\'annotazione non valida');
-  await fitFreeText(pdfDoc, spec);
+  await fitFreeText(pdfDoc, spec, pageRotation(pdfDoc, pageIndex));
   if (opts.imageBytes) {
     const img = opts.imageType === 'jpg' ? await pdfDoc.embedJpg(opts.imageBytes) : await pdfDoc.embedPng(opts.imageBytes);
     spec.imageRef = img.ref; spec.image = { w: img.width, h: img.height };
@@ -306,7 +343,7 @@ export async function createAnnot(pdfDoc, pageIndex, spec0, opts = {}) {
   if (spec.state) { dict.set(N('State'), PDFString.of(spec.state)); dict.set(N('StateModel'), PDFString.of(spec.stateModel || 'Review')); }
   writeKeys(pdfDoc, dict, spec);
   if (spec.type === 'Text' && !spec.icon) dict.set(N('Name'), N('Comment'));
-  await writeAppearance(pdfDoc, dict, spec);
+  await writeAppearance(pdfDoc, dict, spec, pageIndex);
   const ref = ctx.register(dict);
   page.node.addAnnot(ref);
   // nota adesiva: finestra popup collegata, come fa Acrobat
@@ -366,7 +403,7 @@ export async function updateAnnot(pdfDoc, target, changes = {}) {
   if ('width' in changes && spec.type === 'FreeText') spec.borderWidth = changes.width;
   if (changes.inkList) spec.rect = geometryBounds(spec);
   if (spec.type === 'Text' && get(dict, 'IRT')) spec.reply = true;
-  if ('text' in changes || 'fontSize' in changes) await fitFreeText(pdfDoc, spec);
+  if ('text' in changes || 'fontSize' in changes) await fitFreeText(pdfDoc, spec, pageRotation(pdfDoc, found.pageIndex));
   if (changes.author != null) dict.set(N('T'), txt(changes.author));
   // spostamento puro: l'aspetto originale segue il rettangolo, nessuna perdita di fedeltà
   if (onlyMove && hadAP) {
@@ -384,7 +421,7 @@ export async function updateAnnot(pdfDoc, target, changes = {}) {
   const keepAP = hadAP && (spec.type === 'Stamp' || !GENERATED_TYPES.has(spec.type)) && keys.every((k) => k === 'rect' || k === 'translate' || k === 'text' || k === 'author');
   if (spec.type === 'Stamp' && hadAP && !keepAP) { /* cambio colore di un timbro: non supportato, si lascia l'aspetto */ }
   writeKeys(pdfDoc, dict, spec);
-  if (!keepAP && GENERATED_TYPES.has(spec.type) && spec.type !== 'Stamp') await writeAppearance(pdfDoc, dict, spec);
+  if (!keepAP && GENERATED_TYPES.has(spec.type) && spec.type !== 'Stamp') await writeAppearance(pdfDoc, dict, spec, found.pageIndex);
   return refKey(found.ref) || target.key;
 }
 function movePopup(pdfDoc, dict, d) {
@@ -507,7 +544,7 @@ export async function flattenComments(pdfDoc, { pages, warnings = [] } = {}) {
         let stream = apStream(ctx, a.dict);
         if (!stream && GENERATED_TYPES.has(type)) {
           const s = readAnnot(ctx, a.dict);
-          if (s && await writeAppearance(pdfDoc, a.dict, s).catch(() => false)) stream = apStream(ctx, a.dict);
+          if (s && await writeAppearance(pdfDoc, a.dict, s, p).catch(() => false)) stream = apStream(ctx, a.dict);
         }
         const rect = normRect(numsOf(ctx, get(a.dict, 'Rect')));
         if (stream && rect) {

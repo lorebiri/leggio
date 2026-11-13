@@ -9,8 +9,12 @@ import { commentsPanel } from './panel.js';
 import { actionTools } from './actions.js';
 import { measureTool } from './measure.js';
 import { pageComments } from './ui-common.js';
+import { setUnicodeFontLoader } from './annots.js';
+import { loadUnicodeFont } from '../modifica/ui/common.js';
 
 export default function register(app) {
+  // caselle di testo e timbri in greco, cirillico…: stesso font Unicode di «modifica» (Liberation Sans)
+  setUnicodeFontLoader(loadUnicodeFont);
   for (const t of [selectTool(app), highlightTool(app), stickyNoteTool(app), freeTextTool(app), inkTool(app), shapesTool(app), stampTool(app), stampBatchTool(app), measureTool(app), ...actionTools(app)]) {
     app.registerTool(t);
   }

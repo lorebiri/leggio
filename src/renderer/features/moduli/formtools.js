@@ -6,6 +6,27 @@ import { todayIt } from './lib/geom.js';
 import { editProfileDialog } from './profile.js';
 
 const TRUE_WORDS = /^(true|s[iì]|yes|on|1|x|v|vero|checked)$/i;
+const FALSE_WORDS = /^(false|no|off|0|falso|unchecked)?$/i;
+
+/** Testo di un nome PDF: i byte sono di solito UTF-8 (/S#C3#AC), a volte Latin-1 (/S#EC). → [testi possibili] */
+function nameTexts(n) {
+  let raw = '';
+  try { raw = n?.decodeText?.() ?? ''; } catch { return []; }
+  const out = [raw];
+  if (/[\xc0-\xf4][\x80-\xbf]/.test(raw) && ![...raw].some((c) => c.charCodeAt(0) > 0xff)) {
+    try { out.unshift(new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(raw, (c) => c.charCodeAt(0)))); } catch {}
+  }
+  return out;
+}
+/** Valore «attivo» di una casella → { pdf: '/S#EC', text: 'Sì' } | null (null se è il normale /Yes). */
+function checkboxOnValue(f) {
+  try {
+    const n = f.acroField.getOnValue?.();
+    if (!n) return null;
+    const text = nameTexts(n)[0];
+    return text && text !== 'Yes' ? { pdf: n.toString(), text } : null;
+  } catch { return null; }
+}
 
 /** Tipo di un campo pdf-lib. */
 export function fieldKind(PDFLib, f) {
@@ -50,21 +71,22 @@ function safeFields(form) {
 /** Valori correnti dei campi → { nome: valore }. Campi malformati saltati (contati in skipped). */
 export function readValues(PDFLib, pdfDoc) {
   LIB ||= PDFLib;
-  const out = {}; let skipped = 0;
+  const out = {}; let skipped = 0; const onValues = {};
   const form = safeGetForm(pdfDoc);
   for (const f of safeFields(form)) {
     try {
       const name = f.getName();
       switch (fieldKind(PDFLib, f)) {
         case 'text': out[name] = f.getText() ?? ''; break;
-        case 'checkbox': out[name] = f.isChecked(); break;
+        case 'checkbox': { out[name] = f.isChecked(); const on = checkboxOnValue(f); if (on) onValues[name] = on; break; }
         case 'radio': out[name] = f.getSelected() ?? ''; break;
         case 'dropdown': case 'listbox': { const s = f.getSelected() || []; out[name] = s.length > 1 ? s : s[0] ?? ''; break; }
         default: break;
       }
     } catch { skipped++; }
   }
-  return { values: out, skipped: skipped + (form?.skippedBroken || 0) };
+  // onValues: valori «attivi» delle caselle diversi da /Yes, per esportare in FDF/XFDF quelli veri
+  return { values: out, skipped: skipped + (form?.skippedBroken || 0), onValues };
 }
 
 /** Rigenera gli aspetti dei campi modificati; se un campo non è disegnabile col font standard lascia che sia il lettore a farlo. */
@@ -102,7 +124,13 @@ export function writeValues(PDFLib, pdfDoc, data) {
         if (!f.isMultiline()) s = s.replace(/\r?\n/g, ' ');
         f.setText(s);
       } else if (kind === 'checkbox') {
-        const on = typeof raw === 'boolean' ? raw : TRUE_WORDS.test(String(raw).trim()) || (String(raw) !== '' && String(raw) !== 'Off' && f.acroField.getOnValue?.()?.decodeText?.() === String(raw));
+        const str = String(Array.isArray(raw) ? raw[0] ?? '' : raw ?? '').trim();
+        let on;
+        if (typeof raw === 'boolean') on = raw;
+        else if (str !== 'Off' && nameTexts(f.acroField.getOnValue?.()).includes(str)) on = true; // valore vero del campo
+        else if (TRUE_WORDS.test(str)) on = true;
+        else if (FALSE_WORDS.test(str)) on = false;
+        else throw new Error('valore non previsto'); // né attivo né spento: non si finge di averlo applicato
         on ? f.check() : f.uncheck();
       } else if (kind === 'radio') {
         const v = String(Array.isArray(raw) ? raw[0] : raw ?? '');
@@ -207,9 +235,9 @@ export function registerFormTools(app, store) {
       store.setPref('exportFmt', v.fmt);
       const bytes = await app.currentBytes(doc);
       const pdfDoc = await app.lib.openPdfLib(bytes, doc.password);
-      const { values, skipped } = readValues(app.lib.PDFLib, pdfDoc);
+      const { values, skipped, onValues } = readValues(app.lib.PDFLib, pdfDoc);
       if (!Object.keys(values).length) { app.ui.toast('Questo documento non contiene campi compilabili.', { kind: 'warning' }); return; }
-      const text = serialize(v.fmt, values, doc.name);
+      const text = serialize(v.fmt, values, doc.name, onValues);
       const out = v.fmt === 'csv' ? new Uint8Array([0xef, 0xbb, 0xbf, ...textToBytes(text, 'csv')]) : textToBytes(text, v.fmt);
       const r = await app.exportFile(out, `${docBase(doc)}_dati.${v.fmt}`, [{ name: fmtOptions.find((o) => o.value === v.fmt).label, extensions: [v.fmt] }]);
       if (r) app.ui.toast(`Dati esportati (${Object.keys(values).length} campi)` + (skipped ? `; ${skipped} campi illeggibili saltati` : ''), { kind: 'success' });

@@ -7,6 +7,9 @@ import { removeGlyphs, replaceGlyphRange, placeImage } from './rewrite.js';
 import { loadPage, markSeenCodes, setPageContent, addFontToPage, addXObjectToPage, fontResourceName } from './pdfpage.js';
 import { toLocal, fromLocal, wrapText, diffRange, boxToPage } from './blocks.js';
 import { winAnsiCode } from './fontmodel.js';
+import { embedUnicodeFont } from './unicodefont.js';
+
+export { embedUnicodeFont };
 
 const { StandardFonts } = PDFLib;
 const enc = new TextEncoder();
@@ -160,7 +163,7 @@ export async function chooseWriterFont(pdfDoc, page, want, text, env = {}, origM
   let f = cache.get(key);
   if (!f) {
     const bytes = await env.loadUnicodeFont({ bold, italic });
-    f = await pdfDoc.embedFont(bytes, { subset: false }); // il sottoinsieme di fontkit fallisce con questi TTF
+    f = await embedUnicodeFont(pdfDoc, bytes, key);
     cache.set(key, f);
   }
   const missing = [];
@@ -440,16 +443,34 @@ export function pageSearchText(A) {
 
 const normCase = (s, cs) => (cs ? s : s.toLocaleLowerCase('it'));
 function isWordChar(ch) { return !!ch && /[\p{L}\p{N}_]/u.test(ch); }
+/**
+ * Testo in minuscolo con mappa verso il testo originale: alcune lettere cambiano lunghezza
+ * (la «İ» turca diventa «i̇», due unità), quindi gli indici non coincidono.
+ * → { hay, start[j], end[j] } (inizio e fine nel testo originale del carattere da cui viene hay[j])
+ */
+function foldWithMap(s, cs) {
+  let hay = ''; const start = []; const end = [];
+  for (let k = 0; k < s.length;) {
+    const ch = String.fromCodePoint(s.codePointAt(k));
+    const low = normCase(ch, cs);
+    for (let j = 0; j < low.length; j++) { start.push(k); end.push(k + ch.length); }
+    hay += low; k += ch.length;
+  }
+  return { hay, start, end };
+}
 
 /** Occorrenze di query nel testo di una pagina. → [{ start, end, refs, text, context, rect }] */
 export function findInPage(A, query, { caseSensitive = false, wholeWord = false } = {}, pst = pageSearchText(A)) {
   if (!query) return [];
-  const hay = normCase(pst.text.replace(/ /g, ' '), caseSensitive);
+  const fold = foldWithMap(pst.text.replace(/ /g, ' '), caseSensitive);
+  const hay = fold.hay;
   const q = normCase(query.replace(/ /g, ' '), caseSensitive);
   const out = [];
-  let i = 0;
-  while ((i = hay.indexOf(q, i)) >= 0) {
-    const end = i + q.length;
+  let hi = 0;
+  while (q && (hi = hay.indexOf(q, hi)) >= 0) {
+    const hEnd = hi + q.length;
+    // indici nel testo originale (e quindi nei riferimenti ai glifi)
+    const i = fold.start[hi]; const end = fold.end[hEnd - 1];
     if (!wholeWord || (!isWordChar(pst.text[i - 1]) && !isWordChar(pst.text[end]))) {
       const refs = pst.refs.slice(i, end);
       const gl = refs.filter(Boolean);
@@ -464,7 +485,7 @@ export function findInPage(A, query, { caseSensitive = false, wholeWord = false 
         });
       }
     }
-    i = end > i ? end : i + 1;
+    hi = hEnd > hi ? hEnd : hi + 1;
   }
   return out;
 }
