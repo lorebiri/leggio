@@ -8,7 +8,7 @@ import { pageText } from '../avanzati/lib/textsearch.js';
 import { openP7m, looksLikeP7m, innerName } from '../avanzati/lib/cades.js';
 import { parseFattura, isFattura } from '../avanzati/lib/fattura.js';
 import { parseMime, attachments, bodyText, summary, parseDaticert } from '../avanzati/lib/mime.js';
-import { datiDaTesto, datiDaFattura, testoFattura, eScansione, firmePdf, VERSIONE_ESTRAZIONE } from './lib/estrai.js';
+import { datiDaTesto, datiDaFattura, testoFattura, eScansione, firmePdf, esitoFirmeP7m, VERSIONE_ESTRAZIONE } from './lib/estrai.js';
 import { immaginiDisegnate, strisciaCandidata } from './lib/striscia.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(workerUrl, self.location.href).href;
@@ -74,13 +74,16 @@ function testoEml(bytes) {
  * → { testo, pagine, scansione, protetto, parziale, errore, firme, firmatari, contenuto, ...dati }
  */
 async function estrai({ bytes, nome, escludi }) {
-  const out = { v: VERSIONE_ESTRAZIONE, testo: '', pagine: null, scansione: false, protetto: false, parziale: false, errore: '', firme: 0, firmatari: [], contenuto: '' };
+  const out = { v: VERSIONE_ESTRAZIONE, testo: '', pagine: null, scansione: false, protetto: false, parziale: false, errore: '', firme: 0, firmatari: [], firmaEsito: '', contenuto: '' };
   const low = String(nome).toLowerCase();
   let b = bytes; let nomeInterno = nome;
-  // busta firmata .p7m (anche annidata): si guarda dentro senza verificare (la verifica è nell'area avanzati)
+  // busta firmata .p7m (anche annidata): si verifica l'integrità delle firme (crittografia nel worker), così
+  // l'elenco non dice mai «Firmato digitalmente» per un file alterato. Revoca e certificatori: all'apertura.
   if (/\.(p7m|p7s|tsd|m7m)$/.test(low) || (low.endsWith('.xml') && looksLikeP7m(b))) {
     try {
-      const r = await openP7m(b, { verify: false });
+      let r;
+      try { r = await openP7m(b, { verify: true }); out.firmaEsito = esitoFirmeP7m(r); }
+      catch { r = await openP7m(b, { verify: false }); out.firmaEsito = 'non-verificata'; }
       const firmatari = [];
       for (const l of r.levels) for (const s of l.signers) { firmatari.push(s.name); for (const c of s.counterSigners || []) firmatari.push(c.name); }
       out.firme = firmatari.length; out.firmatari = [...new Set(firmatari)].slice(0, 20);
@@ -107,7 +110,7 @@ async function estrai({ bytes, nome, escludi }) {
   const head = new TextDecoder('latin1').decode(b.subarray(0, 1024));
   if (!head.includes('%PDF')) return { ...out, ...datiDaTesto('', { nome, escludi }), tipo: out.firme ? 'p7m' : 'altro', errore: 'Non è un PDF valido' };
   const firme = firmePdf(b);
-  if (firme.length) { out.firme += firme.length; out.firmatari = [...new Set([...out.firmatari, ...firme.filter(Boolean)])].slice(0, 20); }
+  if (firme.length) { if (!out.firmaEsito) out.firmaEsito = 'non-verificata'; out.firme += firme.length; out.firmatari = [...new Set([...out.firmatari, ...firme.filter(Boolean)])].slice(0, 20); }
   const t = await testoPdf(b);
   const dati = datiDaTesto(t.testo, { nome, escludi });
   return {

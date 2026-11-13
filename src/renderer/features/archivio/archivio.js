@@ -106,6 +106,7 @@ export class Archivio {
   pratica(id) { return this.motore.call('pratica', { id }); }
   testi(ids) { return this.motore.call('testi', { ids }); }
   fornitore(piva) { return this.motore.call('fornitore', { piva }); }
+  ibanNoti(piva) { return this.motore.call('iban-noti', { piva }); }
   /** Le impostazioni sono cambiate: il motore ricalcola DURC e semafori. */
   async impostazioniCambiate() { await this.motore.call('impostazioni', { imp: this.impostazioni() }); this.versione++; this.emit('cambiato'); }
 

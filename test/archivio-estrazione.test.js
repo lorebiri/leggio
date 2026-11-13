@@ -9,7 +9,7 @@ import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { pageText } from '../src/renderer/features/avanzati/lib/textsearch.js';
 import { openP7m, innerName } from '../src/renderer/features/avanzati/lib/cades.js';
 import { parseFattura } from '../src/renderer/features/avanzati/lib/fattura.js';
-import { datiDaTesto, datiDaFattura, eScansione, firmePdf } from '../src/renderer/features/archivio/lib/estrai.js';
+import { datiDaTesto, datiDaFattura, eScansione, firmePdf, esitoFirmeP7m, etichettaFirma } from '../src/renderer/features/archivio/lib/estrai.js';
 import { segnaturaGenerica } from '../src/renderer/features/archivio/lib/segnatura.js';
 import { immaginiDisegnate, strisciaCandidata } from '../src/renderer/features/archivio/lib/striscia.js';
 
@@ -99,6 +99,22 @@ describe('estrazione su un archivio generato', () => {
       if (r.kind === 'fattura') expect(datiDaFattura(parseFattura(r.content)).piva).toMatch(/^\d{11}$/);
       else expect(nome.endsWith('.pdf')).toBe(true);
     }
+  }, 60000);
+
+  it('un .p7m alterato NON risulta «Firmato digitalmente»: «Firma non valida»', async () => {
+    const f = files.find((x) => x.endsWith('.p7m'));
+    const buono = new Uint8Array(fs.readFileSync(f));
+    const ok = esitoFirmeP7m(await openP7m(buono, { verify: true }));
+    expect(ok).toBe('valida');
+    expect(etichettaFirma({ firme: 1, firmaEsito: ok })).toMatchObject({ testo: 'Firmato digitalmente' });
+    // un byte cambiato nel contenuto firmato (a metà file, lontano dalla firma in coda)
+    const alterato = buono.slice(); const i = Math.floor(alterato.length / 3); alterato[i] = alterato[i] ^ 0x20;
+    const esito = esitoFirmeP7m(await openP7m(alterato, { verify: true }));
+    expect(esito).toBe('non-valida');
+    expect(etichettaFirma({ firme: 1, firmaEsito: esito })).toMatchObject({ testo: 'Firma non valida', classe: 'err' });
+    // firma nel PDF non verificata dall'indice: mai «Firmato digitalmente»
+    expect(etichettaFirma({ firme: 1, firmaEsito: 'non-verificata' }).testo).toMatch(/da verificare/);
+    expect(etichettaFirma({ firme: 0 })).toBe(null);
   }, 60000);
 
   it('fatture elettroniche XML', () => {

@@ -10,8 +10,8 @@ import { segnaturaGenerica, normalizzaSegnatura, numeroConfrontabile } from '../
 import { immaginiDisegnate, strisciaCandidata } from '../src/renderer/features/archivio/lib/striscia.js';
 import { riepilogoOggi, scadenzaDurc, testoGiorni } from '../src/renderer/features/archivio/lib/scadenze.js';
 import { Motore } from '../src/renderer/features/archivio/lib/motore.js';
-import { prontaPerPagamento, indiciFornitori, pagamentoPrevisto, giorniSdi } from '../src/renderer/features/archivio/lib/pagamento.js';
-import { aggiungiMesi } from '../src/renderer/features/archivio/lib/scadenze.js';
+import { prontaPerPagamento, indiciFornitori, pagamentoPrevisto, giorniSdi, ibanNoti, ibanCambiato } from '../src/renderer/features/archivio/lib/pagamento.js';
+import { aggiungiMesi, contaDaFare } from '../src/renderer/features/archivio/lib/scadenze.js';
 import { Blocchi, leggiBlocco, manifestoValido, DIM } from '../src/renderer/features/archivio/lib/blocchi.js';
 import { registroCsv, registroXlsx, serialeExcel, zipSenzaCompressione } from '../src/renderer/features/archivio/lib/esporta.js';
 import { parseFattura } from '../src/renderer/features/avanzati/lib/fattura.js';
@@ -255,6 +255,25 @@ describe('pronta per il pagamento', () => {
     expect(p.esito).toBe('rosso');
     expect(p.motivi.find((m) => m.livello === 'rosso').testo).toMatch(/non è quello dichiarato/);
   });
+  it('IBAN cambiato rispetto alle fatture precedenti; IBAN noti del fornitore', () => {
+    const A1 = 'IT60X0542811101000000123456'; const A2 = 'IT02L1234512345123456789012';
+    const recs = [
+      { id: 'f1', nome: 'f1', tipo: 'fattura', piva: P, iban: A1, data: '2026-01-10', numero: '1' },
+      { id: 'f2', nome: 'f2', tipo: 'fattura', piva: P, iban: A1, data: '2026-03-10', numero: '2' },
+      { id: 'f3', nome: 'f3', tipo: 'fattura', piva: P, iban: A2, data: '2026-11-01', numero: '3', scadenza: '2026-12-01' },
+      { id: 'd', nome: 'd', tipo: 'durc', piva: P, data: '2026-11-01', scadenza: '2027-03-01' },
+    ];
+    const ind = indiciFornitori(recs);
+    expect(ibanCambiato(recs[2], ind)).toMatchObject({ prima: A1, data: '2026-03-10' });
+    expect(ibanCambiato(recs[1], ind)).toBe(null);
+    const p = prontaPerPagamento(recs[2], null, ind, { oggi: '2026-11-12' });
+    expect(p.esito).toBe('giallo');
+    expect(p.motivi.find((m) => m.livello === 'giallo').testo).toMatch(/IBAN cambiato rispetto alla fattura precedente del 10\/03\/2026/);
+    const noti = ibanNoti(ind, P);
+    expect(noti.map((x) => x.iban)).toEqual([A2, A1]);
+    expect(noti[1]).toMatchObject({ dal: '2026-01-10', data: '2026-03-10', documenti: 2 });
+    expect(noti[1].fonte).toMatch(/fattura n\. 2/);
+  });
   it('30 giorni (PCC) dalla ricezione se manca la scadenza; pagata; non fattura', () => {
     const r = fatt({ scadenza: '' });
     expect(pagamentoPrevisto(r)).toMatchObject({ data: '2026-12-01', fonte: 'pcc' });
@@ -334,6 +353,10 @@ describe('Oggi e scadenzario', () => {
     // «Non serve» toglie dai non protocollati
     const o2 = riepilogoOggi({ records: r, stati: new Map([['b'.repeat(64), { protocollo: 'no' }]]), inizioArchivio: 100, oggi: '2026-11-12' });
     expect(o2.nonProtocollati).toHaveLength(0);
+  });
+  it('conta le cose da fare per il link «Oggi: N cose da fare»', () => {
+    expect(contaDaFare({ conteggi: { anomalie: 1, sdi: 2, inScadenza: 3, fatture: 0, daProtocollare: 1, nonProtocollati: 2, daFirmare: 0, pubblicazioni: 1, nuovi: 50 }, durc: [{}, {}] })).toBe(12);
+    expect(contaDaFare(null)).toBe(0);
   });
   it('un documento con la segnatura letta non è più «da protocollare»', () => {
     const r = [{ ...recs[3], segnatura: { numero: '77', data: '2026-11-12' } }];
@@ -418,6 +441,15 @@ describe('motore di ricerca', () => {
     expect(m.riga('/a/2').fornitoreLetto).toBe('Delta Lab S.n.c.');
     expect(m.cerca({ fornitore: '00012345609' }).totale).toBe(4);
     expect(m.cerca({ fornitore: 'delta lab' }).totale).toBe(4);
+  });
+  it('la ricerca generale trova il numero di protocollo («prot. 12345», «protocollo n. 12345/2026»)', () => {
+    const m = new Motore();
+    m.metti(doc(1, { segnatura: { numero: '0012345', data: '2026-10-01' } }));
+    m.metti(doc(2, { segnatura: { numero: '0012345', data: '2025-10-01' } }));
+    m.metti(doc(3, { testo: 'fattura 12345 qualcosa' }));
+    expect(m.cerca({ q: 'prot. 12345' }).righe.map((x) => x.id).sort()).toEqual(['/a/1', '/a/2']);
+    expect(m.cerca({ q: 'protocollo n. 12345/2026' }).righe.map((x) => x.id)).toEqual(['/a/1']);
+    expect(m.cerca({ q: '12345' }).totale).toBe(3); // il numero da solo: protocollo e testo
   });
   it('estratti e conteggi', () => {
     const m = motore();

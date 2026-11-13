@@ -5,7 +5,33 @@ import { analizza, trovaDate } from '../../avanzati/lib/rinomina.js';
 import { numeroIt } from './testo.js';
 
 /** Versione delle regole di estrazione: se cambia, i documenti vengono riletti alla prossima scansione. */
-export const VERSIONE_ESTRAZIONE = 6; // 6: IBAN, tracciabilità, incarichi, data di fine // 4: segnatura di protocollo (Titulus) nel testo; 5: striscia-immagine
+export const VERSIONE_ESTRAZIONE = 7; // 7: verifica delle firme .p7m nell'indice
+
+/**
+ * Esito della verifica di una busta .p7m (risultato di openP7m con verify: true):
+ * 'non-valida' se una firma non è integra (documento alterato o firma rovinata), 'valida' se tutte sono integre,
+ * 'non-verificata' altrimenti (es. algoritmo non supportato, solo marca temporale).
+ */
+export function esitoFirmeP7m(result) {
+  const tutte = [];
+  const giro = (s) => { tutte.push(s); (s.counterSigners || []).forEach(giro); };
+  for (const l of result?.levels || []) for (const s of l.signers || []) giro(s);
+  if (!tutte.length) return 'non-verificata';
+  if (tutte.some((s) => s.integrity === 'invalid')) return 'non-valida';
+  if (tutte.every((s) => s.integrity === 'valid')) return 'valida';
+  return 'non-verificata';
+}
+
+/**
+ * Etichetta della firma per l'elenco: «Firmato digitalmente» SOLO se la firma è stata verificata integra.
+ * → { testo, classe } | null
+ */
+export function etichettaFirma(r) {
+  if (!r?.firme) return null;
+  if (r.firmaEsito === 'non-valida') return { testo: 'Firma non valida', classe: 'err', titolo: 'La verifica della busta .p7m è fallita: il documento potrebbe essere stato modificato dopo la firma. Aprilo per i dettagli.' };
+  if (r.firmaEsito === 'valida') return { testo: r.firme === 1 ? 'Firmato digitalmente' : `Firmato digitalmente (${r.firme} firme)`, classe: 'firma', titolo: 'Firma integra. La validità del certificato (revoca, certificatore) si controlla all\'apertura.' };
+  return { testo: r.firme === 1 ? 'Contiene una firma (da verificare)' : `Contiene ${r.firme} firme (da verificare)`, classe: 'neutro', titolo: 'Firma nel PDF: Leggio la verifica quando apri il documento.' };
+} // 4: segnatura di protocollo (Titulus) nel testo; 5: striscia-immagine
 
 export const TIPI = [
   { id: 'fattura', label: 'Fattura' },

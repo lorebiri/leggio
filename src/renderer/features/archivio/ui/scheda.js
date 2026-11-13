@@ -2,7 +2,7 @@
 // fornitore (DURC, tracciabilità, fatture da pagare) e pratica collegata (stesso protocollo, CIG o CUP) con
 // il fascicolo con indice. Nessuna schermata nuova: tutto in un pannello che si chiude con un clic.
 import { creaFascicolo } from '../../avanzati/lib/fascicolo.js';
-import { TIPO_LABEL } from '../lib/estrai.js';
+import { TIPO_LABEL, etichettaFirma } from '../lib/estrai.js';
 import { testoProtocollo } from '../lib/stati.js';
 import { euro, dataIt } from '../lib/testo.js';
 import { apriDocumento, fatturaInPdf, leggiFattura } from './azioni.js';
@@ -33,7 +33,7 @@ export async function apriScheda(app, A, riga, { q } = {}) {
 
   c.append(sez('Dati', voce('Tipo', TIPO_LABEL[r.tipo]), voce('Fornitore', r.fornitore), voce('P.IVA', r.piva), voce('Numero', r.numero), voce('Data', dataIt(r.data)),
     voce('Importo', r.importo != null ? euro(r.importo) : ''), voce('CIG', (r.cig || []).join(', ')), voce('CUP', (r.cup || []).join(', ')),
-    voce('Scadenza', dataIt(r.scadenza)), voce('IBAN', r.iban), voce('Firme', r.firme ? (r.firmatari?.length ? r.firmatari.join(', ') : String(r.firme)) : '')));
+    voce('Scadenza', dataIt(r.scadenza)), voce('IBAN', r.iban), voce('Firme', r.firme ? [etichettaFirma(r)?.testo, r.firmatari?.length ? r.firmatari.join(', ') : ''].filter(Boolean).join(' — ') : '')));
 
   const s = r.stato || {};
   c.append(sez('Protocollo (Titulus)', h('p', {}, s.protocollo === 'fatto' ? testoProtocollo(s) : s.protocollo === 'da' ? 'Da protocollare in Titulus.' : s.protocollo === 'no' ? 'Non da protocollare.' : r.segnaturaDaLeggere ? 'Segnatura da leggere (in corso, in sottofondo).' : 'Nessuna segnatura trovata nel documento.')));
@@ -58,6 +58,7 @@ export async function apriScheda(app, A, riga, { q } = {}) {
     c.append(sez(`Fornitore: ${forn.nome || forn.piva}`,
       voce('P.IVA', forn.piva),
       voce('Ultimo DURC', forn.durc[0] ? `valido fino al ${dataIt(forn.durc[0].fine)}${forn.durc[0].calcolata ? ' (calcolata)' : ''}` : 'nessuno in archivio'),
+      forn.iban.length > 1 ? h('p', { class: 'ar-sch-avviso' }, `Questo fornitore ha usato ${forn.iban.length} IBAN diversi: ${forn.iban.map((x) => `…${x.iban.slice(-4)} (${x.dal && x.dal !== x.data ? `dal ${dataIt(x.dal)} ` : ''}fino al ${dataIt(x.data) || '—'})`).join(', ')}. Verifica quello giusto prima di pagare.`) : null,
       voce('Conto dedicato (tracciabilità)', forn.tracciabilita[0] ? `${forn.tracciabilita[0].iban} (dichiarazione del ${dataIt(forn.tracciabilita[0].data) || '—'})` : 'nessuna dichiarazione in archivio'),
       voce('Fatture non pagate', forn.totaleNonPagate ? `${forn.totaleNonPagate} (${forn.fattureNonPagate.filter((f) => ['rosso', 'giallo'].includes(f.pagamento?.esito)).length} da controllare)` : 'nessuna'),
       forn.totaleNonPagate ? h('button', { class: 'btn small', onclick: () => A.emit('vedi', { filtro: { fornitore: forn.piva, tipo: 'fattura', ordine: 'scadenza' } }) }, 'Vedi le fatture del fornitore') : null));
@@ -99,7 +100,7 @@ export async function apriScheda(app, A, riga, { q } = {}) {
 async function fascicolo(app, A, pratica, r0) {
   const docs = pratica.documenti.filter((d) => !d.offline);
   const titoli = (d) => [d.nome.replace(/\.(pdf|xml|p7m)+$/i, ''), d.stato?.protocollo === 'fatto' && d.stato.numeroProtocollo ? `prot. ${d.stato.numeroProtocollo}${d.stato.dataProtocollo ? ' del ' + dataIt(d.stato.dataProtocollo) : ''}` : ''].filter(Boolean).join(' — ');
-  const v = await app.ui.dialog({ title: 'Fascicolo della pratica', fields: [{ name: 'titolo', label: 'Titolo', type: 'text', value: `Pratica ${pratica.chiavi.cig[0] ? 'CIG ' + pratica.chiavi.cig[0] : pratica.chiavi.protocollo ? 'prot. ' + pratica.chiavi.protocollo : r0.nome}` }], okLabel: 'Crea il fascicolo' });
+  const v = await app.ui.dialog({ title: 'Fascicolo della pratica', message: 'Il fascicolo si apre in una scheda nuova: lo controlli e poi lo salvi con «Salva con nome».', fields: [{ name: 'titolo', label: 'Titolo', type: 'text', value: `Pratica ${pratica.chiavi.cig[0] ? 'CIG ' + pratica.chiavi.cig[0] : pratica.chiavi.protocollo ? 'prot. ' + pratica.chiavi.protocollo : r0.nome}` }], okLabel: 'Crea il fascicolo' });
   if (!v) return;
   let risultato;
   await app.ui.withProgress('Fascicolo della pratica', async (p) => {
@@ -119,6 +120,9 @@ async function fascicolo(app, A, pratica, r0) {
     risultato = { bytes: await app.lib.savePdfLib(out.pdfDoc), saltati: [...saltati, ...out.saltati] };
   });
   if (!risultato) return;
-  await app.exportFile(risultato.bytes, `${v.titolo.replace(/[\\/:*?"<>|]+/g, '_')}.pdf`, [{ name: 'PDF', extensions: ['pdf'] }]);
+  // prima si vede, poi si salva: il fascicolo si apre in una scheda nuova (non salvata); «Salva con nome» per conservarlo
+  app.closeRightPanel();
+  await app.openBytes(risultato.bytes, { name: `${v.titolo.replace(/[\\/:*?"<>|]+/g, '_')}.pdf`, dirty: true });
+  app.ui.toast('Fascicolo pronto: controllalo e usa «Salva con nome» per conservarlo.', { kind: 'success', timeout: 8000 });
   if (risultato.saltati.length) app.ui.toast(`Non inseriti nel fascicolo: ${risultato.saltati.map((s) => `${s.titolo} (${s.motivo})`).join('; ')}`, { kind: 'warning', timeout: 10000 });
 }

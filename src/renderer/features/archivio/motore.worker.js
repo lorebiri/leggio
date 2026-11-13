@@ -195,6 +195,7 @@ const H = {
   /** Testo (limitato) dei documenti, per le liste di controllo della pratica. */
   testi({ ids, max = 30000 }) { return ids.map((id) => { const r = M.get(id); return r ? { id, nome: r.nome, testo: String(r.testo || '').slice(0, max) } : null; }).filter(Boolean); },
   fornitore({ piva }) { return M.fornitore(piva); },
+  'iban-noti'({ piva }) { return M.ibanNoti(piva); },
   info() { return { documenti: M.size, stati: M.stati.size, impronte: perImpronta.size }; },
 };
 

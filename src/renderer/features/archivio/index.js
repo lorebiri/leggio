@@ -6,7 +6,7 @@ import './archivio.css';
 import { registerIcon } from '../../core/icons.js';
 import { Archivio } from './archivio.js';
 import { apriVista, vistaAperta } from './ui/vista.js';
-import { disegnaOggi } from './ui/oggi.js';
+import { contaDaFare } from './lib/scadenze.js';
 import { apriDocumento } from './ui/azioni.js';
 import { apriCartelle } from './ui/cartelle.js';
 import { IMPOSTAZIONI_PREDEFINITE } from './lib/scadenze.js';
@@ -20,7 +20,6 @@ export default function register(app) {
   app.archivio = A; // per i test e per le altre aree
 
   const apri = (opts) => apriVista(app, A, opts);
-  const apriId = async (id) => { const [r] = await A.righe([id]); if (r) apriDocumento(app, A, r, {}); };
 
   app.registerTool({
     id: 'archivio', name: 'Archivio d\'ufficio', category: 'archivio', icon: 'archive', needsDoc: false,
@@ -41,6 +40,13 @@ export default function register(app) {
     run: () => apriCartelle(app, A),
   });
 
+  // «Oggi» sta in un solo posto: la scheda «Oggi» dell'archivio. Altrove solo un link con il numero.
+  const linkOggi = async (h) => {
+    let n = 0;
+    try { n = contaDaFare(await A.oggi()); } catch { n = 0; }
+    return h('button', { class: 'btn ar-link-oggi' + (n ? ' primary' : ''), onclick: () => apri({ scheda: 'oggi' }) }, n ? `Oggi: ${n} ${n === 1 ? 'cosa' : 'cose'} da fare` : 'Oggi: niente da fare');
+  };
+
   // ---------- pannello laterale ----------
   app.registerPanel({
     id: 'archive', title: 'Archivio', icon: 'archive', order: 60, needsDoc: false,
@@ -60,7 +66,7 @@ export default function register(app) {
         else if (A.lavoro) stato.replaceChildren(h('span', {}, 'Controllo delle cartelle…'));
         else if (A.codaSeg) stato.replaceChildren(h('span', {}, `Lettura delle segnature di protocollo: ${A.codaSeg.fatti} di ${A.codaSeg.totale}`), h('button', { class: 'btn small', onclick: () => A.interrompiSegnature() }, 'Interrompi'));
         else stato.replaceChildren(h('span', { class: 'av-note' }, A.attivo ? `${A.cartelle.length} ${A.cartelle.length === 1 ? 'cartella collegata' : 'cartelle collegate'}` : 'Nessuna cartella collegata. Collega le cartelle dell\'ufficio per trovare subito i documenti.'));
-        if (A.attivo && A.caricato) await disegnaOggi(app, A, oggi, { compatto: true, apri: apriId, vedi: (filtro) => apri({ filtro }) });
+        if (A.attivo && A.caricato) oggi.replaceChildren(await linkOggi(h));
         else oggi.replaceChildren();
       };
       let t = 0;
@@ -80,15 +86,12 @@ export default function register(app) {
     disegnando = true;
     try {
       const { h } = app.ui;
-      const box = h('div', { class: 'ar-oggi ar-oggi-home' });
       const sec = h('section', { class: 'home-sec ar-home' },
-        h('div', { class: 'ar-home-head' }, h('h2', {}, 'Oggi in archivio'),
-          h('button', { class: 'btn', onclick: () => apri({ scheda: 'documenti' }) }, 'Cerca nei documenti'),
-          h('button', { class: 'btn primary', onclick: () => apri({ scheda: 'oggi' }) }, 'Apri l\'archivio')),
-        box);
+        h('div', { class: 'ar-home-head' }, h('h2', {}, 'Archivio d\'ufficio'), await linkOggi(h),
+          h('button', { class: 'btn', onclick: () => apri({ scheda: 'documenti' }) }, 'Cerca nei documenti')));
+      if (inner.querySelector('.ar-home')) return;
       const hero = inner.querySelector('.home-hero');
       if (hero) hero.after(sec); else inner.prepend(sec);
-      await disegnaOggi(app, A, box, { compatto: true, apri: apriId, vedi: (filtro) => apri({ filtro }) });
     } finally { disegnando = false; }
   }
   new MutationObserver(() => inserisciOggi()).observe(home, { childList: true });
@@ -105,6 +108,8 @@ export default function register(app) {
   app.services = app.services || {};
   /** app.services.statoArchivio(path) → Promise<{ protocollato, numero, data, uor, origine, stati, … } | null> */
   app.services.statoArchivio = (path) => A.statoArchivio(path);
+  /** app.services.ibanNoti(piva) → Promise<[{ iban, data, dal, fonte, documenti }]> (fatture e dichiarazioni di tracciabilità indicizzate) */
+  app.services.ibanNoti = (piva) => A.ibanNoti(piva);
   /** app.services.apriArchivio({ q, filtro, scheda }): apre l'archivio con una ricerca già scritta. */
   app.services.apriArchivio = ({ q, filtro, scheda } = {}) => apri({ q, filtro, scheda: scheda || (q || filtro ? 'documenti' : undefined) });
   /** app.services.apriDocumentoArchivio(id | path, { pagina, q }): apre un documento dell'archivio, sempre in sola lettura. */
@@ -126,6 +131,7 @@ export default function register(app) {
     const s = app.settings;
     arr.push({ key: 'archivio.preavvisoDurc', field: { name: 'archivio.preavvisoDurc', label: 'Archivio: avvisa dei DURC in scadenza con quanti giorni di anticipo', type: 'number', min: 0, max: 365, value: s.get('archivio.preavvisoDurc', IMPOSTAZIONI_PREDEFINITE.preavvisoDurc) } });
     arr.push({ key: 'archivio.preavvisoFatture', field: { name: 'archivio.preavvisoFatture', label: 'Archivio: proponi in «Oggi» le fatture che scadono entro quanti giorni', type: 'number', min: 0, max: 365, value: s.get('archivio.preavvisoFatture', IMPOSTAZIONI_PREDEFINITE.preavvisoFatture) } });
+    arr.push({ key: 'archivio.oggiAllAvvio', field: { name: 'archivio.oggiAllAvvio', label: 'Archivio: all\'avvio mostra «Oggi» (se non ci sono documenti aperti)', type: 'checkbox', value: s.get('archivio.oggiAllAvvio', true) } });
     arr.push({ key: 'archivio.giorniNonProtocollati', field: { name: 'archivio.giorniNonProtocollati', label: 'Archivio: segnala in «Oggi» i documenti arrivati da più di quanti giorni e non ancora protocollati', type: 'number', min: 1, max: 60, value: s.get('archivio.giorniNonProtocollati', IMPOSTAZIONI_PREDEFINITE.giorniNonProtocollati) } });
     arr.push({ key: 'archivio.codiciEnte', field: { name: 'archivio.codiciEnte', label: 'Archivio: codice fiscale e P.IVA del tuo ente (non vengono presi per quelli del fornitore)', type: 'text', value: s.get('archivio.codiciEnte', CODICI_ENTE_PREDEFINITI.join(', ')) } });
   });
@@ -146,6 +152,14 @@ export default function register(app) {
         fields: [{ name: 'level', label: 'Livello', type: 'select', value: 'media', options: [{ value: 'archivio', label: 'Bassa compressione (qualità alta, per archivio)' }, { value: 'media', label: 'Media compressione (consigliata)' }, { value: 'alta', label: 'Alta compressione (file piccolo, per PEC e portali)' }] }],
         summary: (p) => `Riduci dimensioni (${p.level || 'media'})`, runBytes: async (bytes, p) => (await sv.compress(bytes, { level: p.level || 'media' })).bytes });
     }
+  });
+
+  // ---------- all'avvio, con l'archivio attivo e nessun documento aperto, si parte da «Oggi» ----------
+  let primoCaricamento = true;
+  A.on((tipo) => {
+    if (tipo !== 'caricato' || !primoCaricamento) return;
+    primoCaricamento = false;
+    if (A.attivo && !app.activeDoc && !app.docs?.length && app.settings.get('archivio.oggiAllAvvio', true)) apri({ scheda: 'oggi' });
   });
 
   // ---------- avvio ----------

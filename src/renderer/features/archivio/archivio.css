@@ -175,3 +175,4 @@
 .ar-pratica-voce > span:last-child { display: flex; flex-direction: column; min-width: 0; }
 .ar-pratica-voce small { color: var(--muted); font-size: var(--fs-xs); }
 .ar-pratica-voce .ar-tipo { width: 90px; font-size: var(--fs-xs); }
+.ar-sch-avviso { background: #fff4e5; color: #7a4100; border-radius: 8px; padding: 6px 10px; margin: 4px 0; font-weight: 600; }
