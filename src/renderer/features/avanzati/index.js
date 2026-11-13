@@ -4,12 +4,13 @@
 import './avanzati.css';
 import { openPane } from './pane.js';
 import { openSignedFile, signatureView, saveContent, saveReport, registerP7mPanel, SIGNED_EXT } from './ui/p7m.js';
-import { openFattura, registerFatturaPanel } from './ui/fattura.js';
+import { openFattura } from './ui/fattura.js';
 import { KEY_MODELLI, cercaSegnatura } from './ui/protocollo.js';
 import { preparaPerTitulus, KEY_SOGLIA_TITULUS } from './ui/titulus.js';
 import { leggiSegnaturaTitulus, KEY_MASCHERA_UOR } from './ui/segnatura-immagine.js';
 import { registerDatiTitulus } from './ui/datititulus.js';
 import { fatturaPdfDaBytes } from './ui/fattura.js';
+import { creaFascicolo } from './lib/fascicolo.js';
 import { compilaModelli, MODELLI_PREDEFINITI, SOGLIA_MB_PREDEFINITA, segnatureTitulus } from './lib/titulus.js';
 import { openBatch } from './ui/batch.js';
 import { openSearchFolder } from './ui/search-folder.js';
@@ -22,7 +23,7 @@ import { prepareAccessibility } from './ui/accessibility.js';
 import { openScans } from './ui/scans.js';
 import { isFattura } from './lib/fattura.js';
 import { looksLikeP7m } from './lib/cades.js';
-import { extOf } from './native.js';
+import { extOf, apriRisultato } from './native.js';
 import { dichiarazioneConformita, rinominaIntelligente, apriEml } from './ui/coda.js';
 import { setupEnte, modificaProfiloEnte, inserisciEnteTool, compilaConEnte } from './ui/ente.js';
 import { registerControlli } from './ui/controlli.js';
@@ -61,6 +62,16 @@ export default function register(app) {
   app.services.leggiSegnaturaTitulus = (bytes, opts) => leggiSegnaturaTitulus(app, bytes, opts);
   /** FatturaPA (XML o .p7m) → PDF impaginato (solo app desktop). */
   app.services.fatturaPdf = async (bytes, opts) => (await fatturaPdfDaBytes(app, bytes, opts)).bytes;
+  /**
+   * Fascicolo con indice da documenti già letti: si apre PRIMA in una scheda (si salva dopo, con «Salva con nome»).
+   * docs: [{ titolo, bytes }], opts: { titolo, sottotitolo, etichetta, numeriPagina } → doc della scheda
+   */
+  app.services.apriFascicolo = async (docs, opts = {}) => {
+    const r = await creaFascicolo(app.lib.PDFLib, docs, { etichetta: 'Allegato', ...opts });
+    const doc = await apriRisultato(app, await app.lib.savePdfLib(r.pdfDoc), String(opts.titolo || 'Fascicolo').replace(/[\\/:*?"<>|]+/g, '_') + '.pdf');
+    if (r.saltati.length) app.ui.toast(`Non inseriti: ${r.saltati.map((s) => `${s.titolo} (${s.motivo})`).join('; ')}`, { kind: 'warning', timeout: 12000 });
+    return doc;
+  };
   registerDatiTitulus(app);
   app.services.segnatureTitulus = (testo) => { try { return segnatureTitulus(testo, { modelli: String(app.settings.get(KEY_MODELLI, '') || '').trim() ? String(app.settings.get(KEY_MODELLI)).split(/\r?\n/).filter(Boolean) : undefined }); } catch { return segnatureTitulus(testo); } };
   app.bus.on('settings:fields', (arr) => {
@@ -169,15 +180,13 @@ export default function register(app) {
     keywords: 'accessibilità tag struttura testo alternativo lingua titolo screen reader pdf/ua amministrazione trasparente',
     run: () => prepareAccessibility(app, deps) });
   registerP7mPanel(app, deps);
-  registerFatturaPanel(app, deps);
   // i pannelli «Firme (.p7m)» e «Fattura elettronica» appartengono al loro documento:
   // passando a un documento che non li riguarda si torna alle miniature
   app.bus.on('document:activated', ({ doc }) => {
     const cur = app.sidebar.current;
     if (app.el.root.classList.contains('sidebar-closed')) return;
-    if (cur === 'p7m' && !doc?.data?.p7m) app.sidebar.show(doc?.data?.fattura ? 'fattura' : 'thumbs');
-    else if (cur === 'fattura' && !doc?.data?.fattura) app.sidebar.show(doc?.data?.p7m ? 'p7m' : 'thumbs');
-    else if (cur === 'thumbs' && doc?.data?.fattura) app.sidebar.show('fattura');
+    if (cur === 'p7m' && !doc?.data?.p7m) app.sidebar.show(doc?.data?.fattura ? 'controlli' : 'thumbs');
+    else if (cur === 'thumbs' && doc?.data?.fattura) app.sidebar.show('controlli');
   });
   registerLayersPanel(app, deps);
   setupPortfolio(app, deps);

@@ -24,10 +24,25 @@ Tutto funziona senza rete (tranne «Crea PDF da pagina web», che scarica la pag
 
 Pannelli: `p7m` (Firme .p7m), `fattura` (Fattura elettronica), `layers` (Livelli). I pannelli `p7m` e `fattura` appartengono al loro documento: passando a un altro documento si torna alle miniature. Impostazione: «riapri i documenti dell'ultima volta» (`avanzati.restoreSession`, attiva).
 
+## Quinto ciclo: semplicità e niente lavoro perso
+- **Mai perdere lavoro**: ogni risultato creato (pratica di missione e sue parti, fascicolo con indice, PDF da web/Office/scansioni) si apre
+  prima in una scheda segnata «non salvata» (chiudendola Leggio chiede se salvare); il salvataggio viene dopo («Salva…» nell'avviso).
+  Se si annulla la cartella dei giustificativi U-Web la pratica resta aperta e compare «Riprova». I rapporti PDF (verifica firma,
+  pubblicazione) si aprono in una scheda se la finestra di salvataggio viene chiusa (`native.js › salvaOApri`, `apriRisultato`).
+  Per l'archivio: `app.services.apriFascicolo(docs, opts)` crea il fascicolo e lo apre in una scheda (da usare al posto del salvataggio diretto).
+- **Un solo pannello per la fattura**: «Fattura elettronica» non esiste più come pannello; nel riquadro «Controlli» la fattura ha avvisi in alto,
+  «Dati da copiare», allegati e firma, e in fondo Salva come PDF / XML, Stampa, Vista compatta.
+- **Avvisi più mirati**: un solo «Perché?» per avviso (la fonte compare solo se richiesta). La data di ricezione SdI si prende dall'indice
+  dell'archivio (metadati SdI letti dall'archivio; altrimenti data del file, scritta come «stimata»); senza data non si dice nulla. Si corregge
+  in linea, senza finestre. «Manca il CUP» solo quando il CUP è dovuto: CUP nell'ordine abbinato o nella pratica (stesso CIG), fattura su un
+  progetto (PNRR, investimento), oppure impostazione `avanzati.cup.sempre`.
+- **IBAN cambiato**: avviso se l'IBAN della fattura è diverso da quelli delle fatture precedenti dello stesso fornitore (P.IVA). Usa
+  `app.services.ibanFornitore(piva, { escludi })` se l'archivio lo offre, altrimenti `app.archivio.cerca({ fornitore, tipo: 'fattura' })` (campo `iban`).
+
 ## Riquadro «Controlli» (quarto ciclo)
 Un solo pannello laterale (`controlli`) sul documento aperto, al posto di «Dati chiave» e «Dati per Titulus». Parla solo se c'è
 qualcosa da dire («Nessun controllo da segnalare» altrimenti); ogni avviso è una frase breve con un'azione (Copia il motivo,
-Indica la data di ricezione, Cerca nell'archivio, Apri l'ordine, Cerca la ricevuta F24…) e un pulsante «Fonte». In fondo una sola
+Indica la data di ricezione, Cerca nell'archivio, Apri l'ordine, Cerca la ricevuta F24…) e un «Perché?». In fondo una sola
 sezione «Dati da copiare» (Per Titulus, Per U-GOV, ordine abbinato o riconosciuto) e la versione delle regole con le fonti.
 Nessuno strumento nuovo. Leggio segnala soltanto: non rifiuta fatture (lo si fa in U-GOV).
 

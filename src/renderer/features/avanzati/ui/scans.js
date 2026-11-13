@@ -1,6 +1,6 @@
 // «Crea PDF dalla cartella delle scansioni»: osserva la cartella dove lo scanner/multifunzione salva le immagini
 // e crea un PDF da quelle nuove. (L'acquisizione diretta dallo scanner non è possibile senza componenti aggiuntivi.)
-import { chooseFolder, relist, isDesktop } from '../native.js';
+import { chooseFolder, relist, isDesktop, apriRisultato } from '../native.js';
 import { pdfDaImmagini, imageType } from '../lib/images.js';
 
 const EXT = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif', 'tif', 'tiff', 'heic'];
@@ -110,7 +110,7 @@ export function openScans(app, deps) {
     state.sel.clear();
     clearInterval(state.timer);
     pane.close();
-    const doc = await app.openBytes(res.bytes, { name: nome });
+    const doc = await apriRisultato(app, res.bytes, nome);
     if (doc && ocr.checked && app.tools.get('ocr')) setTimeout(() => app.tools.run('ocr'), 400);
   }
 

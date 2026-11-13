@@ -7,7 +7,7 @@ import { estraiDati } from '../lib/datichiave.js';
 import { looksLikeP7m, openP7m, overallStatus } from '../lib/cades.js';
 import { pageText } from '../lib/textsearch.js';
 import { openPdfJs } from '../../../core/pdf.js';
-import { chooseFiles, chooseFolder, writeOut, isDesktop, destroyPdf, call } from '../native.js';
+import { chooseFiles, chooseFolder, writeOut, isDesktop, destroyPdf, call, apriRisultato } from '../native.js';
 import { elencoFile, bloccaDrop } from './elenco.js';
 import { preparaImmagine, aggiungiPaginaImmagine, immagineComePdf, isImmagine, ESTENSIONI_IMMAGINI } from './immagini.js';
 
@@ -116,15 +116,16 @@ export function praticaMissione(app, deps) {
       if (r) {
         const parti = await app.ui.withProgress('Divisione in parti', async (p) => { p.set(null, 'Calcolo delle parti…'); return dividiPerDimensione(app.lib.PDFLib, res.bytes, max, { signal: p.signal }); });
         if (!parti) return;
-        for (const [k, pt] of parti.entries()) await app.openBytes(pt.bytes, { name: nome.replace(/\.pdf$/, `_parte${k + 1}di${parti.length}.pdf`) });
+        for (const [k, pt] of parti.entries()) await apriRisultato(app, pt.bytes, nome.replace(/\.pdf$/, `_parte${k + 1}di${parti.length}.pdf`));
         if (parti.some((x) => x.troppoGrande)) app.ui.toast('Una pagina da sola supera la soglia: riducila con «Riduci dimensioni file».', { kind: 'warning', timeout: 9000 });
         app.ui.toast(`Pratica divisa in ${parti.length} parti, aperte in schede: salvale con «Salva con nome».`, { kind: 'success', timeout: 8000 });
         return;
       }
     }
+    // prima la pratica in una scheda (mai persa), poi il salvataggio quando si vuole; poi i giustificativi per U-Web
+    const doc = await apriRisultato(app, res.bytes, nome);
+    if (doc) app.ui.toast(`Pratica pronta: ${res.pagine} ${res.pagine === 1 ? 'pagina' : 'pagine'}, ${mb(res.bytes.length)}. Non è ancora salvata.`, { kind: 'success', timeout: 12000, action: { label: 'Salva…', run: () => app.save(doc, { as: true }) } });
     if (perSpesa.checked) await giustificativiUweb(app, elenco.items, { ritaglia: ritaglia.checked, ocr: ocr.checked });
-    const doc = await app.openBytes(res.bytes, { name: nome });
-    if (doc) { app.ui.toast(`Pratica pronta: ${res.pagine} pagine, ${mb(res.bytes.length)}.`, { kind: 'success' }); await app.save(doc, { as: true }); }
   }
 }
 
@@ -190,7 +191,7 @@ export function fascicoloConIndice(app, deps) {
     });
     if (!res) return;
     if (res.saltati.length) app.ui.toast(`Non inseriti: ${res.saltati.map((s) => `${s.titolo} (${s.motivo})`).join('; ')}`, { kind: 'warning', timeout: 12000 });
-    const doc = await app.openBytes(res.bytes, { name: (titolo.value || 'Fascicolo').replace(/[\\/:*?"<>|]+/g, '_') + '.pdf' });
+    const doc = await apriRisultato(app, res.bytes, (titolo.value || 'Fascicolo').replace(/[\\/:*?"<>|]+/g, '_') + '.pdf');
     if (doc) app.ui.toast(`Fascicolo creato: ${res.voci.length} documenti, ${doc.pageCount} pagine.`, { kind: 'success' });
   }
 }
@@ -276,7 +277,7 @@ async function giustificativiUweb(app, items, { ritaglia, ocr }) {
   const { h } = app.ui;
   const R = regoleUfficio(app);
   let dest = null;
-  if (isDesktop()) { try { dest = await call(app, 'choose-folder', { title: 'Dove salvare i giustificativi per U-Web' }); } catch { dest = null; } if (!dest) return; }
+  if (isDesktop()) { try { dest = await call(app, 'choose-folder', { title: 'Dove salvare i giustificativi per U-Web' }); } catch { dest = null; } if (!dest) { app.ui.toast('Giustificativi per U-Web non creati: la pratica resta aperta nella sua scheda.', { kind: 'info', timeout: 9000, action: { label: 'Riprova', run: () => giustificativiUweb(app, items, { ritaglia, ocr }) } }); return; } }
   const righe = await app.ui.withProgress('Giustificativi per U-Web', async (p) => {
     const out = []; let n = 0;
     for (const [i, it] of items.entries()) {

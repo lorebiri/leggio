@@ -1,3 +1,4 @@
+import { salvaOApri } from '../native.js';
 // File firmati .p7m: apertura, pannello «Firme del file .p7m», salvataggio del contenuto e del rapporto.
 import { openP7m, innerName, overallStatus, MAX_P7M_BYTES } from '../lib/cades.js';
 import { compactResult } from '../lib/p7m-compact.js';
@@ -107,7 +108,7 @@ export async function saveReport(app, info) {
     const sha = await sha256Hex(info.sourceBytes);
     const bytes = await rapportoPdf(app.lib.PDFLib, info.result, { nomeFile: info.sourceName, dimensione: info.sourceSize, sha256: sha, contenuto: info.result.content ? innerName(info.sourceName, info.result.kind) : null, stato: info.stato });
     const base = info.sourceName.replace(/(\.p7m|\.p7s|\.tsd|\.m7m)+$/i, '').replace(/\.[a-z0-9]{2,4}$/i, '');
-    await app.exportFile(bytes, `${base}_verifica_firma.pdf`, [{ name: 'PDF', extensions: ['pdf'] }]);
+    await salvaOApri(app, bytes, `${base}_verifica_firma.pdf`);
   } catch (err) { app.reportError(err, 'Rapporto di verifica non creato'); }
 }
 
