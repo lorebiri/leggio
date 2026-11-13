@@ -138,10 +138,16 @@ function notify(info) {
   if (win.webContents.isLoading()) win.webContents.once('did-finish-load', send); else send();
 }
 
+/** Serve un nuovo controllo? Un'ultima data nel futuro (orologio messo male una volta) non blocca i controlli. */
+function checkDue(lastCheck, now = Date.now()) {
+  const t = Number(lastCheck);
+  return !Number.isFinite(t) || t <= 0 || t > now || now - t >= DAY;
+}
+
 async function autoCheck() {
   if (!autoEnabled()) return;
   const st = readState();
-  const due = testMode() || !st.lastCheck || Date.now() - st.lastCheck >= DAY;
+  const due = testMode() || checkDue(st.lastCheck);
   if (!due) {
     // controllato da poco: ripropone l'ultima versione trovata, se è ancora più nuova
     if (st.found && compareVersions(st.found.version, app.getVersion()) > 0) notify(st.found);
@@ -194,4 +200,4 @@ async function checkInteractive(win) {
   }
 }
 
-module.exports = { setup, check, checkInteractive, compareVersions, parseVersion, pickAsset, toInfo };
+module.exports = { setup, check, checkInteractive, checkDue, compareVersions, parseVersion, pickAsset, toInfo };

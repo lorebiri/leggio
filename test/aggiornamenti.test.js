@@ -85,3 +85,14 @@ describe('novità di questa versione', () => {
     for (const n of NOVITA) { expect(n.punti.length).toBeGreaterThan(0); expect(compareVersions(n.versione, '0.0.0')).toBe(1); }
   });
 });
+
+describe('controllo automatico: quando ripetere', () => {
+  it('ogni giorno; mai bloccato da una data dell\u2019ultimo controllo nel futuro (orologio sbagliato)', () => {
+    const now = Date.UTC(2026, 10, 13);
+    const DAY = 24 * 3600 * 1000;
+    expect(main.checkDue(undefined, now)).toBe(true);
+    expect(main.checkDue(now - 1000, now)).toBe(false);
+    expect(main.checkDue(now - DAY, now)).toBe(true);
+    expect(main.checkDue(now + 365 * DAY, now)).toBe(true);
+  });
+});
