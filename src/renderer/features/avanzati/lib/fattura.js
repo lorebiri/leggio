@@ -48,8 +48,9 @@ const num = (s) => { if (s == null || s === '') return null; const v = Number(St
 
 function anagrafica(node) {
   if (!node) return null;
-  const da = el(node, 'DatiAnagrafici');
-  const an = el(da, 'Anagrafica');
+  // nella semplificata (FSM10) IdFiscaleIVA, Denominazione/Nome/Cognome e RegimeFiscale stanno direttamente nel nodo
+  const da = el(node, 'DatiAnagrafici') || node;
+  const an = el(da, 'Anagrafica') || da;
   const sede = el(node, 'Sede');
   const piva = el(da, 'IdFiscaleIVA');
   const nome = txt(an, 'Denominazione') || [txt(an, 'Titolo'), txt(an, 'Nome'), txt(an, 'Cognome')].filter(Boolean).join(' ');
@@ -99,13 +100,13 @@ export function parseFattura(input) {
     soggettoEmittente: txt(header, 'SoggettoEmittente'),
     corpi: [],
   };
-  if (semplificata && out.cedente == null) out.cedente = anagrafica(el(header, 'CedentePrestatore'));
   if (semplificata) {
+    // FSM10: il cliente ha IdentificativiFiscali (P.IVA, codice fiscale) e AltriDatiIdentificativi (nome, sede)
     const cc = el(header, 'CessionarioCommittente');
     if (cc && !out.cessionario?.nome) {
       const id = el(cc, 'IdentificativiFiscali');
-      const a = el(cc, 'AltriDatiIdentificativi');
-      out.cessionario = { nome: txt(a, 'Denominazione') || [txt(a, 'Nome'), txt(a, 'Cognome')].filter(Boolean).join(' '), partitaIva: id ? `${txt(id, 'IdFiscaleIVA/IdPaese')}${txt(id, 'IdFiscaleIVA/IdCodice')}` : '', codiceFiscale: txt(id, 'CodiceFiscale'), indirizzo: '', regimeFiscale: '' };
+      const a = anagrafica(el(cc, 'AltriDatiIdentificativi')) || { nome: '', indirizzo: '', rea: '', telefono: '', email: '', pec: '' };
+      out.cessionario = { ...a, partitaIva: id ? `${txt(id, 'IdFiscaleIVA/IdPaese')}${txt(id, 'IdFiscaleIVA/IdCodice')}` : '', codiceFiscale: txt(id, 'CodiceFiscale'), regimeFiscale: '' };
     }
   }
   for (const body of els(root, 'FatturaElettronicaBody')) out.corpi.push(parseBody(body, semplificata));
@@ -173,7 +174,7 @@ function parseBody(body, semplificata) {
   c.cig = uniq(c.riferimenti.map((r) => r.cig));
   c.cup = uniq(c.riferimenti.map((r) => r.cup));
   c.avvisi = controlli(c);
-  c.calcoli = calcoli(c);
+  c.calcoli = calcoli(c, semplificata);
   return c;
 }
 
@@ -191,7 +192,13 @@ export function allegatoNome(a) {
 
 const round2 = (v) => Math.round(v * 100) / 100;
 
-function calcoli(c) {
+function calcoli(c, semplificata = false) {
+  if (semplificata) {
+    // FSM10: <Importo> comprende già l'IVA e non c'è ImportoTotaleDocumento → totale = somma degli importi
+    const totale = round2(c.linee.reduce((s, l) => s + (l.prezzoTotale || 0), 0));
+    const imposta = round2(c.linee.reduce((s, l) => s + (l.imposta || 0), 0));
+    return { imponibile: round2(totale - imposta), imposta, split: false, ivaSplit: 0, ritenute: 0, totale, nettoAPagare: totale };
+  }
   const imponibile = round2(c.riepilogo.reduce((s, r) => s + (r.imponibile || 0), 0) || c.linee.reduce((s, l) => s + (l.prezzoTotale || 0), 0));
   const imposta = round2(c.riepilogo.reduce((s, r) => s + (r.imposta || 0), 0) || c.linee.reduce((s, l) => s + (l.imposta || 0), 0));
   const split = c.riepilogo.some((r) => r.esigibilita === 'S');

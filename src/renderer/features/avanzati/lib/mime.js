@@ -46,23 +46,61 @@ function qpBytes(t) {
   return new Uint8Array(out);
 }
 
+/** Divide sui «;» che non stanno dentro le virgolette (filename="Fattura; marzo.pdf"). */
+function splitParams(s) {
+  const out = []; let cur = ''; let q = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (q && c === '\\' && i + 1 < s.length) { cur += c + s[++i]; continue; }
+    if (c === '"') q = !q;
+    if (c === ';' && !q) { out.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  out.push(cur);
+  return out;
+}
+function unquote(v) {
+  // solo \" e \\ sono sciolti: altre barre (percorsi Windows di client poco corretti) restano come sono
+  if (v.length >= 2 && v[0] === '"' && v[v.length - 1] === '"') return v.slice(1, -1).replace(/\\(["\\])/g, '$1');
+  return v.replace(/^"|"$/g, '');
+}
+/** Byte di un valore RFC 2231: %XX → byte (se codificato), il resto così com'è (intestazioni lette in latin1). */
+function pctBytes(s, encoded, out = []) {
+  for (let i = 0; i < s.length; i++) {
+    if (encoded && s[i] === '%' && /^[0-9A-Fa-f]{2}$/.test(s.slice(i + 1, i + 3))) { out.push(parseInt(s.slice(i + 1, i + 3), 16)); i += 2; }
+    else out.push(s.charCodeAt(i) & 0xff);
+  }
+  return out;
+}
+
 /** Valore principale e parametri di un'intestazione (Content-Type, Content-Disposition), con RFC 2231. */
 export function headerParams(v) {
-  const parts = String(v || '').split(';');
+  const parts = splitParams(String(v || ''));
   const value = parts.shift().trim().toLowerCase();
   const params = {}; const cont = {};
   for (const p of parts) {
     const i = p.indexOf('='); if (i < 0) continue;
-    let k = p.slice(0, i).trim().toLowerCase(); let val = p.slice(i + 1).trim().replace(/^"|"$/g, '');
+    let k = p.slice(0, i).trim().toLowerCase(); let val = unquote(p.slice(i + 1).trim());
     const m = k.match(/^([^*]+)\*(\d+)?(\*)?$/);
     if (m) {
-      if (m[3] || (!m[2] && k.endsWith('*'))) { const q = val.match(/^([^']*)'[^']*'(.*)$/); try { val = q ? new TextDecoder(normCharset(q[1] || 'utf-8')).decode(qpBytes(q[2].replace(/%([0-9A-Fa-f]{2})/g, '=$1'))) : decodeURIComponent(val); } catch {} }
-      if (m[2] != null) { (cont[m[1]] ||= [])[+m[2]] = val; continue; }
+      // segmenti (filename*0*, filename*1*…): si uniscono prima di decodificare, un carattere multibyte può stare a cavallo
+      if (m[2] != null) { (cont[m[1]] ||= [])[+m[2]] = { val, enc: !!m[3] }; continue; }
+      const q = val.match(/^([^']*)'[^']*'(.*)$/); try { val = q ? new TextDecoder(normCharset(q[1] || 'utf-8')).decode(new Uint8Array(pctBytes(q[2], true))) : decodeURIComponent(val); } catch {}
       k = m[1];
     }
     params[k] = decodeWords(val);
   }
-  for (const [k, arr] of Object.entries(cont)) params[k] = arr.join('');
+  for (const [k, arr] of Object.entries(cont)) {
+    const seg = arr.filter(Boolean);
+    if (!seg.some((x) => x.enc)) { params[k] = seg.map((x) => x.val).join(''); continue; }
+    let charset = 'utf-8'; const bytes = [];
+    seg.forEach((x, n) => {
+      let t = x.val;
+      if (n === 0 && x.enc) { const q = t.match(/^([^']*)'[^']*'(.*)$/); if (q) { charset = q[1] || 'utf-8'; t = q[2]; } }
+      pctBytes(t, x.enc, bytes);
+    });
+    try { params[k] = new TextDecoder(normCharset(charset)).decode(new Uint8Array(bytes)); } catch { params[k] = seg.map((x) => x.val).join(''); }
+  }
   return { value, params };
 }
 

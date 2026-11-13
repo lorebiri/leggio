@@ -151,7 +151,8 @@ export function trovaCodici(testo, escludi = CODICI_ENTE_PREDEFINITI) {
 /** Importo principale del documento (totale, netto a pagare, importo complessivo). */
 export function trovaImporto(testo) {
   const t = String(testo || '').replace(/\s+/g, ' ');
-  const reN = '((?:€|eur(?:o)?)?\\s*(?:\\d{1,3}(?:\\.\\d{3})+|\\d+)(?:,\\d{2})|\\d+\\.\\d{2})';
+  // formato italiano (1.234,56) o inglese (1,234.56 / 1234.56); il lookahead evita di prendere solo l'inizio di un numero più lungo
+  const reN = '((?:€|eur(?:o)?)?\\s*(?:(?:\\d{1,3}(?:\\.\\d{3})+|\\d+),\\d{2}|(?:\\d{1,3}(?:,\\d{3})+|\\d+)\\.\\d{2}))(?![.,]?\\d)';
   const etichette = [
     [5, 'totale\\s+(?:documento|fattura|da\\s+pagare|a\\s+pagare|generale|complessivo|dovuto|ordine)'],
     [5, 'netto\\s+a\\s+pagare'],

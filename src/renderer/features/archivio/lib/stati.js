@@ -213,7 +213,8 @@ export function esportaJson(stati, nomi = {}, ora = new Date()) {
 const COLONNE = ['impronta', 'nome', 'percorso', 'protocollo', 'numero_protocollo', 'data_protocollo', 'firma', 'pagamento', 'pubblicato', 'archiviato', 'etichette', 'nota', 'aggiornato'];
 const sino = (v) => (v ? 'sì' : '');
 const fase = (v) => (v === 'da' ? 'da fare' : v === 'fatto' ? 'fatto' : v === 'no' ? 'non serve' : '');
-function cella(v) { const s = String(v ?? ''); return /[;"\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }
+// come cellaCsv in esporta.js: nomi file e note che iniziano con = + - @ (o tab) non diventano formule in Excel
+function cella(v) { const s = String(v ?? ''); const formula = /^[=+\-@\t]/.test(s); return formula || /[;"\r\n]/.test(s) ? `"${(formula ? "'" : '') + s.replace(/"/g, '""')}"` : s; }
 
 /** CSV (separatore «;», come Excel in italiano). */
 export function esportaCsv(stati, nomi = {}) {
@@ -269,7 +270,8 @@ export function importa(testo) {
   if (col('impronta') < 0) throw new Error('Nel CSV manca la colonna «impronta»: usa un file esportato da Leggio.');
   const daFase = (v) => { const x = normalizza(v).trim(); return x === 'da fare' || x === 'da' ? 'da' : x === 'fatto' || x === 'si' || x === 'sì' ? 'fatto' : x === 'non serve' || x === 'no' ? 'no' : undefined; };
   for (const r of righe.slice(1)) {
-    const g = (n) => (col(n) >= 0 ? (r[col(n)] ?? '').trim() : '');
+    // l'apostrofo messo da esportaCsv davanti a = + - @ si toglie, così esporta → importa non cambia le note
+    const g = (n) => (col(n) >= 0 ? (r[col(n)] ?? '').trim().replace(/^'(?=[=+\-@\t])/, '') : '');
     const impronta = g('impronta').toLowerCase();
     const s = ripulisci({
       protocollo: daFase(g('protocollo')), numeroProtocollo: g('numero_protocollo'), dataProtocollo: g('data_protocollo'),
