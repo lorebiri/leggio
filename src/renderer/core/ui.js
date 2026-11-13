@@ -1,5 +1,6 @@
 // Componenti d'interfaccia condivisi: dialoghi, moduli, notifiche, avanzamento, menu.
 import { icon } from './icons.js';
+import { ModalStack, nextFocusIndex } from './modal.js';
 
 export function h(tag, attrs = {}, ...children) {
   const el = document.createElement(tag);
@@ -17,6 +18,35 @@ export function h(tag, attrs = {}, ...children) {
 }
 
 const layer = () => document.getElementById('overlay-root');
+
+// ---------- finestre modali: una pila, solo quella in cima riceve Esc e Tab ----------
+const modals = new ModalStack();
+const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]';
+function focusables(root) {
+  return [...root.querySelectorAll(FOCUSABLE)].filter((el) => !el.disabled && el.tabIndex >= 0 && el.type !== 'hidden' && el.getClientRects().length > 0
+    // un gruppo di pulsanti di scelta conta una volta sola (come fa il browser)
+    && !(el.type === 'radio' && !el.checked && el.name && root.querySelector(`input[type=radio][name="${CSS.escape(el.name)}"]:checked`)));
+}
+function onModalKey(e) {
+  const top = modals.top;
+  if (!top || (e.key !== 'Escape' && e.key !== 'Tab')) return;
+  if (e.target?.closest?.('.ctx-menu')) return; // un menu aperto sopra la finestra gestisce i suoi tasti
+  // sopra la finestra del nucleo c'è un'altra finestra (di un'area): decide lei
+  const over = layer();
+  const above = over && [...over.children].reverse().find((el) => !el.classList.contains('ctx-menu') && !el.classList.contains('closing'));
+  if (above && above !== top.root) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  if (e.key === 'Escape') { top.onEscape?.(); return; }
+  // Tab e Maiusc+Tab restano dentro la finestra
+  const list = focusables(top.root);
+  list[nextFocusIndex(list.length, list.indexOf(document.activeElement), e.shiftKey)]?.focus();
+}
+if (typeof document !== 'undefined') document.addEventListener('keydown', onModalKey, true);
+
+/** Registra una finestra modale (root = elemento in #overlay-root). onEscape: cosa fa Esc (null = niente). → voce da passare a closeModal. */
+export function openModal(root, onEscape) { return modals.push({ root, onEscape }); }
+export function closeModal(entry) { modals.remove(entry); }
 
 /**
  * Dialogo modale con modulo. Restituisce i valori (oggetto) o null se annullato.
@@ -48,14 +78,16 @@ export function dialog({ title, message, fields = [], okLabel = 'OK', cancelLabe
       for (const [name, get] of Object.entries(inputs)) out[name] = get();
       return out;
     }
+    let closed = false;
     function done(v) {
+      if (closed) return;
+      closed = true;
       back.classList.add('closing');
       setTimeout(() => back.remove(), 120);
-      document.removeEventListener('keydown', onKey, true);
+      closeModal(modal);
       prevFocus?.focus?.();
       resolve(v);
     }
-    function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); done(null); } }
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       const v = values();
@@ -64,7 +96,7 @@ export function dialog({ title, message, fields = [], okLabel = 'OK', cancelLabe
       if (msg) { err.textContent = msg; return; }
       done(v);
     });
-    document.addEventListener('keydown', onKey, true);
+    const modal = openModal(back, () => done(null));
     layer().append(back);
     const first = form.querySelector('input:not([type=hidden]),select,textarea');
     (first || okBtn).focus();
@@ -145,9 +177,13 @@ function renderField(f, inputs) {
   return wrap;
 }
 
-/** Converte "1-3, 5, 8-" in indici 0-based (ordinati, unici). Vuoto = tutte le pagine. */
+/**
+ * Converte "1-3, 5, 8-" in indici 0-based (ordinati, unici). Vuoto = tutte le pagine.
+ * Accetta anche il trattino lungo («1–3», come lo scrivono Word e i Mac). Se nessuna pagina
+ * corrisponde (es. «pari» in un documento di una pagina) lancia un errore leggibile.
+ */
 export function parsePageRanges(str, pageCount) {
-  const s = (str || '').trim();
+  const s = (str || '').replace(/[\u2010-\u2015\u2212]/g, '-').trim();
   if (!s) return [...Array(pageCount).keys()];
   const out = new Set();
   for (const part of s.split(/[,;]+/)) {
@@ -167,6 +203,7 @@ export function parsePageRanges(str, pageCount) {
       out.add(n - 1);
     } else throw new Error(`Non capisco «${part.trim()}». Usa per esempio 1-3, 5, 8-`);
   }
+  if (!out.size) throw new Error(`Nessuna pagina corrisponde a «${s}» (il documento ha ${pageCount} ${pageCount === 1 ? 'pagina' : 'pagine'}).`);
   return [...out].sort((a, b) => a - b);
 }
 
@@ -260,9 +297,9 @@ export function choice({ title, message, body, buttons, width } = {}) {
     }
     box.append(h('header', { class: 'dlg-head' }, h('h2', {}, title || ''), h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Chiudi', onclick: () => done(null), html: icon('close') })), content, foot);
     const back = h('div', { class: 'backdrop' }, box);
-    function done(v) { back.remove(); document.removeEventListener('keydown', onKey, true); prevFocus?.focus?.(); resolve(v); }
-    function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); done(null); } }
-    document.addEventListener('keydown', onKey, true);
+    let closed = false;
+    function done(v) { if (closed) return; closed = true; back.remove(); closeModal(modal); prevFocus?.focus?.(); resolve(v); }
+    const modal = openModal(back, () => done(null));
     layer().append(back);
     (primary || foot.querySelector('button'))?.focus();
   });
@@ -278,6 +315,7 @@ export function progress(title, { cancellable = true } = {}) {
     h('div', { class: 'dlg-body' }, h('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': 100 }, bar), text),
     cancellable ? h('footer', { class: 'dlg-foot' }, h('button', { class: 'btn', onclick: () => { ctrl.abort(); text.textContent = 'Interruzione…'; } }, 'Interrompi')) : null);
   const back = h('div', { class: 'backdrop' }, box);
+  const modal = openModal(back, null); // Esc non interrompe per sbaglio: serve il pulsante
   layer().append(back);
   return {
     set(frac, msg) {
@@ -287,7 +325,7 @@ export function progress(title, { cancellable = true } = {}) {
     },
     get cancelled() { return ctrl.signal.aborted; },
     signal: ctrl.signal,
-    close() { back.remove(); },
+    close() { back.remove(); closeModal(modal); },
   };
 }
 

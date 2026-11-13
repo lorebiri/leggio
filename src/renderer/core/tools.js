@@ -1,5 +1,5 @@
 // Registro degli strumenti e pannello "Tutti gli strumenti" (anche come palette comandi ⌘K).
-import { h, toast } from './ui.js';
+import { h, toast, openModal, closeModal } from './ui.js';
 import { icon } from './icons.js';
 import { rankTools, foundByAcrobatName } from './toolsearch.js';
 
@@ -95,10 +95,12 @@ export class ToolRegistry {
 
   /** Pannello a tutto schermo con ricerca. */
   openHub({ focusSearch = true } = {}) {
+    // un pannello già aperto si chiude del tutto (prima restava attivo il suo Esc e bloccava gli altri)
+    this.closeHub?.();
     document.querySelector('.tools-hub')?.remove();
     const search = h('input', { type: 'search', class: 'hub-search', placeholder: 'Cerca uno strumento… (es. unisci, firma, OCR, password)', 'aria-label': 'Cerca strumento' });
     const grid = h('div', { class: 'hub-grid' });
-    const close = () => { hub.remove(); document.removeEventListener('keydown', onKey, true); };
+    const close = () => { hub.remove(); closeModal(modal); if (this.closeHub === close) this.closeHub = null; };
     const hub = h('div', { class: 'tools-hub', role: 'dialog', 'aria-label': 'Tutti gli strumenti' },
       h('div', { class: 'hub-inner' },
         h('header', { class: 'hub-head' }, h('h2', {}, 'Tutti gli strumenti'), h('span', { class: 'hub-free' }, 'Tutto incluso, gratis per sempre'), search, h('button', { class: 'icon-btn', 'aria-label': 'Chiudi', onclick: close, html: icon('close') })),
@@ -131,8 +133,8 @@ export class ToolRegistry {
     search.addEventListener('input', render);
     // Invio apre il primo della classifica
     search.addEventListener('keydown', (e) => { if (e.key === 'Enter' && best) { e.preventDefault(); close(); this.run(best.id); } });
-    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
-    document.addEventListener('keydown', onKey, true);
+    const modal = openModal(hub, close);
+    this.closeHub = close;
     render();
     document.getElementById('overlay-root').append(hub);
     if (focusSearch) search.focus();

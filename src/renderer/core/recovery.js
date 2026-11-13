@@ -9,6 +9,18 @@ import { MB } from './history.js';
 
 const PERIOD_MS = 2 * 60 * 1000;
 
+/**
+ * Nome e percorso con cui riaprire una copia di recupero. Se il file è già aperto in una scheda
+ * (es. riaperto con un doppio clic prima di rispondere), la copia recuperata si apre a parte,
+ * senza percorso e con il nome «nome (recuperato).pdf»: altrimenti si attiverebbe la scheda già
+ * aperta e le modifiche recuperate andrebbero perse.
+ * isOpen(path) → true se il percorso è già aperto.
+ */
+export function restoreTarget(entry, isOpen) {
+  if (entry.path && isOpen(entry.path)) return { name: String(entry.name || 'Senza titolo.pdf').replace(/(\.pdf)?$/i, ' (recuperato).pdf'), path: null };
+  return { name: entry.name, path: entry.path || null };
+}
+
 export class Recovery {
   constructor(app) {
     this.app = app;
@@ -104,9 +116,13 @@ export class Recovery {
     for (const e of list) {
       try {
         const bytes = await this.backend.read(e.session, e.id);
+        const open = new Set(this.app.docs);
+        const target = restoreTarget(e, (p) => this.app.docs.some((d) => d.path === p));
         // un documento in sola lettura torna in sola lettura (il ripristino non deve poter sovrascrivere l'originale)
-        const doc = await this.app.openBytes(bytes, { name: e.name, path: e.path, dirty: true, readOnly: !!e.readOnly });
-        if (doc) { ok++; await this.snapshot(doc); }
+        const doc = await this.app.openBytes(bytes, { name: target.name, path: target.path, dirty: true, readOnly: !!e.readOnly });
+        // conta solo una scheda nuova con i byte recuperati, non una scheda già aperta che è stata solo attivata
+        if (doc && !open.has(doc)) { ok++; await this.snapshot(doc); }
+        else if (doc) log('warn', 'recupero: il file era già aperto, copia non ripristinata', { name: e.name });
       } catch (err) { log('error', 'recupero: ripristino non riuscito', { name: e.name, error: String(err?.message || err) }); }
     }
     // le vecchie copie si eliminano solo se tutto è stato ripristinato (e ricopiato in questa sessione)

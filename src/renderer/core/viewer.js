@@ -4,6 +4,7 @@ import { EventBus, PDFViewer, PDFLinkService, PDFFindController, ScrollMode, Spr
 import 'pdfjs-dist/web/pdf_viewer.css';
 import { pdfjs } from './pdf.js';
 import { rectToCss } from './geometry.js';
+import { isEditable } from './keys.js';
 
 export { rectToCss };
 
@@ -46,10 +47,21 @@ export class Viewer {
   }
 
   #initView() {
+    // tra «pagesinit» e questo fotogramma il documento può essere già cambiato (schede aperte e chiuse
+    // in fretta, riordino): sulla vista nuova le pagine non esistono ancora e pdf.js andrebbe in errore
+    // («Cannot destructure property 'div'»); ci penserà il suo «pagesinit»
+    if (!this.pdfViewer.pagesCount || this.pdfViewer.pdfDocument !== this.doc?.pdf) return;
     const vs = this.doc?.viewState;
-    if (vs && vs.scale) { this.pdfViewer.currentScaleValue = vs.scale; if (vs.page) this.pdfViewer.currentPageNumber = vs.page; if (vs.scrollTop != null) setTimeout(() => (this.container.scrollTop = vs.scrollTop)); }
-    else this.pdfViewer.currentScaleValue = this.app.settings.get('defaultZoom', 'auto');
+    if (vs && vs.scale) { this.pdfViewer.currentScaleValue = vs.scale; if (vs.page) this.#goTo(vs.page); if (vs.scrollTop != null) setTimeout(() => (this.container.scrollTop = vs.scrollTop)); }
+    else { this.pdfViewer.currentScaleValue = this.app.settings.get('defaultZoom', 'auto'); if (vs?.page) this.#goTo(vs.page); }
     this.app.bus.emit('viewer:pagesinit', { doc: this.doc });
+  }
+
+  /** Va alla pagina n (1-based) solo se le pagine della vista sono pronte. */
+  #goTo(n) {
+    if (!pagesReady(this.pdfViewer, n)) return false;
+    this.pdfViewer.currentPageNumber = n;
+    return true;
   }
 
   #pageReady(pageIndex) {
@@ -108,12 +120,20 @@ export class Viewer {
     await this.setDocument(this.doc);
   }
   saveViewState() {
-    if (!this.doc || !this.pdfViewer.pdfDocument || this.pdfViewer.currentScaleValue == null) return;
+    // vista non ancora pronta (pagine non create): si tiene lo stato salvato prima, non «pagina 1»
+    if (!this.doc || !this.pdfViewer.pdfDocument || !this.pdfViewer.pagesCount || this.pdfViewer.currentScaleValue == null) return;
     this.doc.viewState = { scale: this.pdfViewer.currentScaleValue, page: this.pdfViewer.currentPageNumber, scrollTop: this.container.scrollTop };
   }
 
   get page() { return this.pdfViewer.currentPageNumber; }
-  set page(n) { if (this.doc) this.pdfViewer.currentPageNumber = Math.max(1, Math.min(this.doc.pageCount, n)); }
+  set page(n) {
+    if (!this.doc) return;
+    const p = Math.max(1, Math.min(this.doc.pageCount, Math.round(Number(n)) || 1));
+    if (this.#goTo(p)) return;
+    // vista non ancora pronta (documento appena caricato o ricaricato): la pagina si applica in #initView
+    // (lo scorrimento salvato porterebbe di nuovo alla pagina di prima: non serve più)
+    if (!this.pdfViewer.pagesCount) this.doc.viewState = { ...(this.doc.viewState || {}), page: p, scrollTop: null };
+  }
   get pageIndex() { return this.page - 1; }
   get scale() { return this.pdfViewer.currentScale; }
   set scaleValue(v) { this.pdfViewer.currentScaleValue = v; }
@@ -143,6 +163,8 @@ export class Viewer {
     let pan = null; let space = false;
     window.addEventListener('keydown', (e) => { if (e.code === 'Space' && !e.repeat && !isTyping(e)) { space = true; this.container.classList.add('pan-ready'); } });
     window.addEventListener('keyup', (e) => { if (e.code === 'Space') { space = false; this.container.classList.remove('pan-ready'); } });
+    // passando a un'altra finestra con Spazio premuto (Alt/⌘+Tab) il rilascio non arriva mai: si azzera qui
+    window.addEventListener('blur', () => { space = false; pan = null; this.container.classList.remove('pan-ready', 'panning'); });
     this.container.addEventListener('mousedown', (e) => {
       if (e.button !== 0 && e.button !== 1) return;
       if (!(this.mode === 'hand' || space || e.button === 1)) return;
@@ -161,7 +183,9 @@ export class Viewer {
   }
 }
 
-export function isTyping(e) {
-  const t = e.target;
-  return t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+export function isTyping(e) { return isEditable(e.target); }
+
+/** Le pagine della vista pdf.js esistono già e n è una pagina valida? (Prima di «pagesinit» non ci sono.) */
+export function pagesReady(pdfViewer, n) {
+  return !!pdfViewer.pdfDocument && Number.isInteger(n) && n >= 1 && n <= pdfViewer.pagesCount && !!pdfViewer.getPageView(n - 1);
 }
