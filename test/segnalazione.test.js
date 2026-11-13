@@ -54,3 +54,31 @@ describe('Segnala un problema', () => {
     expect(S.nomeImmagine(new Date(2026, 10, 13, 9, 5, 7))).toBe('Leggio-segnalazione-2026-11-13-090507.png');
   });
 });
+
+describe('Segnala un problema: privacy e casi limite', () => {
+  it('percorsi Windows nel JSON del registro (barre raddoppiate), con spazi e di rete: resta solo il nome del file', () => {
+    const riga = String.raw`2026-11-13T09:00:01.456Z [WARN] (main) apertura non riuscita {"p":"C:\\Users\\Mario Rossi\\Pratiche Riservate\\Bianchi Carlo\\ricorso.pdf","error":"x"}`;
+    const unc = String.raw`2026-11-13T09:00:01.456Z [WARN] (main) x {"p":"\\\\server\\Ufficio Legale\\Cliente Verdi\\atto.pdf"}`;
+    const a = S.pulisci(riga, 'C:\\Users\\Mario Rossi');
+    const b = S.pulisci(unc, 'C:\\Users\\Mario Rossi');
+    expect(a).not.toMatch(/Mario|Rossi|Pratiche|Bianchi|Users/);
+    expect(a).toContain('ricorso.pdf');
+    expect(b).not.toMatch(/server|Ufficio|Verdi/);
+    expect(b).toContain('atto.pdf');
+  });
+  it('percorsi POSIX con spazi nelle cartelle (dentro il JSON): niente nomi di cartelle', () => {
+    const riga = '2026-11-13T09:00:01.456Z [ERROR] (main) x {"p":"/home/mrossi/Pratiche Riservate/Bianchi Carlo/ricorso finale.pdf"}';
+    const s = S.pulisci(riga, '/home/mrossi');
+    expect(s).not.toMatch(/mrossi|Pratiche|Bianchi/);
+    expect(s).toContain('ricorso finale.pdf');
+  });
+  it('un’emoji tagliata a metà non blocca la segnalazione (URIError)', () => {
+    const riga = '2026-11-13T09:00:01.456Z [ERROR] (renderer) ' + 'a'.repeat(173) + '😀'.repeat(20);
+    const r = S.pulisci(riga);
+    expect(() => encodeURIComponent(r)).not.toThrow();
+    expect(() => S.preparaMail({ versione: '1', errori: [r], contesto: 'a'.repeat(199) + '😀' })).not.toThrow();
+  });
+  it('l’ora del registro è in UTC: lo dice', () => {
+    expect(S.pulisci('2026-11-13T09:00:01.456Z [ERROR] (main) x')).toMatch(/^2026-11-13 09:00:01 UTC/);
+  });
+});
