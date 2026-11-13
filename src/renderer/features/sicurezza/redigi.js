@@ -20,7 +20,7 @@ const abort = (signal) => { if (signal?.aborted) throw new DOMException('Annulla
  * Cerca con i cercatori in tutte le pagine. → { byPage: Map(i → rects), hits: [{ page, text, matcher }], textless: [indici] }
  */
 export async function findInPdf(pdf, matchers, { signal, onProgress, OPS, signatures = false, exclude } = {}) {
-  const byPage = new Map(); const hits = []; const textless = [];
+  const byPage = new Map(); const hits = []; const textless = []; let testo = '';
   for (let i = 0; i < pdf.numPages; i++) {
     abort(signal);
     if (i % 10 === 0) onProgress?.(i / pdf.numPages, `Ricerca: pagina ${i + 1} di ${pdf.numPages}`);
@@ -41,6 +41,7 @@ export async function findInPdf(pdf, matchers, { signal, onProgress, OPS, signat
     }
     page.cleanup();
     const pt = buildPageText(tc.items, tc.styles);
+    if (testo.length < 6000) testo += pt.text + '\n'; // inizio del documento: serve a proporre il modello giusto
     for (const hit of findMatches(pt.text, matchers)) {
       if (exclude?.(hit)) continue; // es. telefono o email dell'ente: mai oscurati
       const rects = rangeRects(pt, hit.start, hit.end);
@@ -51,7 +52,7 @@ export async function findInPdf(pdf, matchers, { signal, onProgress, OPS, signat
       hits.push({ page: i, text: hit.text, matcher: hit.matcher, rects, before: flat(pt.text.slice(Math.max(0, hit.start - 35), hit.start)), after: flat(pt.text.slice(hit.end, hit.end + 35)) });
     }
   }
-  return { byPage, hits, textless };
+  return { byPage, hits, textless, testo };
 }
 
 export async function hasImages(page, OPS) {

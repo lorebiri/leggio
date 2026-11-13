@@ -3,7 +3,7 @@
 // In cima all'elenco c'è il menu «Modello pronto» (Dati personali comuni / Incarichi e assegni…).
 import { PDFJS_ASSETS } from '../../core/pdf.js';
 import { buildMatchers } from './logica/modelli.js';
-import { PRESET, getPreset, preselect, FIRMA, datiEnte, isDatoEnte } from './logica/preset.js';
+import { PRESET, getPreset, preselect, FIRMA, datiEnte, isDatoEnte, presetConsigliato, profiloEnteCompilato } from './logica/preset.js';
 import { findInPdf, applyRedaction } from './redigi.js';
 import { boxAvviso, esclusioneEnte } from './comune.js';
 
@@ -25,14 +25,40 @@ export function presetMenu(app, current, onChange, { conPersonalizzato = false }
   };
   sel.addEventListener('change', () => { sync(); app.settings.set('sic.preset', sel.value); onChange?.(getPreset(sel.value)); });
   sync();
-  return { el: h('div', { class: 'field' }, h('label', {}, 'Modello pronto'), sel, desc, fonti), get: () => getPreset(sel.value), select: sel };
+  /** Imposta il modello senza ricordarlo come scelta dell'utente (proposta automatica). */
+  const set = (id) => { sel.value = id; sync(); onChange?.(getPreset(id)); };
+  return { el: h('div', { class: 'field' }, h('label', {}, 'Modello pronto'), sel, desc, fonti), get: () => getPreset(sel.value), select: sel, set };
 }
 
 /**
  * bytes → { bytes, trovati, verifica: true } ; lancia AbortError se l'utente rinuncia, Error se la verifica fallisce.
  * opts: { password, progress ({ set, signal }), preset ('dati' | 'incarichi'), label, doSanitize }
  */
-export async function oscuraDatiPersonali(app, bytes, { password, progress, preset, label = '', doSanitize = false } = {}) {
+/** Tipo del documento nell'archivio (se il documento viene da lì). */
+async function tipoArchivio(app, doc) {
+  try { return doc?.path && typeof app.services?.statoArchivio === 'function' ? (await app.services.statoArchivio(doc.path))?.tipo || null : null; } catch { return null; }
+}
+
+/** Riga «Compila il Profilo dell'ente» (una volta: se l'utente rinuncia non viene più proposta). onDone() dopo il salvataggio. */
+export function rigaProfiloEnte(app, onDone) {
+  const { h } = app.ui;
+  if (app.settings.get('sic.chiediProfiloEnte', true) === false || !app.tools.get('entity-profile')) return null;
+  let profilo = {};
+  try { profilo = app.services?.profiloEnte?.() || {}; } catch { /* */ }
+  if (profiloEnteCompilato(profilo)) return null;
+  const box = h('div', { class: 'lg-sic-avviso lg-sic-info', style: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' } },
+    h('span', { style: { flex: '1' } }, 'Compila il Profilo dell\'ente: così telefono ed email dell\'istituto restano visibili.'),
+    h('button', { type: 'button', class: 'btn small', onclick: async () => {
+      await app.tools.run('entity-profile');
+      let p = {}; try { p = app.services?.profiloEnte?.() || {}; } catch { /* */ }
+      if (profiloEnteCompilato(p)) { box.remove(); onDone?.(); }
+      else { app.settings.set('sic.chiediProfiloEnte', false); box.remove(); } // ha rinunciato: non chiederlo più
+    } }, 'Compila il profilo…'),
+    h('button', { type: 'button', class: 'btn small', onclick: () => { app.settings.set('sic.chiediProfiloEnte', false); box.remove(); } }, 'Non ora'));
+  return box;
+}
+
+export async function oscuraDatiPersonali(app, bytes, { password, progress, preset, label = '', doSanitize = false, doc = app.activeDoc } = {}) {
   const { pdfjs } = app.lib; const { h } = app.ui;
   const signal = progress?.signal;
   const task = pdfjs.getDocument({ data: bytes.slice(), password, isEvalSupported: false, ...PDFJS_ASSETS });
@@ -40,7 +66,9 @@ export async function oscuraDatiPersonali(app, bytes, { password, progress, pres
   try {
     progress?.set?.(null, 'Ricerca dei dati personali…');
     const found = await findInPdf(pdf, buildMatchers({ models: CERCATI }), { signal, OPS: pdfjs.OPS, signatures: true, exclude: esclusioneEnte(app, datiEnte, isDatoEnte), onProgress: (f, t) => progress?.set?.(f * 0.3, t) });
-    let current = getPreset(preset || app.settings.get('sic.preset', 'dati')) || PRESET[0];
+    // modello proposto da solo se il documento sembra un incarico, un assegno o una borsa
+    const consigliato = presetConsigliato({ testo: found.testo, tipoArchivio: await tipoArchivio(app, doc) });
+    let current = getPreset(preset || consigliato || app.settings.get('sic.preset', 'dati')) || PRESET[0];
     const checks = found.hits.map((hit) => ({ hit, on: preselect(current, hit) }));
     const listEl = h('div', { style: { maxHeight: '44vh', overflow: 'auto' } });
     const render = () => {
@@ -68,9 +96,17 @@ export async function oscuraDatiPersonali(app, bytes, { password, progress, pres
     };
     const menu = presetMenu(app, current.id, (p) => { current = p; for (const c of checks) c.on = preselect(p, c.hit); render(); syncFirma(); });
     render(); syncFirma();
+    const perche = consigliato && current.id === consigliato && !preset ? h('p', { class: 'muted', style: { margin: '-6px 0 10px' } }, 'Proposto perché il documento sembra un incarico, un contratto di collaborazione, un assegno o una borsa.') : null;
+    // profilo dell'ente vuoto: proposta in una riga; dopo la compilazione i recapiti dell'ente escono dall'elenco
+    const riga = rigaProfiloEnte(app, () => {
+      const escl = esclusioneEnte(app, datiEnte, isDatoEnte);
+      if (!escl) return;
+      for (let k = checks.length - 1; k >= 0; k--) if (escl(checks[k].hit)) checks.splice(k, 1);
+      render();
+    });
     const ok = await app.ui.dialog({
       title: 'Conferma i dati da oscurare', okLabel: 'Oscura i dati spuntati', danger: true, width: 660,
-      body: h('div', {}, menu.el,
+      body: h('div', {}, riga, menu.el, perche,
         found.hits.length ? h('p', {}, `Trovati ${found.hits.length} dati. Controlla l'elenco e togli la spunta da quelli che devono restare visibili.`) : null,
         found.textless.length ? boxAvviso(app, `${found.textless.length} pagine sono scansioni senza testo: lì i dati non sono stati cercati. Esegui prima l'OCR oppure oscura a mano.`) : null,
         firmaNote, listEl),

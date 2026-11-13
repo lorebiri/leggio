@@ -130,3 +130,22 @@ describe('recapiti del Profilo dell\'ente: mai oscurati', () => {
     expect(isDatoEnte({ matcher: 'Numero di telefono', text: '050 315 2443' }, null)).toBe(false);
   });
 });
+
+describe('proposta automatica del modello', () => {
+  it('riconosce incarichi, contratti di collaborazione, assegni e borse', async () => {
+    const { sembraIncarico, presetConsigliato, profiloEnteCompilato } = await import('../src/renderer/features/sicurezza/logica/preset.js');
+    expect(sembraIncarico(INCARICO)).toBe(true); // contratto di lavoro autonomo occasionale
+    expect(sembraIncarico(ASSEGNO)).toBe(true);
+    expect(sembraIncarico('DECRETO DI CONFERIMENTO DI UNA BORSA DI STUDIO per laureati')).toBe(true);
+    expect(sembraIncarico('Contratto di collaborazione coordinata e continuativa')).toBe(true);
+    expect(sembraIncarico('Conferimento dell’incarico\nprofessionale')).toBe(true);
+    expect(sembraIncarico('Fattura n. 910/2026 — Vetreria Toscana Spa — CIG Z9F8E7D6C5')).toBe(false);
+    expect(sembraIncarico('Determina di affidamento diretto della fornitura di reagenti')).toBe(false);
+    expect(sembraIncarico('Ordine di missione n. 12')).toBe(false);
+    expect(presetConsigliato({ testo: 'Fattura', tipoArchivio: 'incarico' })).toBe('incarichi');
+    expect(presetConsigliato({ testo: 'Fattura n. 1', tipoArchivio: 'fattura' })).toBe(null);
+    expect(profiloEnteCompilato({})).toBe(false);
+    expect(profiloEnteCompilato({ denominazione: 'ICCOM', partitaIva: '02118311006' })).toBe(false);
+    expect(profiloEnteCompilato({ telefono: '055 5225000' })).toBe(true);
+  });
+});
