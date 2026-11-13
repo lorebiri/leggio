@@ -116,12 +116,19 @@ async function fascicolo(app, A, pratica, r0) {
         if (bytes) input.push({ titolo: titoli(d), bytes }); else saltati.push({ titolo: d.nome, motivo: 'non convertibile' });
       } catch (e) { saltati.push({ titolo: d.nome, motivo: e.message }); }
     }
+    if (typeof app.services?.apriFascicolo === 'function') { risultato = { input, saltati, servizio: true }; return; }
     const out = await creaFascicolo(app.lib.PDFLib, input, { titolo: v.titolo, sottotitolo: `Creato con Leggio dall'archivio il ${new Date().toLocaleDateString('it-IT')}`, etichetta: 'Allegato', numeriPagina: true, signal: p.signal, onProgress: (f, m) => p.set(0.5 + f * 0.45, m) });
     risultato = { bytes: await app.lib.savePdfLib(out.pdfDoc), saltati: [...saltati, ...out.saltati] };
   });
   if (!risultato) return;
-  // prima si vede, poi si salva: il fascicolo si apre in una scheda nuova (non salvata); «Salva con nome» per conservarlo
   app.closeRightPanel();
+  if (risultato.servizio) {
+    // servizio dell'area avanzati: crea il fascicolo e lo apre in una scheda «non salvata»
+    await app.services.apriFascicolo(risultato.input, { titolo: v.titolo, sottotitolo: `Creato con Leggio dall'archivio il ${new Date().toLocaleDateString('it-IT')}`, numeriPagina: true });
+    if (risultato.saltati.length) app.ui.toast(`Non letti: ${risultato.saltati.map((s) => `${s.titolo} (${s.motivo})`).join('; ')}`, { kind: 'warning', timeout: 10000 });
+    return;
+  }
+  // prima si vede, poi si salva: il fascicolo si apre in una scheda nuova (non salvata); «Salva con nome» per conservarlo
   await app.openBytes(risultato.bytes, { name: `${v.titolo.replace(/[\\/:*?"<>|]+/g, '_')}.pdf`, dirty: true });
   app.ui.toast('Fascicolo pronto: controllalo e usa «Salva con nome» per conservarlo.', { kind: 'success', timeout: 8000 });
   if (risultato.saltati.length) app.ui.toast(`Non inseriti nel fascicolo: ${risultato.saltati.map((s) => `${s.titolo} (${s.motivo})`).join('; ')}`, { kind: 'warning', timeout: 10000 });

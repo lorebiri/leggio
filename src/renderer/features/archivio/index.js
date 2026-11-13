@@ -110,6 +110,8 @@ export default function register(app) {
   app.services.statoArchivio = (path) => A.statoArchivio(path);
   /** app.services.ibanNoti(piva) → Promise<[{ iban, data, dal, fonte, documenti }]> (fatture e dichiarazioni di tracciabilità indicizzate) */
   app.services.ibanNoti = (piva) => A.ibanNoti(piva);
+  /** app.services.ibanFornitore(piva, { escludi: percorso del documento corrente }) → Promise<[{ iban, data, fonte, path }]> */
+  app.services.ibanFornitore = (piva, { escludi } = {}) => A.ibanFornitore(piva, escludi);
   /** app.services.apriArchivio({ q, filtro, scheda }): apre l'archivio con una ricerca già scritta. */
   app.services.apriArchivio = ({ q, filtro, scheda } = {}) => apri({ q, filtro, scheda: scheda || (q || filtro ? 'documenti' : undefined) });
   /** app.services.apriDocumentoArchivio(id | path, { pagina, q }): apre un documento dell'archivio, sempre in sola lettura. */

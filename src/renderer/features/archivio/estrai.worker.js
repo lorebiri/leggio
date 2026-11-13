@@ -8,7 +8,7 @@ import { pageText } from '../avanzati/lib/textsearch.js';
 import { openP7m, looksLikeP7m, innerName } from '../avanzati/lib/cades.js';
 import { parseFattura, isFattura } from '../avanzati/lib/fattura.js';
 import { parseMime, attachments, bodyText, summary, parseDaticert } from '../avanzati/lib/mime.js';
-import { datiDaTesto, datiDaFattura, testoFattura, eScansione, firmePdf, esitoFirmeP7m, VERSIONE_ESTRAZIONE } from './lib/estrai.js';
+import { datiDaTesto, datiDaFattura, testoFattura, eScansione, firmePdf, esitoFirmeP7m, leggiFileSdi, VERSIONE_ESTRAZIONE } from './lib/estrai.js';
 import { immaginiDisegnate, strisciaCandidata } from './lib/striscia.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(workerUrl, self.location.href).href;
@@ -101,6 +101,8 @@ async function estrai({ bytes, nome, escludi }) {
     return { ...out, contenuto: 'eml', testo: e.testo, ...dati, tipo: 'pec', fornitore: dati.fornitore || e.mittente.replace(/<.*>/, '').replace(/"/g, '').trim().slice(0, 80), data: dati.data || e.data, oggetto: e.oggetto };
   }
   if (lowI.endsWith('.xml') || isFattura(b)) {
+    const sdi = !isFattura(b) ? leggiFileSdi(nome, new TextDecoder().decode(b.subarray(0, 200000))) : null;
+    if (sdi) return { ...out, contenuto: 'sdi', ...datiDaTesto('', { nome, escludi }), tipo: 'altro', sdiFattura: sdi.fattura, sdiRicezione: sdi.ricezione };
     if (!isFattura(b)) return { ...out, contenuto: 'xml', ...datiDaTesto('', { nome, escludi }), tipo: out.firme ? 'p7m' : 'altro', errore: 'File XML che non è una fattura elettronica' };
     const f = parseFattura(b);
     const testo = testoFattura(f).slice(0, MAX_CARATTERI);

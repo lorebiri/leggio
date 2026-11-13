@@ -41,10 +41,10 @@ export function indiciFornitori(records, { durataDurc = 120 } = {}) {
       durc.get(r.piva).push({ id: r.id, nome: r.nome, inizio, fine, calcolata: !r.scadenza });
     } else if (r.tipo === 'fattura' && r.iban) {
       if (!ibanFatture.has(r.piva)) ibanFatture.set(r.piva, []);
-      ibanFatture.get(r.piva).push({ id: r.id, nome: r.nome, iban: r.iban, data: r.data || '', numero: r.numero || '' });
+      ibanFatture.get(r.piva).push({ id: r.id, path: r.path, nome: r.nome, iban: r.iban, data: r.data || '', numero: r.numero || '' });
     } else if (r.tipo === 'tracciabilita' && r.iban) {
       if (!tracciabilita.has(r.piva)) tracciabilita.set(r.piva, []);
-      tracciabilita.get(r.piva).push({ id: r.id, nome: r.nome, iban: r.iban, data: r.data || '' });
+      tracciabilita.get(r.piva).push({ id: r.id, path: r.path, nome: r.nome, iban: r.iban, data: r.data || '' });
     }
   }
   for (const l of durc.values()) l.sort((a, b) => b.fine.localeCompare(a.fine));
@@ -70,6 +70,17 @@ export function ibanNoti(indici, piva) {
   for (const t of indici.tracciabilita.get(piva) || []) add(t.iban, t.data, `dichiarazione di tracciabilità (${t.nome})`);
   for (const f of indici.ibanFatture.get(piva) || []) add(f.iban, f.data, `fattura${f.numero ? ' n. ' + f.numero : ''} (${f.nome})`);
   return [...m.values()].sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+}
+
+/**
+ * Ogni IBAN visto per il fornitore, documento per documento (per l'area avanzati: «IBAN cambiato»).
+ * escludiId: il documento corrente. → [{ iban, data, fonte, path }] dal più recente
+ */
+export function ibanFornitore(indici, piva, escludiId = null) {
+  const out = [];
+  for (const t of indici.tracciabilita.get(piva) || []) if (t.id !== escludiId) out.push({ iban: t.iban, data: t.data, fonte: 'dichiarazione di tracciabilità', path: t.path });
+  for (const f of indici.ibanFatture.get(piva) || []) if (f.id !== escludiId) out.push({ iban: f.iban, data: f.data, fonte: `fattura${f.numero ? ' n. ' + f.numero : ''}`, path: f.path });
+  return out.sort((a, b) => (b.data || '').localeCompare(a.data || ''));
 }
 
 /** IBAN della fattura diverso da quello delle fatture PRECEDENTI dello stesso fornitore? → { prima, data } | null */

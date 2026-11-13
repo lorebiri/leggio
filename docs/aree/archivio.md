@@ -338,6 +338,17 @@ fine, documenti MePA firmati e qualche **numero di protocollo ripetuto** (anomal
   «IBAN cambiato rispetto alla fattura precedente» (giallo).
 - **Fascicolo della pratica**: si apre in una scheda nuova (non salvata); lo si salva dopo con «Salva con nome».
 - **Pannelli**: se si apre un altro strumento a tutta area l'archivio si chiude, e con lui la sua Scheda a destra.
+- **Sola lettura su ogni apertura** (`lib/apertura.js › apriInSolaLettura`, test `test/archivio-apertura.test.js`):
+  i PDF con `app.openPath(path, { readOnly: true })`; .p7m, fatture XML e .eml con `app.openFile(…, { readOnly: true })`,
+  che passa le opzioni al gestore dell'area avanzati. Poiché oggi quei gestori ignorano le opzioni, ogni documento
+  aperto durante la chiamata (PDF contenuto nel .p7m, fattura impaginata) viene marcato in sola lettura. Vale per
+  elenco, «Oggi», Scheda, Pratica e `apriDocumentoArchivio`. Provato nell'app: PDF, PDF da .p7m e fattura XML
+  propongono «Lavora su una copia» alla prima modifica.
+- **Data di ricezione SdI**: i file dello SdI accanto alle fatture (`…_MT_001.xml`, `…_RC_001.xml`…) danno
+  `DataOraRicezione` (o `DataOraConsegna`): il campo `ricezione` della fattura è esatto, non più stimato. Questi file
+  non compaiono nell'elenco (servono solo alla data).
+- Servizi: `app.services.ibanFornitore(piva, { escludi })` → `[{ iban, data, fonte, path }]` (`ibanNoti` resta);
+  il fascicolo della Pratica usa `app.services.apriFascicolo` (scheda «non salvata»).
 - Non fatto (core): l'icona Archivio con il numerino; il messaggio tecnico «file non aperto né scelto dall'utente» al
   salvataggio è del nucleo.
 

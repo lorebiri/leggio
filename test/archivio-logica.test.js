@@ -4,13 +4,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { normalizza, interpretaRicerca, paginaDi, estratto, numeroIt, dataDaTesto, giorniTra, aggiungiGiorni } from '../src/renderer/features/archivio/lib/testo.js';
-import { ibanValido, trovaIban, trovaDataFine, riconosciTipo, pivaValida, cfValido, trovaCigCup, trovaCodici, trovaImporto, datiDaTesto, datiDaFattura, eScansione, firmePdf, pulisciFornitore } from '../src/renderer/features/archivio/lib/estrai.js';
+import { leggiFileSdi, chiaveSdi, ibanValido, trovaIban, trovaDataFine, riconosciTipo, pivaValida, cfValido, trovaCigCup, trovaCodici, trovaImporto, datiDaTesto, datiDaFattura, eScansione, firmePdf, pulisciFornitore } from '../src/renderer/features/archivio/lib/estrai.js';
 import { applica, haStato, descrivi, esportaJson, esportaCsv, importa, unisci, leggiCsv, conSegnatura, leggiElencoProtocolli, testoProtocollo, modificaDaEvento } from '../src/renderer/features/archivio/lib/stati.js';
 import { segnaturaGenerica, normalizzaSegnatura, numeroConfrontabile } from '../src/renderer/features/archivio/lib/segnatura.js';
 import { immaginiDisegnate, strisciaCandidata } from '../src/renderer/features/archivio/lib/striscia.js';
 import { riepilogoOggi, scadenzaDurc, testoGiorni } from '../src/renderer/features/archivio/lib/scadenze.js';
 import { Motore } from '../src/renderer/features/archivio/lib/motore.js';
-import { prontaPerPagamento, indiciFornitori, pagamentoPrevisto, giorniSdi, ibanNoti, ibanCambiato } from '../src/renderer/features/archivio/lib/pagamento.js';
+import { prontaPerPagamento, indiciFornitori, pagamentoPrevisto, giorniSdi, ibanNoti, ibanCambiato, ibanFornitore } from '../src/renderer/features/archivio/lib/pagamento.js';
 import { aggiungiMesi, contaDaFare } from '../src/renderer/features/archivio/lib/scadenze.js';
 import { Blocchi, leggiBlocco, manifestoValido, DIM } from '../src/renderer/features/archivio/lib/blocchi.js';
 import { registroCsv, registroXlsx, serialeExcel, zipSenzaCompressione } from '../src/renderer/features/archivio/lib/esporta.js';
@@ -98,6 +98,13 @@ describe('estrazione dei dati chiave', () => {
     expect(riconosciTipo('MERCATO ELETTRONICO DELLA PUBBLICA AMMINISTRAZIONE DOCUMENTO DI STIPULA - TRATTATIVA DIRETTA N. 1234567')).toBe('ordine');
     expect(trovaDataFine('Durata: dal 01/02/2026 al 31/01/2027')).toBe('2027-01-31');
     expect(datiDaTesto('CONFERIMENTO DI INCARICO\nDurata: dal 01/02/2026 al 31/01/2027\nData 01/02/2026').dataFine).toBe('2027-01-31');
+  });
+  it('file dello SdI accanto alle fatture: data di ricezione', () => {
+    const rc = '<ns3:RicevutaConsegna><NomeFile>IT01234567890_00042.xml.p7m</NomeFile><DataOraRicezione>2026-11-03T10:00:00+01:00</DataOraRicezione></ns3:RicevutaConsegna>';
+    expect(leggiFileSdi('IT01234567890_00042_RC_001.xml', rc)).toEqual({ fattura: 'it01234567890_00042', ricezione: '2026-11-03' });
+    expect(leggiFileSdi('IT01234567890_00042_MT_001.xml', '<FileMetadati></FileMetadati>')).toEqual({ fattura: 'it01234567890_00042', ricezione: '' });
+    expect(leggiFileSdi('fattura.xml', rc)).toBe(null);
+    expect(chiaveSdi('IT01234567890_00042.xml.p7m')).toBe('it01234567890_00042');
   });
   it('ripulisce i nomi dei fornitori', () => {
     expect(pulisciFornitore('sociale Alfa Strumenti')).toBe('Alfa Strumenti');
@@ -269,6 +276,10 @@ describe('pronta per il pagamento', () => {
     const p = prontaPerPagamento(recs[2], null, ind, { oggi: '2026-11-12' });
     expect(p.esito).toBe('giallo');
     expect(p.motivi.find((m) => m.livello === 'giallo').testo).toMatch(/IBAN cambiato rispetto alla fattura precedente del 10\/03\/2026/);
+    expect(ibanFornitore(ind, P, 'f3')).toEqual([
+      { iban: A1, data: '2026-03-10', fonte: 'fattura n. 2', path: undefined },
+      { iban: A1, data: '2026-01-10', fonte: 'fattura n. 1', path: undefined },
+    ]);
     const noti = ibanNoti(ind, P);
     expect(noti.map((x) => x.iban)).toEqual([A2, A1]);
     expect(noti[1]).toMatchObject({ dal: '2026-01-10', data: '2026-03-10', documenti: 2 });

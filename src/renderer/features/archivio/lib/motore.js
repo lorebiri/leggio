@@ -4,7 +4,7 @@
 import { normalizza, interpretaRicerca, estratto, paginaDi } from './testo.js';
 import { haStato, descrivi, conSegnatura } from './stati.js';
 import { numeroConfrontabile } from './segnatura.js';
-import { indiciFornitori, prontaPerPagamento, ibanNoti } from './pagamento.js';
+import { indiciFornitori, prontaPerPagamento, ibanNoti, ibanFornitore } from './pagamento.js';
 
 const TIPO_PAROLE = { durc: 'durc', fattura: 'fattura', fatture: 'fattura', 'nota di credito': 'nota-credito', determina: 'ordine', ordine: 'ordine', missione: 'missione', missioni: 'missione', contratto: 'contratto', contratti: 'contratto', pec: 'pec' };
 const coll = new Intl.Collator('it', { sensitivity: 'base', numeric: true });
@@ -63,6 +63,7 @@ export class Motore {
     return { chiavi: { protocollo: s0?.protocollo === 'fatto' ? s0.numeroProtocollo : '', cig: [...cig], cup: [...cup] }, documenti: out.slice(0, 500) };
   }
 
+  ibanFornitore(piva, escludiId) { return piva ? ibanFornitore(this.#indici(), String(piva).replace(/^IT/i, ''), escludiId) : []; }
   ibanNoti(piva) { return piva ? ibanNoti(this.#indici(), String(piva).replace(/^IT/i, '')) : []; }
 
   /** Scheda del fornitore (P.IVA): nome, DURC, dichiarazioni di tracciabilità, fatture non pagate. */
@@ -126,6 +127,7 @@ export class Motore {
     const prot = f.protocollo ? numeroConfrontabile(f.protocollo) : '';
     const out = [];
     for (const r of this.rec.values()) {
+      if (r.contenuto === 'sdi') continue; // metadati e ricevute dello SdI: servono solo per la data di ricezione
       if (f.tipo && r.tipo !== f.tipo) continue;
       if (f.cartella && r.cartella !== f.cartella) continue;
       if (forn && !normalizza(`${r.fornitore || ''} ${this.nomeFornitore(r)} ${r.piva || ''} ${r.cf || ''}`).includes(forn)) continue;
@@ -210,6 +212,7 @@ export class Motore {
     const tipi = {}; const forn = new Map(); const etichette = new Map(); const cartelle = {}; const segnali = { scansione: 0, protetto: 0, errore: 0, firmato: 0, 'firma-non-valida': 0, 'segnatura-letta': 0, 'segnatura-da-leggere': 0, 'segnatura-non-letta': 0 };
     let protocollati = 0;
     for (const r of this.rec.values()) {
+      if (r.contenuto === 'sdi') continue;
       if (r.segnatura?.numero) protocollati++;
       tipi[r.tipo] = (tipi[r.tipo] || 0) + 1;
       cartelle[r.cartella] = (cartelle[r.cartella] || 0) + 1;

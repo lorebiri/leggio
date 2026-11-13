@@ -118,7 +118,7 @@ describe('estrazione su un archivio generato', () => {
   }, 60000);
 
   it('fatture elettroniche XML', () => {
-    const xml = files.filter((x) => x.endsWith('.xml'));
+    const xml = files.filter((x) => x.endsWith('.xml') && !/_(MT|RC)_\d{3}\.xml$/.test(x));
     expect(xml.length).toBeGreaterThan(0);
     for (const f of xml) {
       const d = datiDaFattura(parseFattura(fs.readFileSync(f)));

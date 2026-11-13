@@ -5,7 +5,7 @@ import { analizza, trovaDate } from '../../avanzati/lib/rinomina.js';
 import { numeroIt } from './testo.js';
 
 /** Versione delle regole di estrazione: se cambia, i documenti vengono riletti alla prossima scansione. */
-export const VERSIONE_ESTRAZIONE = 7; // 7: verifica delle firme .p7m nell'indice
+export const VERSIONE_ESTRAZIONE = 8; // 7: verifica delle firme .p7m; 8: file SdI (ricezione)
 
 /**
  * Esito della verifica di una busta .p7m (risultato di openP7m con verify: true):
@@ -182,6 +182,23 @@ export function trovaScadenza(testo, tipo) {
     : /((?:data\s+)?scadenza(?:\s+(?:del\s+)?pagamento)?|da\s+pagare\s+entro\s+il|pagamento\s+entro\s+il)[^0-9]{0,30}(\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}|\d{4}-\d{2}-\d{2})/i;
   const m = t.match(pat);
   return m ? (trovaDate(m[2])[0]?.iso || '') : '';
+}
+
+/** File dello SdI accanto alle fatture (metadati _MT_, ricevute _RC_, notifiche…): nome della fattura a cui si riferisce. */
+export const RE_FILE_SDI = /^(.+?)_(MT|RC|NS|MC|NE|DT|AT|EC|SE)_\d{3}\.xml(\.p7m)?$/i;
+/** Chiave per abbinare una fattura ai suoi file SdI: nome senza estensioni (.xml, .p7m), minuscolo. */
+export const chiaveSdi = (nome) => String(nome || '').replace(/(\.xml)?(\.p7m)*$/i, '').toLowerCase();
+/**
+ * Legge un file SdI (metadati o ricevuta). → { fattura (chiave), ricezione (ISO) } o null.
+ * La data è DataOraRicezione (o DataOraConsegna) se c'è. Il nome della fattura: <NomeFile> o il nome del file.
+ */
+export function leggiFileSdi(nome, testoXml) {
+  const m = RE_FILE_SDI.exec(String(nome || ''));
+  if (!m) return null;
+  const t = String(testoXml || '');
+  const d = t.match(/<(?:\w+:)?DataOra(?:Ricezione|Consegna)>\s*(\d{4}-\d{2}-\d{2})/);
+  const nf = t.match(/<(?:\w+:)?NomeFile>\s*([^<\s]+)\s*</);
+  return { fattura: chiaveSdi(nf ? nf[1] : m[1]), ricezione: d ? d[1] : '' };
 }
 
 /** Controllo dell'IBAN (mod 97). */
