@@ -1,0 +1,45 @@
+# Pubblica la pagina di download (cartella site/) su GitHub Pages.
+# Parte SOLO a mano: nessuna pubblicazione automatica.
+#
+# Come attivarla (una volta sola, Lorenzo):
+#   1. Su GitHub apri il repository → Settings → Pages.
+#   2. In «Build and deployment» → Source scegli «GitHub Actions».
+# Come pubblicare (ogni volta che cambi site/):
+#   3. Actions → «Pagina di download (GitHub Pages)» → Run workflow → scegli il ramo (di solito main) → Run.
+#   4. A fine run l'indirizzo della pagina compare nel riepilogo (di solito https://lorebiri.github.io/leggio/).
+# La pagina legge da sola l'ultima versione pubblicata su GitHub Releases: non serve ripubblicarla a ogni rilascio.
+name: Pagina di download (GitHub Pages)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  pubblica:
+    name: Pubblica site/
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - name: Prepara i file (senza LEGGIMI.md)
+        run: |
+          mkdir -p _pagina
+          cp -r site/. _pagina/
+          rm -f _pagina/LEGGIMI.md
+          touch _pagina/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _pagina
+      - id: deploy
+        uses: actions/deploy-pages@v4
