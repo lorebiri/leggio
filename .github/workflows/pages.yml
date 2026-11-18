@@ -32,11 +32,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
-      - name: Prepara i file (senza LEGGIMI.md)
+      - name: Prepara i file (senza LEGGIMI.md e senza lo script delle schermate)
         run: |
           mkdir -p _pagina
           cp -r site/. _pagina/
-          rm -f _pagina/LEGGIMI.md
+          rm -rf _pagina/LEGGIMI.md _pagina/strumenti
           touch _pagina/.nojekyll
       - uses: actions/upload-pages-artifact@v3
         with:

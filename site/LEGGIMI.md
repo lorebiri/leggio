@@ -1,7 +1,9 @@
-# Pagina di download di Leggio
+# Sito di Leggio (presentazione e download)
 
-Pagina statica in italiano da pubblicare su GitHub Pages: propone il file giusto per il computer di chi
-la visita, elenca tutti gli altri, mostra le impronte SHA-256 e spiega gli avvisi di sicurezza di Windows e macOS.
+Pagina statica in italiano da pubblicare su GitHub Pages. Dall'alto: pulsante di download per il computer di chi
+la visita · il progetto (cos'è, per chi, licenza, privacy) · le funzioni con schermate vere (prima le novità:
+copia documento fronte/retro, modifica delle tabelle, .p7m, stampa) · confronto con le alternative · tutti i file
+con le impronte SHA-256 · domande frequenti (avvisi di sicurezza, verifica dei file, aggiornamenti…) · contatti.
 
 ## File
 
@@ -11,7 +13,8 @@ la visita, elenca tutti gli altri, mostra le impronte SHA-256 e spiega gli avvis
 | `stile.css` | aspetto, tema chiaro e scuro, versione per telefono |
 | `scarica.js` | logica pura: riconosce il sistema, abbina i file della release, legge `SHA256SUMS.txt`, scarta gli indirizzi non GitHub (test: `npx vitest run test/sito-download.test.js`) |
 | `avvio.js` | collega la logica alla pagina |
-| `icona.svg`, `img/` | icona e schermate (generate dalla versione web con Playwright, 1280×800) |
+| `icona.svg`, `img/` | icona e schermate (WebP/PNG 1280×800, sotto i 200 kB) |
+| `strumenti/schermate.mjs` | rifà le schermate con Playwright dalla versione web (non viene pubblicato) |
 
 La pagina chiede soltanto a `api.github.com` l'ultima versione di `lorebiri/leggio` (e, se c'è, il file
 `SHA256SUMS.txt`). Nessun carattere esterno, nessun cookie, nessuna statistica. La CSP è nel `<meta>` di `index.html`.
@@ -27,6 +30,16 @@ Riconosce i nomi di `package.json` → `build`: `Leggio-X.Y.Z-win-x64-installer.
 ```bash
 python3 -m http.server 5300 -d site   # poi apri http://localhost:5300/ (va bene qualunque server statico)
 ```
+
+## Rifare le schermate
+
+```bash
+npx vite build && mkdir -p dist/fixtures && cp test/fixtures/*.pdf dist/fixtures/
+npx vite preview --port 5233 --strictPort &
+node site/strumenti/schermate.mjs            # tutte; oppure: node site/strumenti/schermate.mjs stampa p7m
+```
+
+I documenti mostrati sono inventati e costruiti dallo script (nessun documento d'identità vero).
 
 ## Pubblicarla
 
