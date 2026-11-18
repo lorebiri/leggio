@@ -4,6 +4,18 @@
 // cosa può fare di nuovo, non come è fatto. Senza voce per la versione, all'utente non viene mostrato nulla.
 export const NOVITA = [
   {
+    versione: '0.2.0',
+    titolo: 'Copia dei documenti e tante correzioni',
+    punti: [
+      'Nuovo: «Copia documento fronte/retro». Dalla scansione di carta d’identità, patente o tessera sanitaria, Leggio ritaglia la tessera e mette fronte e retro su un solo foglio A4, a grandezza reale.',
+      'Ora puoi modificare il testo delle tabelle una cella alla volta, senza spostare le altre.',
+      'I file firmati .p7m non vengono più toccati: l’originale resta com’era.',
+      'Risolto il problema della stampa di fogli bianchi.',
+      'Nuovo: oscuramento guidato dei dati dei documenti d’identità, con filigrana «Copia per uso…».',
+      'Leggio è disponibile anche per Linux, e oltre 50 altri piccoli problemi sono stati corretti.',
+    ],
+  },
+  {
     versione: '0.1.0',
     titolo: 'La prima versione di Leggio',
     punti: [
