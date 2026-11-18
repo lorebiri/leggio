@@ -3,7 +3,7 @@
 import {
   CATALOGO, URL_API, URL_RELEASES, URL_SORGENTE, NOMI_SISTEMA,
   rilevaSistema, leggiRelease, leggiSomme, scegliPrincipale,
-  urlDownloadSicuro, urlApiFileSicuro, formattaDimensione, formattaData,
+  urlDownloadSicuro, urlApiFileSicuro, formattaDimensione, formattaData, costoAcrobat, formattaEuro,
 } from './scarica.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
@@ -201,9 +201,31 @@ function collegaRisposte() {
   });
 }
 
+// «Quanto risparmi»: il calcolo per il numero di postazioni scelto (senza JavaScript restano i tre esempi fissi).
+function collegaCalcolo() {
+  const box = $('#calcolo');
+  const campo = $('#postazioni');
+  const esito = $('#calcolo-esito');
+  if (!box || !campo || !esito) return;
+  const aggiorna = () => {
+    const n = Number(campo.value);
+    const anno = costoAcrobat(n);
+    if (anno == null) { esito.textContent = 'Scrivi un numero intero di postazioni, da 1 in su.'; return; }
+    esito.replaceChildren(
+      `Con Acrobat Pro: circa `, crea('strong', { text: formattaEuro(anno) }), ` l'anno, `,
+      crea('strong', { text: formattaEuro(costoAcrobat(n, 3)) }), ' in tre anni. ',
+      crea('span', { class: 'calcolo-noi', text: 'Con Leggio: 0 €.' }),
+    );
+  };
+  campo.addEventListener('input', aggiorna);
+  box.hidden = false;
+  aggiorna();
+}
+
 async function avvia() {
   document.documentElement.classList.add('js');
   collegaRisposte();
+  collegaCalcolo();
   document.body.append(crea('div', { id: 'annuncio', class: 'vh', role: 'status', 'aria-live': 'polite' }));
   const sistema = rilevaSistema({
     platform: navigator.userAgentData?.platform || '',

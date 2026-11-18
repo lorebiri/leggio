@@ -1,9 +1,16 @@
 # Sito di Leggio (presentazione e download)
 
-Pagina statica in italiano da pubblicare su GitHub Pages. Dall'alto: pulsante di download per il computer di chi
-la visita · il progetto (cos'è, per chi, licenza, privacy) · le funzioni con schermate vere (prima le novità:
-copia documento fronte/retro, modifica delle tabelle, .p7m, stampa) · confronto con le alternative · tutti i file
-con le impronte SHA-256 · domande frequenti (avvisi di sicurezza, verifica dei file, aggiornamenti…) · contatti.
+Pagina statica in italiano da pubblicare su GitHub Pages. Dall'alto: la promessa («Le funzioni di Acrobat Pro.
+Gratis, per sempre, senza Internet»), cinque vantaggi con icone e il pulsante di download per il computer di chi
+la visita · tabella di confronto con Leggio evidenziato (Acrobat Reader, lettore di Edge o Chrome, Foxit PDF Reader,
+Acrobat Pro, PDF-XChange Editor) · «Quanto risparmi» (Acrobat Pro per 1, 10, 50 postazioni e calcolo libero) ·
+«Solo in Leggio» con schermate vere (.p7m, fatture XML, Titulus e U-GOV, copia fronte/retro, oscuramento con
+filigrana) · fascia di fiducia (open source, nessun account, nessuna telemetria, file mai inviati) · tutte le
+altre funzioni · tutti i file con le impronte SHA-256 · domande frequenti · contatti.
+
+**Da ricontrollare a ogni aggiornamento della pagina:** il confronto e il prezzo di Acrobat Pro
+(`ACROBAT_PRO_EURO_MESE` in `scarica.js` e i testi della sezione `#risparmio`, che i test confrontano con il calcolo),
+sui siti dei produttori; aggiorna anche la data nella nota sotto la tabella.
 
 ## File
 

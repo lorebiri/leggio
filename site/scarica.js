@@ -159,3 +159,25 @@ export function formattaData(iso) {
 }
 
 export const NOMI_SISTEMA = { windows: 'Windows', mac: 'macOS', linux: 'Linux', mobile: 'telefono o tablet', altro: 'questo sistema' };
+
+// ---- «Quanto risparmi» ----
+// Prezzo di listino indicativo di Acrobat Pro per l'Italia (piano annuale individuale, IVA inclusa), novembre 2026.
+// Se cambia, aggiorna anche i testi della sezione #risparmio di index.html (i test controllano che coincidano).
+export const ACROBAT_PRO_EURO_MESE = 24.39;
+
+/**
+ * Costo indicativo di Acrobat Pro per un certo numero di postazioni e di anni, arrotondato alla decina di euro.
+ * @returns {number|null} null se il numero di postazioni non è un intero tra 1 e 100000
+ */
+export function costoAcrobat(postazioni, anni = 1) {
+  const n = Number(postazioni);
+  if (!Number.isInteger(n) || n < 1 || n > 100000 || !Number.isInteger(anni) || anni < 1) return null;
+  return Math.round((ACROBAT_PRO_EURO_MESE * 12 * n * anni) / 10) * 10;
+}
+
+/** 14630 → «14.630 €» */
+export function formattaEuro(euro) {
+  if (!Number.isFinite(euro)) return '';
+  // separatore delle migliaia scritto a mano: alcuni browser non lo mettono sotto 10.000 in it-IT
+  return `${String(Math.round(euro)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} €`;
+}

@@ -183,6 +183,30 @@ const lettera = async (L, d, { pagine = 4 } = {}) => {
   }
 };
 
+/** FatturaPA inventata (formato FPA12) per la schermata della fattura elettronica. */
+const FATTURA_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<p:FatturaElettronica versione="FPA12" xmlns:p="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2">
+<FatturaElettronicaHeader>
+ <DatiTrasmissione><IdTrasmittente><IdPaese>IT</IdPaese><IdCodice>00000000000</IdCodice></IdTrasmittente><ProgressivoInvio>00042</ProgressivoInvio><FormatoTrasmissione>FPA12</FormatoTrasmissione><CodiceDestinatario>UFABCD</CodiceDestinatario></DatiTrasmissione>
+ <CedentePrestatore><DatiAnagrafici><IdFiscaleIVA><IdPaese>IT</IdPaese><IdCodice>00000000000</IdCodice></IdFiscaleIVA><Anagrafica><Denominazione>Cooperativa Esempio s.c.</Denominazione></Anagrafica><RegimeFiscale>RF01</RegimeFiscale></DatiAnagrafici>
+  <Sede><Indirizzo>Via dei Mille</Indirizzo><NumeroCivico>1</NumeroCivico><CAP>00100</CAP><Comune>Città</Comune><Provincia>RM</Provincia><Nazione>IT</Nazione></Sede></CedentePrestatore>
+ <CessionarioCommittente><DatiAnagrafici><CodiceFiscale>00000000000</CodiceFiscale><Anagrafica><Denominazione>Comune di Esempio</Denominazione></Anagrafica></DatiAnagrafici>
+  <Sede><Indirizzo>Piazza del Municipio 1</Indirizzo><CAP>00100</CAP><Comune>Esempio</Comune><Provincia>RM</Provincia><Nazione>IT</Nazione></Sede></CessionarioCommittente>
+</FatturaElettronicaHeader>
+<FatturaElettronicaBody>
+ <DatiGenerali><DatiGeneraliDocumento><TipoDocumento>TD01</TipoDocumento><Divisa>EUR</Divisa><Data>2026-11-12</Data><Numero>42/2026</Numero><ImportoTotaleDocumento>1134.60</ImportoTotaleDocumento><Causale>Servizi informatici - documento di esempio</Causale></DatiGeneraliDocumento>
+  <DatiOrdineAcquisto><IdDocumento>ORD-118</IdDocumento><CodiceCUP>B12C34000560001</CodiceCUP><CodiceCIG>Z1A2B3C4D5</CodiceCIG></DatiOrdineAcquisto></DatiGenerali>
+ <DatiBeniServizi>
+  <DettaglioLinee><NumeroLinea>1</NumeroLinea><Descrizione>Manutenzione impianto</Descrizione><Quantita>1.00</Quantita><PrezzoUnitario>100.00</PrezzoUnitario><PrezzoTotale>100.00</PrezzoTotale><AliquotaIVA>22.00</AliquotaIVA></DettaglioLinee>
+  <DettaglioLinee><NumeroLinea>2</NumeroLinea><Descrizione>Licenza software annuale</Descrizione><Quantita>2.00</Quantita><PrezzoUnitario>250.00</PrezzoUnitario><PrezzoTotale>500.00</PrezzoTotale><AliquotaIVA>22.00</AliquotaIVA></DettaglioLinee>
+  <DettaglioLinee><NumeroLinea>3</NumeroLinea><Descrizione>Formazione del personale</Descrizione><Quantita>3.00</Quantita><PrezzoUnitario>80.00</PrezzoUnitario><PrezzoTotale>240.00</PrezzoTotale><AliquotaIVA>22.00</AliquotaIVA></DettaglioLinee>
+  <DettaglioLinee><NumeroLinea>4</NumeroLinea><Descrizione>Assistenza telefonica</Descrizione><Quantita>6.00</Quantita><PrezzoUnitario>15.00</PrezzoUnitario><PrezzoTotale>90.00</PrezzoTotale><AliquotaIVA>22.00</AliquotaIVA></DettaglioLinee>
+  <DatiRiepilogo><AliquotaIVA>22.00</AliquotaIVA><ImponibileImporto>930.00</ImponibileImporto><Imposta>204.60</Imposta><EsigibilitaIVA>S</EsigibilitaIVA><RiferimentoNormativo>Scissione dei pagamenti art. 17-ter</RiferimentoNormativo></DatiRiepilogo>
+ </DatiBeniServizi>
+ <DatiPagamento><CondizioniPagamento>TP02</CondizioniPagamento><DettaglioPagamento><ModalitaPagamento>MP05</ModalitaPagamento><DataScadenzaPagamento>2026-12-12</DataScadenzaPagamento><ImportoPagamento>930.00</ImportoPagamento><IstitutoFinanziario>Banca di Prova</IstitutoFinanziario><IBAN>IT60X0542811101000000123456</IBAN></DettaglioPagamento></DatiPagamento>
+</FatturaElettronicaBody>
+</p:FatturaElettronica>`;
+
 // ---------- scene ----------
 
 const SCENE = {
@@ -293,44 +317,78 @@ const SCENE = {
   async 'oscura-documento'() {
     const { page, ctx, errori } = await apriApp();
     const CARD = [60, 520, 400, 734];
-    await page.evaluate(async (CARD) => {
-      const app = window.__leggio; const L = app.lib.PDFLib;
-      const d = await L.PDFDocument.create();
-      const p = d.addPage([595, 842]);
-      const f = await d.embedFont(L.StandardFonts.Courier);
-      const fs = await d.embedFont(L.StandardFonts.Helvetica);
-      const [x0, y0, x1, y1] = CARD; const W = x1 - x0; const H = y1 - y0;
-      const c = document.createElement('canvas'); c.width = 680; c.height = 428; const g = c.getContext('2d');
-      g.fillStyle = '#e6edf3'; g.fillRect(0, 0, 680, 428); g.fillStyle = '#cfd9e2'; g.fillRect(0, 300, 680, 128);
-      const jpg = new Uint8Array(await (await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.9))).arrayBuffer());
-      p.drawImage(await d.embedJpg(jpg), { x: x0, y: y0, width: W, height: H });
-      p.drawText('DOCUMENTO DI PROVA – RETRO', { x: x0 + 10, y: y1 - 18, size: 9, font: fs });
-      p.drawText('RSSMRA80A41H501U', { x: x0 + 10, y: y1 - 0.18 * H, size: 11, font: f });
-      p.drawText('VIA ESEMPIO 1 CITTA', { x: x0 + 10, y: y1 - 0.40 * H, size: 11, font: f });
-      p.drawText('C<ITA0000000<<<<<<<<<<<<<<<', { x: x0 + 10, y: y1 - 0.72 * H, size: 11, font: f });
-      p.drawText('ROSSI<<MARIA<<<<<<<<<<<<<<<', { x: x0 + 10, y: y1 - 0.90 * H, size: 11, font: f });
-      p.drawText('Allegato alla domanda di iscrizione al servizio mensa', { x: 60, y: 460, size: 12, font: fs });
-      await app.openBytes(await d.save(), { name: 'copia-documento-identita.pdf' });
-      await new Promise((r) => setTimeout(r, 900));
-      app.tools.run('redact');
-    }, CARD);
-    await page.waitForTimeout(500);
+    await documentoDiProva(page, CARD);
     await page.getByRole('button', { name: 'Documento d\'identità…' }).click();
     await page.waitForSelector('.dlg');
     await page.getByLabel('Documento', { exact: true }).selectOption('cie');
     await page.getByLabel('Lato', { exact: true }).selectOption('retro');
     await page.click('.dlg button[type=submit]');
     await page.waitForTimeout(300);
-    const pts = await page.evaluate((CARD) => {
-      const app = window.__leggio; const vp = app.viewer.getViewport(0); const r = app.viewer.getOverlay(0).getBoundingClientRect();
-      const a = vp.convertToViewportPoint(CARD[0], CARD[3]); const b = vp.convertToViewportPoint(CARD[2], CARD[1]);
-      return { x0: r.left + a[0], y0: r.top + a[1], x1: r.left + b[0], y1: r.top + b[1] };
-    }, CARD);
-    await page.mouse.move(pts.x0, pts.y0); await page.mouse.down();
-    await page.mouse.move((pts.x0 + pts.x1) / 2, (pts.y0 + pts.y1) / 2, { steps: 5 });
-    await page.mouse.move(pts.x1, pts.y1, { steps: 5 }); await page.mouse.up();
+    await trascinaSuTessera(page, CARD);
     await salva(page, 'oscura-documento', { attesa: 600 });
     await fine(ctx, errori, 'oscura-documento');
+  },
+
+  async 'fattura-xml'() {
+    const { page, ctx, errori } = await apriApp();
+    await page.evaluate(async (xml) => {
+      await window.__leggio.openFile({ name: 'IT00000000000_00042.xml', bytes: new TextEncoder().encode(xml) });
+      await new Promise((r) => setTimeout(r, 1500));
+    }, FATTURA_XML);
+    await salva(page, 'fattura-xml', { attesa: 600 });
+    await fine(ctx, errori, 'fattura-xml');
+  },
+
+  async 'titulus-ugov'() {
+    const { page, ctx, errori } = await apriApp();
+    await apriCostruito(page, 'Fattura_Cooperativa_n42_2026.pdf', async (L, d) => {
+      const f = await d.embedFont(L.StandardFonts.Helvetica); const fb = await d.embedFont(L.StandardFonts.HelveticaBold);
+      const p = d.addPage([595, 842]);
+      const t = (s, x, y, o = {}) => p.drawText(s, { x, y, size: 10, font: f, ...o });
+      p.drawRectangle({ x: 0, y: 812, width: 595, height: 30, color: L.rgb(0.12, 0.3, 0.45) });
+      t('Cooperativa Esempio s.c.', 50, 775, { size: 16, font: fb });
+      t('Via dei Mille 1 - 00100 Citta - P. IVA 01234567890', 50, 757);
+      t('FATTURA n. 42/2026 del 12/11/2026', 50, 715, { size: 16, font: fb });
+      t('Destinatario: Comune di Esempio - Codice ufficio UFABCD', 50, 690);
+      t('Ordine n. ORD-118 del 02/10/2026 - CIG Z1A2B3C4D5 - CUP B12C34000560001', 50, 672);
+      t('Manutenzione impianto', 50, 630); t('100,00', 500, 630);
+      t('Licenza software annuale', 50, 612); t('500,00', 500, 612);
+      p.drawLine({ start: { x: 50, y: 600 }, end: { x: 545, y: 600 }, thickness: 0.6 });
+      t('Imponibile 600,00 - IVA 22% 132,00', 50, 582);
+      t('Totale documento EUR 732,00', 50, 562, { font: fb, size: 12 });
+      t('Pagamento: bonifico IBAN IT60X0542811101000000123456 entro il 12/12/2026', 50, 537);
+      t('Documento di esempio', 50, 80, { color: L.rgb(0.4, 0.4, 0.4) });
+    });
+    await page.evaluate(() => window.__leggio.sidebar.show('controlli'));
+    await page.waitForSelector('.side-content >> text=Per U-GOV', { timeout: 15000 });
+    await salva(page, 'titulus-ugov', { attesa: 800 });
+    await fine(ctx, errori, 'titulus-ugov');
+  },
+
+  async 'oscura-filigrana'() {
+    const { page, ctx, errori } = await apriApp();
+    const CARD = [60, 520, 400, 734];
+    await documentoDiProva(page, CARD);
+    await page.getByRole('button', { name: 'Documento d\'identità…' }).click();
+    await page.waitForSelector('.dlg');
+    await page.getByLabel('Documento', { exact: true }).selectOption('cie');
+    await page.getByLabel('Lato', { exact: true }).selectOption('retro');
+    await page.click('.dlg button[type=submit]');
+    await page.waitForTimeout(300);
+    await trascinaSuTessera(page, CARD);
+    await page.getByRole('button', { name: 'Applica oscuramento…' }).click();
+    await page.waitForSelector('.dlg');
+    await page.getByLabel('Filigrana: «Copia per uso esclusivo di…» (facoltativa)').fill('Comune di Esempio');
+    await page.getByLabel('Finalità (facoltativa)').fill('iscrizione al nido');
+    await page.getByText('Applica al documento aperto').click();
+    await page.click('.dlg button[type=submit]');
+    await page.waitForSelector('.dlg >> text=Oscuramento completato', { timeout: 60000 });
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
+    await page.evaluate(() => { window.__leggio.tools.deactivate?.(); window.__leggio.viewer.pdfViewer.currentScaleValue = 'page-width'; });
+    await page.waitForTimeout(1200);
+    await salva(page, 'oscura-filigrana', { attesa: 800 });
+    await fine(ctx, errori, 'oscura-filigrana');
   },
 
   async commenti() {
@@ -414,6 +472,44 @@ const SCENE = {
     await fine(ctx, errori, 'lettura-scuro');
   },
 };
+
+/** Retro di un documento d'identità di prova su una pagina A4, aperto con lo strumento «Oscura» attivo. */
+async function documentoDiProva(page, CARD) {
+  await page.evaluate(async (CARD) => {
+    const app = window.__leggio; const L = app.lib.PDFLib;
+    const d = await L.PDFDocument.create();
+    const p = d.addPage([595, 842]);
+    const f = await d.embedFont(L.StandardFonts.Courier);
+    const fs = await d.embedFont(L.StandardFonts.Helvetica);
+    const [x0, y0, x1, y1] = CARD; const W = x1 - x0; const H = y1 - y0;
+    const c = document.createElement('canvas'); c.width = 680; c.height = 428; const g = c.getContext('2d');
+    g.fillStyle = '#e6edf3'; g.fillRect(0, 0, 680, 428); g.fillStyle = '#cfd9e2'; g.fillRect(0, 300, 680, 128);
+    const jpg = new Uint8Array(await (await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.9))).arrayBuffer());
+    p.drawImage(await d.embedJpg(jpg), { x: x0, y: y0, width: W, height: H });
+    p.drawText('DOCUMENTO DI PROVA – RETRO', { x: x0 + 10, y: y1 - 18, size: 9, font: fs });
+    p.drawText('RSSMRA80A41H501U', { x: x0 + 10, y: y1 - 0.18 * H, size: 11, font: f });
+    p.drawText('VIA ESEMPIO 1 CITTA', { x: x0 + 10, y: y1 - 0.40 * H, size: 11, font: f });
+    p.drawText('C<ITA0000000<<<<<<<<<<<<<<<', { x: x0 + 10, y: y1 - 0.72 * H, size: 11, font: f });
+    p.drawText('ROSSI<<MARIA<<<<<<<<<<<<<<<', { x: x0 + 10, y: y1 - 0.90 * H, size: 11, font: f });
+    p.drawText('Allegato alla domanda di iscrizione al servizio mensa', { x: 60, y: 460, size: 12, font: fs });
+    await app.openBytes(await d.save(), { name: 'copia-documento-identita.pdf' });
+    await new Promise((r) => setTimeout(r, 900));
+    app.tools.run('redact');
+  }, CARD);
+  await page.waitForTimeout(500);
+}
+
+/** Trascina un riquadro attorno alla tessera (coordinate PDF in CARD). */
+async function trascinaSuTessera(page, CARD) {
+  const pts = await page.evaluate((CARD) => {
+    const app = window.__leggio; const vp = app.viewer.getViewport(0); const r = app.viewer.getOverlay(0).getBoundingClientRect();
+    const a = vp.convertToViewportPoint(CARD[0], CARD[3]); const b = vp.convertToViewportPoint(CARD[2], CARD[1]);
+    return { x0: r.left + a[0], y0: r.top + a[1], x1: r.left + b[0], y1: r.top + b[1] };
+  }, CARD);
+  await page.mouse.move(pts.x0, pts.y0); await page.mouse.down();
+  await page.mouse.move((pts.x0 + pts.x1) / 2, (pts.y0 + pts.y1) / 2, { steps: 5 });
+  await page.mouse.move(pts.x1, pts.y1, { steps: 5 }); await page.mouse.up();
+}
 
 async function fine(ctx, errori, nome) {
   if (errori.length) console.log(`ERRORE ${nome}: ${errori.join(' | ')}`);

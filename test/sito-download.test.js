@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import {
   rilevaSistema, classificaFile, urlDownloadSicuro, urlApiFileSicuro, leggiRelease, leggiSomme,
   scegliPrincipale, formattaDimensione, formattaData, URL_RELEASES, CATALOGO,
+  costoAcrobat, formattaEuro, ACROBAT_PRO_EURO_MESE,
 } from '../site/scarica.js';
 
 const UA = {
@@ -176,12 +177,69 @@ describe('formattazione', () => {
   });
 });
 
+describe('quanto risparmi', () => {
+  it('costo indicativo di Acrobat Pro arrotondato alla decina', () => {
+    expect(ACROBAT_PRO_EURO_MESE).toBeGreaterThan(0);
+    expect(costoAcrobat(1)).toBe(Math.round(ACROBAT_PRO_EURO_MESE * 12 / 10) * 10);
+    expect(costoAcrobat(10)).toBe(2930);
+    expect(costoAcrobat(50)).toBe(14630);
+    expect(costoAcrobat(50, 3)).toBe(Math.round(ACROBAT_PRO_EURO_MESE * 12 * 150 / 10) * 10);
+    expect(costoAcrobat('25')).toBe(7320);
+  });
+  it('rifiuta valori non validi', () => {
+    for (const v of [0, -3, 2.5, NaN, '', 'dieci', null, 100001]) expect(costoAcrobat(v), String(v)).toBeNull();
+    expect(costoAcrobat(1, 0)).toBeNull();
+  });
+  it('scrive gli euro all\'italiana', () => {
+    expect(formattaEuro(290)).toBe('290 €');
+    expect(formattaEuro(2930)).toBe('2.930 €');
+    expect(formattaEuro(1463000)).toBe('1.463.000 €');
+    expect(formattaEuro(NaN)).toBe('');
+  });
+});
+
 describe('index.html', () => {
   const SITO = join(__dirname, '..', 'site');
   const html = readFileSync(join(SITO, 'index.html'), 'utf8');
   it('ha un posto per ogni file del catalogo e i contenitori usati da avvio.js', () => {
     for (const v of CATALOGO) expect(html, v.chiave).toContain(`data-file="${v.chiave}"`);
-    for (const id of ['principale', 'versione', 'altri-sistemi', 'linux-presto', 'somme-nota', 'd-avvisi', 'd-verifica']) expect(html, id).toContain(`id="${id}"`);
+    for (const id of ['principale', 'versione', 'altri-sistemi', 'linux-presto', 'somme-nota', 'd-avvisi', 'd-verifica',
+      'confronto', 'risparmio', 'esclusive', 'fiducia', 'calcolo', 'postazioni', 'calcolo-esito', 'd-acrobat']) expect(html, id).toContain(`id="${id}"`);
+  });
+  it('promessa e vantaggi in alto, prima del pulsante di download', () => {
+    const h1 = html.indexOf('<h1'); const vantaggi = html.indexOf('class="vantaggi"'); const principale = html.indexOf('id="principale"');
+    expect(h1).toBeGreaterThan(0);
+    expect(h1).toBeLessThan(vantaggi);
+    expect(vantaggi).toBeLessThan(principale);
+    expect(html.match(/<h1\b/g)).toHaveLength(1);
+  });
+  it('tabella di confronto: sei programmi, ogni riga completa, Leggio evidenziato', () => {
+    const tabella = html.slice(html.indexOf('<table class="confronto"'), html.indexOf('</table>'));
+    for (const nome of ['Leggio', 'Adobe Acrobat Reader', 'Edge o Chrome', 'Foxit PDF Reader', 'Adobe Acrobat Pro', 'PDF-XChange Editor']) expect(tabella, nome).toContain(nome);
+    const corpo = tabella.slice(tabella.indexOf('<tbody>'));
+    const righe = [...corpo.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)].map((m) => m[1]);
+    expect(righe.length).toBeGreaterThanOrEqual(12);
+    for (const r of righe) {
+      expect((r.match(/<td\b/g) || []).length, r.slice(0, 80)).toBe(6);
+      expect(r, r.slice(0, 80)).toMatch(/<td class="noi">/);
+    }
+    for (const parola of ['.p7m', 'fatture elettroniche', 'fronte/retro', 'Titulus', 'Prezzo', 'senza Internet']) expect(tabella, parola).toContain(parola);
+    // ogni segno ha il testo per i lettori di schermo
+    expect((tabella.match(/class="si"><span class="vh">Sì<\/span>/g) || []).length).toBe((tabella.match(/class="si"/g) || []).length);
+    expect((tabella.match(/class="no"><span class="vh">No<\/span>/g) || []).length).toBe((tabella.match(/class="no"/g) || []).length);
+    expect(html).toMatch(/Confronto di novembre 2026/);
+  });
+  it('gli importi scritti nella sezione «Quanto risparmi» coincidono con il calcolo', () => {
+    for (const n of [1, 10, 50]) {
+      const cifra = formattaEuro(costoAcrobat(n)).replace(' €', '');
+      expect(html, `${n} postazioni`).toMatch(new RegExp(`${n} postazion[ei]</span>\\s*<span class="loro">[^<]*<span class="vh">[^<]*</span>circa ${cifra.replace('.', '\\.')} €`));
+    }
+    expect(html).toContain(String(ACROBAT_PRO_EURO_MESE).replace('.', ','));
+  });
+  it('fiducia: licenza, codice, nessun account, nessuna telemetria', () => {
+    const f = html.slice(html.indexOf('id="fiducia"'), html.indexOf('</section>', html.indexOf('id="fiducia"')));
+    for (const t of ['Open source', 'GPL', 'https://github.com/lorebiri/leggio"', 'Nessun account', 'Nessuna telemetria', 'File mai inviati']) expect(f, t).toContain(t);
+    expect(html).toMatch(/programma non firmato/);
   });
   it('immagini locali, presenti, con testo alternativo e leggere', () => {
     const img = [...html.matchAll(/<img\b[^>]*>/g)].map((m) => m[0]);
