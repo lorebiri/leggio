@@ -4,6 +4,7 @@ import { openP7m, innerName, overallStatus, MAX_P7M_BYTES } from '../lib/cades.j
 import { compactResult } from '../lib/p7m-compact.js';
 import { ESITI, LIMITI, righeFirmatario, rapportoPdf, sha256Hex, fmtData } from '../lib/report.js';
 import { isFattura } from '../lib/fattura.js';
+import { nomeUscitaFirmato } from '../lib/batch-ops.js';
 
 export const SIGNED_EXT = ['p7m', 'p7s', 'tsd', 'm7m'];
 
@@ -39,8 +40,10 @@ export async function openSignedFile(app, { bytes, name, path = null, readOnly =
   const info = { result, stato, sourceName: name, sourcePath: path, sourceSize: bytes.length, sourceBytes: bytes };
   const inner = innerName(name, result.kind);
   if (result.kind === 'pdf') {
-    // il nome della scheda ricorda che il PDF viene da un file firmato («Salva il PDF contenuto» usa il nome originale)
-    const doc = await app.openBytes(result.content, { name: inner.replace(/\.pdf$/i, '') + ' (da .p7m).pdf', readOnly });
+    // Il PDF contenuto si apre SOLO in memoria (nessun percorso): il .p7m originale non viene mai riscritto
+    // né rinominato. Il nome della scheda è distinto («contratto (da p7m).pdf»): Salva chiede sempre dove
+    // salvare la copia («Salva come»), mai sopra il file firmato.
+    const doc = await app.openBytes(result.content, { name: nomeUscitaFirmato(name), readOnly });
     if (!doc) {
       // il PDF contenuto non si apre (danneggiato o alterato): mostriamo comunque l'esito della firma
       showSignaturePane(app, info, deps);
@@ -98,7 +101,9 @@ export function signatureView(app, info, { compact = false } = {}) {
 export async function saveContent(app, info) {
   const r = info.result;
   if (!r.content) return app.ui.toast('Il documento firmato non è contenuto in questo file.', { kind: 'warning' });
-  const name = innerName(info.sourceName, r.kind);
+  // nome distinto dal file firmato (con le estensioni nascoste di Windows «contratto.pdf» e «contratto.pdf.p7m»
+  // apparirebbero quasi uguali e sembrerebbe che il .p7m sia stato rinominato)
+  const name = r.kind === 'pdf' ? nomeUscitaFirmato(info.sourceName) : innerName(info.sourceName, r.kind);
   const ext = name.split('.').pop();
   await app.exportFile(r.content, name, [{ name: ext.toUpperCase(), extensions: [ext] }]);
 }

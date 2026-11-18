@@ -40,6 +40,10 @@ function friendly(err, target, phase) {
   return e;
 }
 
+/** Buste firmate (CAdES): l'originale firmato non si riscrive MAI (si perderebbe la firma). */
+const SIGNED_RE = /\.(p7m|p7s|m7m|tsd)$/i;
+const isSignedEnvelopePath = (p) => SIGNED_RE.test(String(p || ''));
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function retry(fn, { tries = 6, base = 60 } = {}) {
@@ -125,6 +129,10 @@ async function safeWrite(target, bytes, opts = {}) {
   let existing = null;
   try { existing = await fsp.stat(target); } catch (err) { if (err.code !== 'ENOENT') throw friendly(err, target, 'check'); }
   if (existing && existing.isDirectory()) throw friendly(Object.assign(new Error(), { code: 'EISDIR' }), target, 'check');
+  if (existing && isSignedEnvelopePath(target)) {
+    const msg = `«${path.basename(target)}» è un file firmato digitalmente: Leggio non lo sovrascrive mai. Salva il documento con un altro nome («Salva come»).`;
+    throw Object.assign(new Error(msg), { userMessage: msg, code: 'ESIGNED', phase: 'check' });
+  }
 
   const tmp = path.join(dir, tempName(target));
   const cleanupTmp = () => fsp.unlink(tmp).catch(() => {});
@@ -180,4 +188,4 @@ async function cleanStaleTemps(target) {
   } catch { /* cartella non leggibile */ }
 }
 
-module.exports = { safeWrite, friendly, cleanStaleTemps, tempName, MAX_BYTES, sameContent };
+module.exports = { safeWrite, isSignedEnvelopePath, friendly, cleanStaleTemps, tempName, MAX_BYTES, sameContent };

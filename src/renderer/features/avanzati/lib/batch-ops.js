@@ -148,6 +148,12 @@ export function operazioneProteggi(protect) {
  * it: { path, rel, name }. → { folder, sub, overwrite } (folder null = nessun percorso: nel browser si scarica)
  */
 export function destinazione(it, opz) {
+  // i file firmati (.p7m…) e le fatture XML non si sostituiscono mai: il PDF va accanto, con un nome distinto
+  const nonPdf = /\.(p7m|p7s|m7m|tsd|xml)$/i.test(String(it.name || it.path || ''));
+  if (opz.dest === 'overwrite' && it.path && nonPdf) {
+    const i = Math.max(it.path.lastIndexOf('/'), it.path.lastIndexOf('\\'));
+    return { folder: i > 0 ? it.path.slice(0, i) : it.path, sub: '', overwrite: false };
+  }
   const dirOf = (p) => { const i = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\')); return i > 0 ? p.slice(0, i) : p; };
   if (opz.dest === 'overwrite' && it.path) return { folder: dirOf(it.path), sub: '', overwrite: true };
   if (opz.dest === 'other' && opz.destFolder) return { folder: opz.destFolder, sub: '', overwrite: false };
@@ -212,6 +218,12 @@ export async function eseguiSequenza(bytes, passi, env) {
 }
 
 /** Nome del file di uscita. modo: 'stesso' | 'suffisso' */
+/** Nome del PDF ricavato da un file firmato: «contratto.pdf.p7m» → «contratto (da p7m).pdf» (mai lo stesso nome). */
+export function nomeUscitaFirmato(nome) {
+  const base = String(nome || 'documento').replace(/(\.(p7m|p7s|m7m|tsd))+$/i, '').replace(/\.(pdf|xml)$/i, '') || 'documento';
+  return `${base} (da p7m).pdf`;
+}
+
 export function nomeUscita(nome, { modo = 'stesso', suffisso = '_elaborato' } = {}) {
   const n = String(nome || 'documento.pdf');
   if (modo !== 'suffisso') return n;
