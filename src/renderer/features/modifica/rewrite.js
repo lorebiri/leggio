@@ -58,9 +58,10 @@ export function removeGlyphs(show, opRec, shouldRemove) {
 
 /**
  * Sostituisce i glifi da `from` a `to` (indici inclusi) con i byte codificati `newBytes` nello stesso font.
- * Il testo che segue nello stesso operatore scorre in modo naturale.
+ * Il testo che segue nello stesso operatore scorre in modo naturale; con comp = { before, num } prima del glifo
+ * `before` si inserisce lo spostamento `num` (unità TJ), così da lì in poi i glifi restano dov'erano.
  */
-export function replaceGlyphRange(show, opRec, from, to, newBytes) {
+export function replaceGlyphRange(show, opRec, from, to, newBytes, comp = null) {
   if (show.inForm) return null;
   const out = [];
   const byEl = new Map();
@@ -78,6 +79,7 @@ export function replaceGlyphRange(show, opRec, from, to, newBytes) {
     let run = [];
     const flushRun = () => { if (run.length) { out.push('<' + toHex(Uint8Array.from(run)) + '>'); run = []; } };
     for (const [g, gi] of byEl.get(ei) || []) {
+      if (comp && gi === comp.before) { flushRun(); out.push(fmtNum(comp.num)); }
       if (gi >= from && gi <= to) {
         if (!inserted) { for (const b of newBytes) run.push(b); inserted = true; }
         continue;
