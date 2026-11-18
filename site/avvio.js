@@ -183,8 +183,27 @@ async function architettura() {
   } catch { return ''; }
 }
 
+// Domande frequenti: un link a una risposta (#d-verifica…) apre la risposta chiusa.
+function apriRisposta(hash) {
+  let id = '';
+  try { id = decodeURIComponent(String(hash || '').slice(1)); } catch { return; }
+  const d = id && document.getElementById(id)?.closest('details');
+  if (d && !d.open) d.open = true;
+}
+
+function collegaRisposte() {
+  apriRisposta(location.hash);
+  if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
+  window.addEventListener('hashchange', () => apriRisposta(location.hash));
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest?.('a[href^="#"]');
+    if (a) apriRisposta(a.getAttribute('href'));
+  });
+}
+
 async function avvia() {
   document.documentElement.classList.add('js');
+  collegaRisposte();
   document.body.append(crea('div', { id: 'annuncio', class: 'vh', role: 'status', 'aria-live': 'polite' }));
   const sistema = rilevaSistema({
     platform: navigator.userAgentData?.platform || '',
