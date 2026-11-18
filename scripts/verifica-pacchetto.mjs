@@ -20,7 +20,9 @@ function trovaApp() {
   for (const c of cand) {
     if (!existsSync(c)) continue;
     if (process.platform === 'darwin') return { exe: join(c, 'Contents/MacOS', pkg.build.productName), asar: join(c, 'Contents/Resources/app.asar') };
-    return { exe: join(c, `${pkg.build.productName}${process.platform === 'win32' ? '.exe' : ''}`), asar: join(c, 'resources/app.asar') };
+    // su Linux l'eseguibile ha il nome del pacchetto in minuscolo (electron-builder: linux.executableName o name)
+    const nome = process.platform === 'win32' ? `${pkg.build.productName}.exe` : (pkg.build.linux?.executableName || pkg.name);
+    return { exe: join(c, nome), asar: join(c, 'resources/app.asar') };
   }
   return null;
 }

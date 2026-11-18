@@ -1,7 +1,16 @@
 # Pacchetti di installazione: parte quando si spinge un tag vX.Y.Z.
-# Costruisce su macOS e Windows e carica tutto in una BOZZA di release GitHub,
-# che va controllata e pubblicata a mano (vedi docs/RILASCIO.md).
-# Avviato a mano (workflow_dispatch) costruisce i pacchetti senza pubblicarli: si scaricano dagli artefatti.
+# Costruisce su macOS, Windows e Linux e carica tutto in una BOZZA di release GitHub, con il file
+# SHA256SUMS.txt (impronte SHA-256 di ogni pacchetto). La bozza va controllata e pubblicata a mano
+# (vedi docs/RILASCIO.md). Avviato a mano (workflow_dispatch) costruisce i pacchetti senza pubblicarli:
+# si scaricano dagli artefatti del run.
+#
+# FIRMA DEL CODICE (pronta, spenta finché mancano i segreti): vedi docs/FIRMA-DEL-CODICE.md
+#   - Windows: variabile del repository FIRMA_WINDOWS = "signpath" oppure "azure" (vuota = nessuna firma)
+#       signpath → segreto SIGNPATH_API_TOKEN, variabili SIGNPATH_ORGANIZATION_ID, SIGNPATH_PROJECT_SLUG,
+#                  SIGNPATH_POLICY_SLUG (es. release-signing)
+#       azure    → segreti AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET; variabili AZURE_SIGN_ENDPOINT,
+#                  AZURE_SIGN_ACCOUNT, AZURE_SIGN_PROFILE, AZURE_SIGN_PUBLISHER
+#   - macOS: segreti CSC_LINK, CSC_KEY_PASSWORD (Developer ID), APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
 name: Release
 
 on:
@@ -52,12 +61,13 @@ jobs:
           - os: windows-latest
             nome: Windows
             args: --win
+          - os: ubuntu-latest
+            nome: Linux
+            args: --linux
     runs-on: ${{ matrix.os }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # Nessun certificato per ora: niente firma. Quando ci saranno, aggiungere qui i segreti
-      # (CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID): vedi docs/RILASCIO.md.
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      FIRMA_WINDOWS: ${{ vars.FIRMA_WINDOWS }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -70,17 +80,102 @@ jobs:
         run: node scripts/prepara-ocr.mjs
       - run: npm test
       - run: npx vite build
-      - name: Costruisci i pacchetti
-        run: npx electron-builder ${{ matrix.args }} --publish never
-      - name: Verifica che il pacchetto contenga i moduli del processo main
-        run: node scripts/verifica-pacchetto.mjs
-      - name: Carica nella bozza di release
-        if: startsWith(github.ref, 'refs/tags/v')
+
+      # ---------- macOS (firma Developer ID + notarizzazione se ci sono i segreti, altrimenti ad hoc) ----------
+      - name: Costruisci i pacchetti macOS
+        if: matrix.nome == 'macOS'
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         shell: bash
         run: |
-          shopt -s nullglob
-          files=(release/Leggio-*.dmg release/Leggio-*.zip release/Leggio-*.exe)
-          gh release upload "${GITHUB_REF_NAME}" "${files[@]}" --repo "${GITHUB_REPOSITORY}" --clobber
+          if [ -z "$CSC_LINK" ]; then export CSC_IDENTITY_AUTO_DISCOVERY=false; echo "macOS: nessun certificato, firma ad hoc."; fi
+          npx electron-builder --config scripts/config-firma.cjs --mac --publish never
+
+      # ---------- Linux ----------
+      - name: Costruisci il pacchetto Linux
+        if: matrix.nome == 'Linux'
+        run: npx electron-builder --config scripts/config-firma.cjs --linux --publish never
+
+      # ---------- Windows: senza firma o con Azure Trusted Signing (firma fatta da electron-builder) ----------
+      - name: Costruisci i pacchetti Windows
+        if: matrix.nome == 'Windows' && env.FIRMA_WINDOWS != 'signpath'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGN_ENDPOINT: ${{ vars.AZURE_SIGN_ENDPOINT }}
+          AZURE_SIGN_ACCOUNT: ${{ vars.AZURE_SIGN_ACCOUNT }}
+          AZURE_SIGN_PROFILE: ${{ vars.AZURE_SIGN_PROFILE }}
+          AZURE_SIGN_PUBLISHER: ${{ vars.AZURE_SIGN_PUBLISHER }}
+        run: npx electron-builder --config scripts/config-firma.cjs --win --publish never
+
+      # ---------- Windows con SignPath (gratuito per progetti open source) ----------
+      # 1) app non impacchettata → SignPath firma Leggio.exe e le DLL; 2) installer e portatile costruiti dall'app
+      #    firmata → SignPath firma i due .exe finali. La configurazione dell'artefatto sta su SignPath (vedi docs).
+      - name: "SignPath 1/4: app non impacchettata"
+        if: matrix.nome == 'Windows' && env.FIRMA_WINDOWS == 'signpath'
+        env: { CSC_IDENTITY_AUTO_DISCOVERY: 'false' }
+        run: npx electron-builder --config scripts/config-firma.cjs --win --dir --publish never
+      - name: "SignPath 2/4: carica l'app da firmare"
+        if: matrix.nome == 'Windows' && env.FIRMA_WINDOWS == 'signpath'
+        id: app-da-firmare
+        uses: actions/upload-artifact@v4
+        with: { name: app-da-firmare, path: release/win-unpacked, retention-days: 1 }
+      - name: "SignPath 2/4: firma dell'app"
+        if: matrix.nome == 'Windows' && env.FIRMA_WINDOWS == 'signpath'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          artifact-configuration-slug: app
+          github-artifact-id: ${{ steps.app-da-firmare.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: release/win-unpacked-firmata
+      - name: "SignPath 3/4: installer e portatile dall'app firmata"
+        if: matrix.nome == 'Windows' && env.FIRMA_WINDOWS == 'signpath'
+        env: { CSC_IDENTITY_AUTO_DISCOVERY: 'false' }
+        shell: bash
+        run: |
+          rm -rf release/win-unpacked
+          npx electron-builder --config scripts/config-firma.cjs --win --prepackaged release/win-unpacked-firmata --publish never
+          mkdir -p release/da-firmare && mv release/Leggio-*.exe release/da-firmare/
+      - name: "SignPath 4/4: carica gli installer da firmare"
+        if: matrix.nome == 'Windows' && env.FIRMA_WINDOWS == 'signpath'
+        id: installer-da-firmare
+        uses: actions/upload-artifact@v4
+        with: { name: installer-da-firmare, path: release/da-firmare, retention-days: 1 }
+      - name: "SignPath 4/4: firma degli installer"
+        if: matrix.nome == 'Windows' && env.FIRMA_WINDOWS == 'signpath'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          artifact-configuration-slug: installer
+          github-artifact-id: ${{ steps.installer-da-firmare.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: release
+
+      - name: Verifica la firma Authenticode (solo se la firma è attiva)
+        if: matrix.nome == 'Windows' && env.FIRMA_WINDOWS != ''
+        shell: pwsh
+        run: |
+          foreach ($f in Get-ChildItem release/Leggio-*.exe) {
+            $s = Get-AuthenticodeSignature $f.FullName
+            Write-Host "$($f.Name): $($s.Status) — $($s.SignerCertificate.Subject)"
+            if ($s.Status -ne 'Valid') { throw "Firma non valida su $($f.Name)" }
+          }
+      - name: Verifica che il pacchetto contenga i moduli del processo main
+        if: env.FIRMA_WINDOWS != 'signpath' || matrix.nome != 'Windows'
+        run: node scripts/verifica-pacchetto.mjs
       - name: Conserva i pacchetti come artefatti del workflow
         uses: actions/upload-artifact@v4
         with:
@@ -89,5 +184,31 @@ jobs:
             release/Leggio-*.dmg
             release/Leggio-*.zip
             release/Leggio-*.exe
+            release/Leggio-*.AppImage
           if-no-files-found: error
           retention-days: 14
+
+  impronte:
+    name: Impronte SHA-256 e caricamento nella bozza
+    needs: pacchetti
+    if: ${{ !failure() && !cancelled() }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: leggio-*
+          merge-multiple: true
+          path: pacchetti
+      - name: Calcola SHA256SUMS.txt
+        working-directory: pacchetti
+        run: |
+          sha256sum Leggio-* | tee SHA256SUMS.txt
+      - name: Conserva le impronte come artefatto
+        uses: actions/upload-artifact@v4
+        with: { name: leggio-SHA256SUMS, path: pacchetti/SHA256SUMS.txt, retention-days: 14 }
+      - name: Carica pacchetti e impronte nella bozza (solo dai tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        working-directory: pacchetti
+        run: gh release upload "${GITHUB_REF_NAME}" Leggio-* SHA256SUMS.txt --repo "${GITHUB_REPOSITORY}" --clobber
