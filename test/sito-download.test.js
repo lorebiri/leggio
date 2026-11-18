@@ -1,8 +1,10 @@
 // Pagina di download (site/): logica pura in site/scarica.js.
 import { describe, it, expect } from 'vitest';
+import { readFileSync, existsSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   rilevaSistema, classificaFile, urlDownloadSicuro, urlApiFileSicuro, leggiRelease, leggiSomme,
-  scegliPrincipale, formattaDimensione, formattaData, URL_RELEASES,
+  scegliPrincipale, formattaDimensione, formattaData, URL_RELEASES, CATALOGO,
 } from '../site/scarica.js';
 
 const UA = {
@@ -171,5 +173,33 @@ describe('formattazione', () => {
     expect(formattaDimensione(null)).toBe('');
     expect(formattaData('2026-11-18T10:00:00Z')).toBe('18 novembre 2026');
     expect(formattaData('boh')).toBe('');
+  });
+});
+
+describe('index.html', () => {
+  const SITO = join(__dirname, '..', 'site');
+  const html = readFileSync(join(SITO, 'index.html'), 'utf8');
+  it('ha un posto per ogni file del catalogo e i contenitori usati da avvio.js', () => {
+    for (const v of CATALOGO) expect(html, v.chiave).toContain(`data-file="${v.chiave}"`);
+    for (const id of ['principale', 'versione', 'altri-sistemi', 'linux-presto', 'somme-nota', 'd-avvisi', 'd-verifica']) expect(html, id).toContain(`id="${id}"`);
+  });
+  it('immagini locali, presenti, con testo alternativo e leggere', () => {
+    const img = [...html.matchAll(/<img\b[^>]*>/g)].map((m) => m[0]);
+    const src = [...html.matchAll(/\b(?:src|srcset)="([^"]+)"/g)].map((m) => m[1]).filter((u) => !u.endsWith('.js'));
+    expect(img.length).toBeGreaterThan(5);
+    for (const t of img) expect(t, t).toMatch(/\balt="/);
+    for (const u of src) {
+      expect(u, u).not.toMatch(/^(https?:)?\/\//);
+      expect(existsSync(join(SITO, u)), u).toBe(true);
+      expect(statSync(join(SITO, u)).size, u).toBeLessThan(200 * 1024);
+    }
+  });
+  it('nessuna risorsa esterna, link esterni solo verso il repository, nessuna email', () => {
+    expect(html).toMatch(/http-equiv="Content-Security-Policy"[^>]*script-src 'self'/);
+    expect(html).not.toMatch(/<(script|link)\b[^>]*(src|href)="(https?:)?\/\//);
+    expect(html).not.toMatch(/\bstyle="|<style\b|\bon[a-z]+="/);
+    const esterni = [...html.matchAll(/href="(https?:[^"]+)"/g)].map((m) => m[1]);
+    for (const u of esterni) expect(u, u).toMatch(/^https:\/\/github\.com\/lorebiri\/leggio(\/|$)/);
+    expect(html).not.toMatch(/mailto:/);
   });
 });
