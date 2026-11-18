@@ -23,7 +23,7 @@ export const NOME_SOMME = 'SHA256SUMS.txt';
 /**
  * Riconosce il sistema operativo del visitatore.
  * @param {{ platform?: string, userAgent?: string, maxTouchPoints?: number }} info
- *   platform: navigator.userAgentData.platform se c'è (Chrome, Edge), altrimenti vuoto.
+ *   platform: navigator.userAgentData.platform se il browser lo fornisce, altrimenti vuoto.
  * @returns {'windows'|'mac'|'linux'|'mobile'|'altro'}
  */
 export function rilevaSistema({ platform = '', userAgent = '', maxTouchPoints = 0 } = {}) {

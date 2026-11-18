@@ -202,7 +202,7 @@ describe('index.html', () => {
   it('ha un posto per ogni file del catalogo e i contenitori usati da avvio.js', () => {
     for (const v of CATALOGO) expect(html, v.chiave).toContain(`data-file="${v.chiave}"`);
     for (const id of ['principale', 'versione', 'altri-sistemi', 'linux-presto', 'somme-nota', 'd-avvisi', 'd-verifica',
-      'in-leggio', 'risparmio', 'esclusive', 'fiducia', 'calcolo', 'postazioni', 'costo', 'calcolo-esito', 'd-limiti']) expect(html, id).toContain(`id="${id}"`);
+      'confronto', 'risparmio', 'esclusive', 'fiducia', 'calcolo', 'postazioni', 'costo', 'calcolo-esito', 'd-limiti']) expect(html, id).toContain(`id="${id}"`);
   });
   it('promessa e vantaggi in alto, prima del pulsante di download', () => {
     const h1 = html.indexOf('<h1'); const vantaggi = html.indexOf('class="vantaggi"'); const principale = html.indexOf('id="principale"');
@@ -211,23 +211,41 @@ describe('index.html', () => {
     expect(vantaggi).toBeLessThan(principale);
     expect(html.match(/<h1\b/g)).toHaveLength(1);
   });
-  it('nessun confronto con prodotti di terzi e nessun prezzo altrui', () => {
-    const testo = html.replace(/<p class="marchi">[\s\S]*?<\/p>/, '');
-    for (const marchio of ['Acrobat', 'Adobe', 'Foxit', 'XChange', 'Nitro', 'Wondershare']) expect(testo, marchio).not.toMatch(new RegExp(marchio, 'i'));
-    expect(html).not.toMatch(/tutto quello che fa/i);
-    // gli unici importi in euro sono gli «0 €» di Leggio
+  // Scelta di Lorenzo: nessun nome di prodotto o azienda di terzi (si possono nominare solo i sistemi operativi, i chip dei Mac e GitHub).
+  const VIETATI = ['Adobe', 'Acrobat', 'Reader', 'Foxit', 'PDF-XChange', 'XChange', 'Tracker Software', 'Nitro', 'Wondershare', 'PDFelement',
+    'Smallpdf', 'iLovePDF', 'Edge', 'Chrome', 'Chromium', 'Firefox', 'Safari', 'Microsoft', 'Google', 'SmartScreen', 'OneDrive',
+    'Word', 'Excel', 'PowerPoint', 'LibreOffice', 'Office', 'Dike', 'ArubaSign'];
+  const avvio = readFileSync(join(SITO, 'avvio.js'), 'utf8');
+  for (const [nome, testo] of [['index.html', html], ['avvio.js', avvio]]) {
+    it(`nessun nome di prodotti o aziende di terzi in ${nome}`, () => {
+      for (const v of VIETATI) expect(testo, `${nome}: ${v}`).not.toMatch(new RegExp(`\\b${v.replace('-', '\\-')}\\b`, 'i'));
+    });
+  }
+  it('nessun prezzo altrui e nessun disclaimer sui marchi', () => {
     for (const m of html.matchAll(/([\d.,]+)\s*€/g)) expect(m[1], m[0]).toBe('0');
-    expect(html).toContain('I prezzi e le funzioni dei prodotti di terzi possono cambiare: verificali sui siti dei produttori');
+    expect(html).not.toMatch(/sono marchi|è un marchio|marchio registrato/i);
+    expect(html).not.toMatch(/tutto quello che fa/i);
   });
-  it('marchi citati (nelle istruzioni) attribuiti ai titolari nel piè di pagina', () => {
-    const marchi = html.match(/<p class="marchi">([\s\S]*?)<\/p>/)?.[1] || '';
-    for (const t of ['Microsoft Corporation', 'Google LLC', 'Apple Inc.', 'non è affiliato né approvato']) expect(marchi, t).toContain(t);
-    expect(html.indexOf('class="marchi"')).toBeGreaterThan(html.indexOf('<footer'));
+  it('confronto per categorie: Leggio e due colonne generiche, righe complete', () => {
+    const tabella = html.slice(html.indexOf('<table class="confronto"'), html.indexOf('</table>'));
+    const intest = [...tabella.slice(0, tabella.indexOf('</thead>')).matchAll(/<th scope="col"[^>]*>([^<]*)</g)].map((m) => m[1]).filter(Boolean);
+    expect(intest).toEqual(['Leggio', 'Lettori PDF gratuiti', 'Editor PDF a pagamento']);
+    const righe = [...tabella.slice(tabella.indexOf('<tbody>')).matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)].map((m) => m[1]);
+    expect(righe.length).toBeGreaterThanOrEqual(12);
+    for (const r of righe) {
+      expect((r.match(/<td\b/g) || []).length, r.slice(0, 80)).toBe(3);
+      expect(r).toMatch(/<td class="noi">/);
+    }
+    // valori prudenti, niente assoluti sulle categorie
+    const generiche = righe.flatMap((r) => [...r.matchAll(/<td>([^<]*)<\/td>/g)].map((m) => m[1]));
+    for (const g of generiche) expect(g, g).not.toMatch(/^(Sì|No|Mai|Nessuno|Tutti)\b/);
+    expect(generiche.some((g) => /di solito no/i.test(g))).toBe(true);
+    for (const t of ['.p7m', 'fatture elettroniche', 'fronte/retro', 'Titulus', 'senza Internet', 'Prezzo']) expect(tabella, t).toContain(t);
+    expect((tabella.match(/class="distintivo"|distintivo"/g) || []).length).toBeGreaterThanOrEqual(6);
+    expect((tabella.match(/class="si"><span class="vh">Sì<\/span>/g) || []).length).toBe((tabella.match(/class="si"/g) || []).length);
   });
-  it('elenco di cosa trovi in Leggio, con testo per i lettori di schermo', () => {
-    const el = html.slice(html.indexOf('class="elenco-incluso"'), html.indexOf('</ul>', html.indexOf('class="elenco-incluso"')));
-    for (const t of ['.p7m', 'fatture elettroniche', 'fronte/retro', 'Titulus', 'Senza Internet', '0 €']) expect(el, t).toContain(t);
-    expect((el.match(/class="si"><span class="vh">Incluso:<\/span>/g) || []).length).toBe((el.match(/<li>/g) || []).length);
+  it('«Quanto risparmi»: messaggio generico, senza cifre di terzi', () => {
+    expect(html).toContain('Gli editor PDF professionali costano di solito un abbonamento annuale per ogni postazione. Leggio: 0 €, su tutti i computer che vuoi.');
   });
   it('fiducia: licenza, codice, nessun account, nessuna telemetria', () => {
     const f = html.slice(html.indexOf('id="fiducia"'), html.indexOf('</section>', html.indexOf('id="fiducia"')));

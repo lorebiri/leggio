@@ -2,18 +2,18 @@
 
 Pagina statica in italiano da pubblicare su GitHub Pages. Dall'alto: la promessa («Il PDF per l'ufficio
 italiano. Gratis, per sempre, senza Internet»), cinque vantaggi con icone e il pulsante di download per il computer
-di chi la visita · «Cosa trovi in Leggio» (elenco delle funzioni incluse) · «Quanto risparmi» (0 € per ogni
-postazione e conto fatto con i numeri di chi visita) · «Pensato per i documenti italiani» con schermate vere
-(.p7m, fatture XML, Titulus e U-GOV, copia fronte/retro, oscuramento con filigrana) · fascia di fiducia · tutte le
-altre funzioni · tutti i file con le impronte SHA-256 · domande frequenti · contatti e marchi.
+di chi la visita · confronto **per categorie** (Leggio, lettori PDF gratuiti, editor PDF a pagamento) con i punti di
+forza di Leggio evidenziati · «Quanto risparmi» (0 € per ogni postazione e conto fatto con i numeri di chi visita) ·
+«Pensato per i documenti italiani» con schermate vere (.p7m, fatture XML, Titulus e U-GOV, copia fronte/retro,
+oscuramento con filigrana) · fascia di fiducia · tutte le altre funzioni · tutti i file con le impronte SHA-256 ·
+domande frequenti · contatti.
 
-**Prodotti di terzi.** La pagina non confronta Leggio con prodotti di altri e non riporta prezzi altrui
-(pubblicità comparativa: d.lgs. 145/2007, art. 4). Un confronto si può aggiungere solo con ogni cella e ogni
-prezzo verificati sulle pagine ufficiali dei produttori, con le fonti, i link e la data della verifica sotto la
-tabella, e la frase «I prezzi e le funzioni dei prodotti di terzi possono cambiare: verificali sui siti dei
-produttori». I test (`test/sito-download.test.js`) bloccano nomi di prodotti concorrenti e importi diversi da 0 €.
-I marchi citati nelle istruzioni (Microsoft, Windows, Edge, Chrome, Apple, macOS, Linux) sono attribuiti ai
-titolari nel piè di pagina.
+**Niente nomi di terzi.** Per scelta di Lorenzo la pagina non nomina prodotti o aziende di altri (programmi PDF,
+browser, servizi di archiviazione, programmi per ufficio) e non riporta prezzi altrui: il confronto è solo per
+categorie, con valori prudenti («di solito no», «spesso solo a pagamento», «in genere sì»). Restano solo i nomi che
+servono a scaricare: i sistemi operativi, i chip dei Mac e GitHub, dove sono i file. I test
+(`test/sito-download.test.js`) falliscono se un nome vietato ricompare nella pagina o nei testi di `avvio.js`.
+Le schermate usate non devono mostrarli (per questo `img/strumenti.webp` non è più nella pagina).
 
 ## File
 
