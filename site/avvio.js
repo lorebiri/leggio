@@ -3,7 +3,7 @@
 import {
   CATALOGO, URL_API, URL_RELEASES, URL_SORGENTE, NOMI_SISTEMA,
   rilevaSistema, leggiRelease, leggiSomme, scegliPrincipale,
-  urlDownloadSicuro, urlApiFileSicuro, formattaDimensione, formattaData, costoAcrobat, formattaEuro,
+  urlDownloadSicuro, urlApiFileSicuro, formattaDimensione, formattaData, risparmioAnnuo, formattaEuro,
 } from './scarica.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
@@ -201,23 +201,24 @@ function collegaRisposte() {
   });
 }
 
-// «Quanto risparmi»: il calcolo per il numero di postazioni scelto (senza JavaScript restano i tre esempi fissi).
+// «Quanto risparmi»: il conto con i numeri di chi visita (senza JavaScript restano le tre carte fisse).
 function collegaCalcolo() {
   const box = $('#calcolo');
-  const campo = $('#postazioni');
+  const postazioni = $('#postazioni');
+  const costo = $('#costo');
   const esito = $('#calcolo-esito');
-  if (!box || !campo || !esito) return;
+  if (!box || !postazioni || !costo || !esito) return;
   const aggiorna = () => {
-    const n = Number(campo.value);
-    const anno = costoAcrobat(n);
-    if (anno == null) { esito.textContent = 'Scrivi un numero intero di postazioni, da 1 in su.'; return; }
-    esito.replaceChildren(
-      `Con Acrobat Pro: circa `, crea('strong', { text: formattaEuro(anno) }), ` l'anno, `,
-      crea('strong', { text: formattaEuro(costoAcrobat(n, 3)) }), ' in tre anni. ',
-      crea('span', { class: 'calcolo-noi', text: 'Con Leggio: 0 €.' }),
-    );
+    const n = Number(postazioni.value);
+    if (!Number.isInteger(n) || n < 1) { esito.textContent = 'Scrivi un numero intero di postazioni, da 1 in su.'; return; }
+    if (costo.value.trim() === '') { esito.replaceChildren('Con Leggio, ', crea('strong', { text: `${n} ${n === 1 ? 'postazione' : 'postazioni'}` }), ' costano ', crea('span', { class: 'calcolo-noi', text: '0 €' }), '. Scrivi quanto paghi oggi per vedere quanto risparmi.'); return; }
+    const anno = risparmioAnnuo(n, costo.value);
+    if (anno == null) { esito.textContent = 'Scrivi il costo annuo per postazione in euro, per esempio 120.'; return; }
+    esito.replaceChildren('Con Leggio risparmi ', crea('strong', { text: formattaEuro(anno) }), ' l\'anno, ',
+      crea('strong', { text: formattaEuro(anno * 3) }), ' in tre anni. ', crea('span', { class: 'calcolo-noi', text: 'Leggio: 0 €.' }));
   };
-  campo.addEventListener('input', aggiorna);
+  postazioni.addEventListener('input', aggiorna);
+  costo.addEventListener('input', aggiorna);
   box.hidden = false;
   aggiorna();
 }

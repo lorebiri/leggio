@@ -1,16 +1,19 @@
 # Sito di Leggio (presentazione e download)
 
-Pagina statica in italiano da pubblicare su GitHub Pages. Dall'alto: la promessa («Le funzioni di Acrobat Pro.
-Gratis, per sempre, senza Internet»), cinque vantaggi con icone e il pulsante di download per il computer di chi
-la visita · tabella di confronto con Leggio evidenziato (Acrobat Reader, lettore di Edge o Chrome, Foxit PDF Reader,
-Acrobat Pro, PDF-XChange Editor) · «Quanto risparmi» (Acrobat Pro per 1, 10, 50 postazioni e calcolo libero) ·
-«Solo in Leggio» con schermate vere (.p7m, fatture XML, Titulus e U-GOV, copia fronte/retro, oscuramento con
-filigrana) · fascia di fiducia (open source, nessun account, nessuna telemetria, file mai inviati) · tutte le
-altre funzioni · tutti i file con le impronte SHA-256 · domande frequenti · contatti.
+Pagina statica in italiano da pubblicare su GitHub Pages. Dall'alto: la promessa («Il PDF per l'ufficio
+italiano. Gratis, per sempre, senza Internet»), cinque vantaggi con icone e il pulsante di download per il computer
+di chi la visita · «Cosa trovi in Leggio» (elenco delle funzioni incluse) · «Quanto risparmi» (0 € per ogni
+postazione e conto fatto con i numeri di chi visita) · «Pensato per i documenti italiani» con schermate vere
+(.p7m, fatture XML, Titulus e U-GOV, copia fronte/retro, oscuramento con filigrana) · fascia di fiducia · tutte le
+altre funzioni · tutti i file con le impronte SHA-256 · domande frequenti · contatti e marchi.
 
-**Da ricontrollare a ogni aggiornamento della pagina:** il confronto e il prezzo di Acrobat Pro
-(`ACROBAT_PRO_EURO_MESE` in `scarica.js` e i testi della sezione `#risparmio`, che i test confrontano con il calcolo),
-sui siti dei produttori; aggiorna anche la data nella nota sotto la tabella.
+**Prodotti di terzi.** La pagina non confronta Leggio con prodotti di altri e non riporta prezzi altrui
+(pubblicità comparativa: d.lgs. 145/2007, art. 4). Un confronto si può aggiungere solo con ogni cella e ogni
+prezzo verificati sulle pagine ufficiali dei produttori, con le fonti, i link e la data della verifica sotto la
+tabella, e la frase «I prezzi e le funzioni dei prodotti di terzi possono cambiare: verificali sui siti dei
+produttori». I test (`test/sito-download.test.js`) bloccano nomi di prodotti concorrenti e importi diversi da 0 €.
+I marchi citati nelle istruzioni (Microsoft, Windows, Edge, Chrome, Apple, macOS, Linux) sono attribuiti ai
+titolari nel piè di pagina.
 
 ## File
 

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import {
   rilevaSistema, classificaFile, urlDownloadSicuro, urlApiFileSicuro, leggiRelease, leggiSomme,
   scegliPrincipale, formattaDimensione, formattaData, URL_RELEASES, CATALOGO,
-  costoAcrobat, formattaEuro, ACROBAT_PRO_EURO_MESE,
+  risparmioAnnuo, formattaEuro,
 } from '../site/scarica.js';
 
 const UA = {
@@ -178,17 +178,15 @@ describe('formattazione', () => {
 });
 
 describe('quanto risparmi', () => {
-  it('costo indicativo di Acrobat Pro arrotondato alla decina', () => {
-    expect(ACROBAT_PRO_EURO_MESE).toBeGreaterThan(0);
-    expect(costoAcrobat(1)).toBe(Math.round(ACROBAT_PRO_EURO_MESE * 12 / 10) * 10);
-    expect(costoAcrobat(10)).toBe(2930);
-    expect(costoAcrobat(50)).toBe(14630);
-    expect(costoAcrobat(50, 3)).toBe(Math.round(ACROBAT_PRO_EURO_MESE * 12 * 150 / 10) * 10);
-    expect(costoAcrobat('25')).toBe(7320);
+  it('moltiplica le postazioni per il costo scritto da chi visita', () => {
+    expect(risparmioAnnuo(10, 120)).toBe(1200);
+    expect(risparmioAnnuo('25', '99.5')).toBe(2488);
+    expect(risparmioAnnuo(3, '24,5')).toBe(74);
+    expect(risparmioAnnuo(1, 0)).toBe(0);
   });
   it('rifiuta valori non validi', () => {
-    for (const v of [0, -3, 2.5, NaN, '', 'dieci', null, 100001]) expect(costoAcrobat(v), String(v)).toBeNull();
-    expect(costoAcrobat(1, 0)).toBeNull();
+    for (const v of [0, -3, 2.5, NaN, '', 'dieci', null, 100001]) expect(risparmioAnnuo(v, 100), String(v)).toBeNull();
+    for (const c of ['', null, -1, 'tanto', 100001]) expect(risparmioAnnuo(5, c), String(c)).toBeNull();
   });
   it('scrive gli euro all\'italiana', () => {
     expect(formattaEuro(290)).toBe('290 €');
@@ -204,7 +202,7 @@ describe('index.html', () => {
   it('ha un posto per ogni file del catalogo e i contenitori usati da avvio.js', () => {
     for (const v of CATALOGO) expect(html, v.chiave).toContain(`data-file="${v.chiave}"`);
     for (const id of ['principale', 'versione', 'altri-sistemi', 'linux-presto', 'somme-nota', 'd-avvisi', 'd-verifica',
-      'confronto', 'risparmio', 'esclusive', 'fiducia', 'calcolo', 'postazioni', 'calcolo-esito', 'd-acrobat']) expect(html, id).toContain(`id="${id}"`);
+      'in-leggio', 'risparmio', 'esclusive', 'fiducia', 'calcolo', 'postazioni', 'costo', 'calcolo-esito', 'd-limiti']) expect(html, id).toContain(`id="${id}"`);
   });
   it('promessa e vantaggi in alto, prima del pulsante di download', () => {
     const h1 = html.indexOf('<h1'); const vantaggi = html.indexOf('class="vantaggi"'); const principale = html.indexOf('id="principale"');
@@ -213,28 +211,23 @@ describe('index.html', () => {
     expect(vantaggi).toBeLessThan(principale);
     expect(html.match(/<h1\b/g)).toHaveLength(1);
   });
-  it('tabella di confronto: sei programmi, ogni riga completa, Leggio evidenziato', () => {
-    const tabella = html.slice(html.indexOf('<table class="confronto"'), html.indexOf('</table>'));
-    for (const nome of ['Leggio', 'Adobe Acrobat Reader', 'Edge o Chrome', 'Foxit PDF Reader', 'Adobe Acrobat Pro', 'PDF-XChange Editor']) expect(tabella, nome).toContain(nome);
-    const corpo = tabella.slice(tabella.indexOf('<tbody>'));
-    const righe = [...corpo.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)].map((m) => m[1]);
-    expect(righe.length).toBeGreaterThanOrEqual(12);
-    for (const r of righe) {
-      expect((r.match(/<td\b/g) || []).length, r.slice(0, 80)).toBe(6);
-      expect(r, r.slice(0, 80)).toMatch(/<td class="noi">/);
-    }
-    for (const parola of ['.p7m', 'fatture elettroniche', 'fronte/retro', 'Titulus', 'Prezzo', 'senza Internet']) expect(tabella, parola).toContain(parola);
-    // ogni segno ha il testo per i lettori di schermo
-    expect((tabella.match(/class="si"><span class="vh">Sì<\/span>/g) || []).length).toBe((tabella.match(/class="si"/g) || []).length);
-    expect((tabella.match(/class="no"><span class="vh">No<\/span>/g) || []).length).toBe((tabella.match(/class="no"/g) || []).length);
-    expect(html).toMatch(/Confronto di novembre 2026/);
+  it('nessun confronto con prodotti di terzi e nessun prezzo altrui', () => {
+    const testo = html.replace(/<p class="marchi">[\s\S]*?<\/p>/, '');
+    for (const marchio of ['Acrobat', 'Adobe', 'Foxit', 'XChange', 'Nitro', 'Wondershare']) expect(testo, marchio).not.toMatch(new RegExp(marchio, 'i'));
+    expect(html).not.toMatch(/tutto quello che fa/i);
+    // gli unici importi in euro sono gli «0 €» di Leggio
+    for (const m of html.matchAll(/([\d.,]+)\s*€/g)) expect(m[1], m[0]).toBe('0');
+    expect(html).toContain('I prezzi e le funzioni dei prodotti di terzi possono cambiare: verificali sui siti dei produttori');
   });
-  it('gli importi scritti nella sezione «Quanto risparmi» coincidono con il calcolo', () => {
-    for (const n of [1, 10, 50]) {
-      const cifra = formattaEuro(costoAcrobat(n)).replace(' €', '');
-      expect(html, `${n} postazioni`).toMatch(new RegExp(`${n} postazion[ei]</span>\\s*<span class="loro">[^<]*<span class="vh">[^<]*</span>circa ${cifra.replace('.', '\\.')} €`));
-    }
-    expect(html).toContain(String(ACROBAT_PRO_EURO_MESE).replace('.', ','));
+  it('marchi citati (nelle istruzioni) attribuiti ai titolari nel piè di pagina', () => {
+    const marchi = html.match(/<p class="marchi">([\s\S]*?)<\/p>/)?.[1] || '';
+    for (const t of ['Microsoft Corporation', 'Google LLC', 'Apple Inc.', 'non è affiliato né approvato']) expect(marchi, t).toContain(t);
+    expect(html.indexOf('class="marchi"')).toBeGreaterThan(html.indexOf('<footer'));
+  });
+  it('elenco di cosa trovi in Leggio, con testo per i lettori di schermo', () => {
+    const el = html.slice(html.indexOf('class="elenco-incluso"'), html.indexOf('</ul>', html.indexOf('class="elenco-incluso"')));
+    for (const t of ['.p7m', 'fatture elettroniche', 'fronte/retro', 'Titulus', 'Senza Internet', '0 €']) expect(el, t).toContain(t);
+    expect((el.match(/class="si"><span class="vh">Incluso:<\/span>/g) || []).length).toBe((el.match(/<li>/g) || []).length);
   });
   it('fiducia: licenza, codice, nessun account, nessuna telemetria', () => {
     const f = html.slice(html.indexOf('id="fiducia"'), html.indexOf('</section>', html.indexOf('id="fiducia"')));

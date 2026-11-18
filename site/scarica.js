@@ -161,18 +161,18 @@ export function formattaData(iso) {
 export const NOMI_SISTEMA = { windows: 'Windows', mac: 'macOS', linux: 'Linux', mobile: 'telefono o tablet', altro: 'questo sistema' };
 
 // ---- «Quanto risparmi» ----
-// Prezzo di listino indicativo di Acrobat Pro per l'Italia (piano annuale individuale, IVA inclusa), novembre 2026.
-// Se cambia, aggiorna anche i testi della sezione #risparmio di index.html (i test controllano che coincidano).
-export const ACROBAT_PRO_EURO_MESE = 24.39;
+// Nessun prezzo di terzi nella pagina: il calcolo usa solo i numeri scritti da chi la visita.
 
 /**
- * Costo indicativo di Acrobat Pro per un certo numero di postazioni e di anni, arrotondato alla decina di euro.
- * @returns {number|null} null se il numero di postazioni non è un intero tra 1 e 100000
+ * Spesa annua che si evita con Leggio: postazioni × costo annuo per postazione indicato dall'utente.
+ * @returns {number|null} null se le postazioni non sono un intero tra 1 e 100000 o il costo non è un numero tra 0 e 100000
  */
-export function costoAcrobat(postazioni, anni = 1) {
+export function risparmioAnnuo(postazioni, costoPerPostazione) {
   const n = Number(postazioni);
-  if (!Number.isInteger(n) || n < 1 || n > 100000 || !Number.isInteger(anni) || anni < 1) return null;
-  return Math.round((ACROBAT_PRO_EURO_MESE * 12 * n * anni) / 10) * 10;
+  if (postazioni === '' || postazioni == null || !Number.isInteger(n) || n < 1 || n > 100000) return null;
+  const c = typeof costoPerPostazione === 'string' ? Number(costoPerPostazione.trim().replace(',', '.')) : Number(costoPerPostazione);
+  if (costoPerPostazione === '' || costoPerPostazione == null || !Number.isFinite(c) || c < 0 || c > 100000) return null;
+  return Math.round(n * c);
 }
 
 /** 14630 → «14.630 €» */
