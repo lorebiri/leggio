@@ -79,7 +79,7 @@ async function salva(page, nome, opz = {}) {
   await page.waitForTimeout(opz.attesa ?? 400);
   // via i messaggi temporanei (toast): coprirebbero la schermata
   await page.evaluate(() => document.querySelectorAll('#toast-root > *').forEach((t) => t.remove())).catch(() => {});
-  const png = await page.screenshot();
+  const png = await page.screenshot(opz.clip ? { clip: opz.clip } : {});
   const est = FORMATO[nome] || 'webp';
   const dati = est === 'webp' ? await inWebp(png) : png;
   const file = join(CARTELLA, `${nome}.${est}`);
@@ -243,7 +243,12 @@ const SCENE = {
     await page.waitForTimeout(800);
     await page.getByRole('button', { name: 'Non ora' }).click({ timeout: 1500 }).catch(() => {});
     await page.evaluate(() => { window.__leggio.viewer.pdfViewer.currentScaleValue = 'page-fit'; });
-    await salva(page, 'copia-documento-risultato', { attesa: 1200 });
+    await page.waitForTimeout(800);
+    // solo il foglio A4, con un po' di margine
+    const r = await page.evaluate(() => { const b = document.querySelector('.pdfViewer .page').getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width, height: b.height }; });
+    const m = 12; const y = Math.max(0, r.y - m);
+    const clip = { x: Math.max(0, r.x - m), y, width: r.width + 2 * m, height: Math.min(VISTA.height - 30, r.y + r.height + m) - y };
+    await salva(page, 'copia-documento-risultato', { attesa: 600, clip });
     await fine(ctx, errori, 'copia-documento');
   },
 
