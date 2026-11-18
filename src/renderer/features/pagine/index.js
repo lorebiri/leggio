@@ -10,6 +10,7 @@ import { strumentoRitaglia } from './ui/ritaglia.js';
 import { apriIntestazioni, apriFiligrana, apriSfondo } from './ui/timbri.js';
 import { apriCrea, installaTrascinamento } from './ui/crea.js';
 import { pannelloSegnalibri } from './ui/segnalibri.js';
+import { apriCopiaDocumento } from './ui/copia-documento.js';
 import * as U from './ui/strumenti.js';
 import { mostraErrore, modificaDoc } from './ui/comune.js';
 
@@ -30,6 +31,7 @@ registerIcon('bates', '<rect x="4" y="3" width="16" height="18" rx="1.5"/><path 
 registerIcon('background', '<rect x="4" y="3" width="16" height="18" rx="1.5" fill="currentColor" fill-opacity=".18"/><path d="M8 8h8M8 12h8M8 16h5"/>');
 registerIcon('labels', '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.4"/>');
 registerIcon('eraser', '<path d="m7 21-4-4 11-11 7 7-7 8zM10 9l6 6M3 21h18"/>');
+registerIcon('idCopy', '<rect x="5" y="2.5" width="14" height="19" rx="1.5"/><rect x="7.5" y="5" width="9" height="5.5" rx="1"/><rect x="7.5" y="13" width="9" height="5.5" rx="1"/>');
 registerIcon('duplicate', '<rect x="8" y="8" width="12" height="13" rx="1.5"/><path d="M16 8V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2M14 12v5M11.5 14.5h5"/>');
 
 export default function register(app) {
@@ -51,6 +53,10 @@ export default function register(app) {
     description: 'In più file: ogni N pagine, per intervalli, a ogni pagina bianca, per segnalibri o sotto una dimensione (PEC)',
     keywords: 'dividi separa spezza split pec dimensione massima mb allegati segnalibri pagine bianche fatture',
     run: (a) => apriDividi(a) });
+  T({ id: 'copia-documento', name: 'Copia documento fronte/retro', icon: 'idCopy', category: 'crea', needsDoc: false,
+    description: 'Fronte e retro di carta d\'identità, patente o tessera sanitaria su un solo foglio, ritagliati e in dimensione reale',
+    keywords: 'copia carta identità documento fronte retro tessera sanitaria patente codice fiscale cie fotocopia id card copy un foglio scansione ritaglia raddrizza',
+    run: (a) => apriCopiaDocumento(a) });
   T({ id: 'create-pdf', name: 'Crea PDF', acrobatName: 'Crea PDF', icon: 'pageInsert', category: 'crea', needsDoc: false,
     description: 'Da foto e immagini (una per pagina, raddrizzate e adattate ad A4), da file di testo o vuoto',
     keywords: 'crea nuovo pdf da immagini foto jpg png heic scontrini testo txt vuoto',

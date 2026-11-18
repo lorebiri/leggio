@@ -145,3 +145,31 @@ li.open > .pg-ol-row .pg-ol-tw { transform: none; }
 .pg-ol-pag { color: var(--muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; padding-right: 4px; }
 .pg-ol-edit { flex: 1; height: 30px; border: 1px solid var(--accent); border-radius: var(--radius-sm); padding: 0 6px; font-size: 13px; background: var(--surface); }
 .pg-ol-vuoto { padding: 14px; color: var(--muted); font-size: var(--fs-xs); line-height: 1.45; }
+
+/* ---------- Copia documento fronte/retro ---------- */
+.cd-wrap { max-width: 1100px; margin: 0 auto; padding: 4px 4px 32px; }
+.cd-nota { color: var(--muted, #666); margin: 0 0 12px; }
+.cd-opzioni { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px 16px; align-items: end; margin-bottom: 16px; }
+.cd-campo { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm, 13px); }
+.cd-check { display: flex; gap: 8px; align-items: center; }
+.cd-vuoto { border: 2px dashed var(--line, #ccc); border-radius: 12px; padding: 28px; text-align: center; color: var(--muted, #666); }
+.cd-drop .cd-vuoto, .cd-drop .cd-coppie { outline: 3px dashed var(--accent, #0f766e); outline-offset: 4px; }
+.cd-coppia { border: 1px solid var(--line, #ddd); border-radius: 12px; padding: 12px; margin-bottom: 14px; background: var(--surface, #fff); }
+.cd-coppia-tit { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.cd-lati { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 14px; }
+.cd-lato-tit { font-weight: 600; margin-bottom: 4px; }
+.cd-lato > select { width: 100%; margin-bottom: 8px; }
+.cd-editor { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+.cd-area { position: relative; line-height: 0; border: 1px solid var(--line, #ddd); }
+.cd-pagina { display: block; width: 220px; height: auto; }
+.cd-quad { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+.cd-quad polygon { fill: rgba(15, 118, 110, .12); stroke: var(--accent, #0f766e); stroke-width: 2; }
+.cd-maniglia { fill: #fff; stroke: var(--accent, #0f766e); stroke-width: 2.5; cursor: grab; }
+.cd-maniglia.cd-primo { fill: var(--accent, #0f766e); }
+.cd-maniglia:focus-visible { outline: none; stroke: #b42318; stroke-width: 4; }
+.cd-destra { display: flex; flex-direction: column; gap: 8px; max-width: 230px; }
+.cd-ritaglio { width: 190px; height: auto; border: 1px solid var(--line, #ccc); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.12); background: #fff; }
+.cd-stato { font-size: var(--fs-sm, 13px); }
+.cd-stato.warn { color: var(--warning, #b54708); }
+.cd-bottoni { display: flex; flex-wrap: wrap; gap: 6px; }
+.cd-nessuno { color: var(--muted, #888); padding: 12px 0; }
