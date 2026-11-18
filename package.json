@@ -2,10 +2,20 @@
   "name": "leggio",
   "productName": "Leggio",
   "version": "0.1.0",
-  "description": "Leggio — lettore ed editor PDF libero e gratuito per Windows e macOS",
+  "description": "Leggio — lettore ed editor PDF libero e gratuito per Windows, macOS e Linux",
   "main": "electron/main.cjs",
   "license": "GPL-3.0-or-later",
-  "author": "Lorenzo Birindelli",
+  "author": {
+    "name": "Lorenzo Birindelli"
+  },
+  "homepage": "https://github.com/lorebiri/leggio",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lorebiri/leggio.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lorebiri/leggio/issues"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite build && electron .",
@@ -60,29 +70,15 @@
       {
         "from": "LICENSE",
         "to": "LICENSE.txt"
+      },
+      {
+        "from": "build/p7m.ico",
+        "to": "p7m.ico"
       }
     ],
     "asar": true,
     "npmRebuild": false,
     "artifactName": "Leggio-${version}-${os}-${arch}.${ext}",
-    "fileAssociations": [
-      {
-        "ext": "pdf",
-        "name": "Documento PDF",
-        "description": "Documento PDF",
-        "mimeType": "application/pdf",
-        "role": "Editor",
-        "rank": "Alternate"
-      },
-      {
-        "ext": ["p7m", "m7m", "tsd"],
-        "name": "Documento firmato digitalmente",
-        "description": "Documento firmato digitalmente (CAdES)",
-        "mimeType": "application/pkcs7-mime",
-        "role": "Viewer",
-        "rank": "Alternate"
-      }
-    ],
     "mac": {
       "target": [
         {
@@ -107,7 +103,30 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "identity": "-",
-      "minimumSystemVersion": "12.0"
+      "minimumSystemVersion": "12.0",
+      "fileAssociations": [
+        {
+          "ext": "pdf",
+          "name": "Documento PDF",
+          "description": "Documento PDF",
+          "mimeType": "application/pdf",
+          "role": "Editor",
+          "rank": "Alternate"
+        },
+        {
+          "ext": [
+            "p7m",
+            "m7m",
+            "tsd"
+          ],
+          "name": "Documento firmato digitalmente",
+          "description": "Documento firmato digitalmente (CAdES)",
+          "mimeType": "application/pkcs7-mime",
+          "role": "Viewer",
+          "rank": "Alternate",
+          "icon": "build/p7m"
+        }
+      ]
     },
     "dmg": {
       "title": "Leggio ${version}",
@@ -163,10 +182,30 @@
       "multiLanguageInstaller": false,
       "license": "LICENSE",
       "deleteAppDataOnUninstall": false,
-      "artifactName": "Leggio-${version}-win-${arch}-installer.${ext}"
+      "artifactName": "Leggio-${version}-win-${arch}-installer.${ext}",
+      "include": "build/installer.nsh"
     },
     "portable": {
       "artifactName": "Leggio-${version}-win-${arch}-portatile.${ext}"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Office",
+      "icon": "build/icon.png",
+      "synopsis": "Lettore ed editor PDF libero e gratuito",
+      "description": "Leggi, commenta, modifica, firma e converti i PDF. Funziona senza Internet.",
+      "mimeTypes": [
+        "application/pdf",
+        "application/pkcs7-mime"
+      ],
+      "artifactName": "Leggio-${version}-linux-x86_64.${ext}"
     },
     "publish": [
       {

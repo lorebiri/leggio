@@ -33,7 +33,9 @@ function colorFrom(vals) {
  * Interpreta le operazioni di un content stream.
  * res: { font(name) → modello | null, xobject(name) → { subtype, matrix?, bbox?, open() → { parsed, res } } | null }
  * opts: { maxOps, maxDepth, collectForms (default true) }
- * Ritorna { shows, images, forms, unbalanced, finalDepth, endCtmIdentity, opCount, truncated }
+ * Ritorna { shows, images, forms, rules, unbalanced, finalDepth, endCtmIdentity, opCount, truncated }
+ *  rules[i]: { x0, y0, x1, y1, w } tratto rettilineo in spazio pagina di un tracciato disegnato (linee e bordi
+ *            tracciati, rettangoli pieni sottili): servono a riconoscere i bordi delle celle delle tabelle.
  *  shows[i]: { opIndex, op, fontName, font, fs, th, tc, tw, rise, color, tm(matrice testo iniziale), ctm, glyphs:[…], inForm, formPath }
  *  glyph: { el (indice elemento TJ o 0), code, len, offset, w, u, space, adv (avanzamento in unità testo, senza Th),
  *           x0 (posizione in unità testo all'inizio del glifo, relativa all'inizio dell'operatore), p: [x,y] centro in spazio pagina,
@@ -42,7 +44,7 @@ function colorFrom(vals) {
 export function interpret(parsed, res, opts = {}) {
   const maxOps = opts.maxOps ?? 2_000_000;
   const maxDepth = opts.maxDepth ?? 8;
-  const out = { shows: [], images: [], forms: [], opCount: 0, truncated: false, unbalanced: false, excessQ: 0, finalDepth: 0, endCtmIdentity: true, unsupportedFonts: new Set() };
+  const out = { shows: [], images: [], forms: [], rules: [], opCount: 0, truncated: false, unbalanced: false, excessQ: 0, finalDepth: 0, endCtmIdentity: true, unsupportedFonts: new Set() };
   run(parsed, res, IDENT, out, 0, null, maxOps, maxDepth);
   return out;
 }
@@ -51,6 +53,9 @@ function run(parsed, res, baseCtm, out, depth, formPath, maxOps, maxDepth) {
   const stack = [];
   let gs = { ctm: baseCtm, fontName: null, font: null, fs: 0, tc: 0, tw: 0, th: 1, tl: 0, rise: 0, tr: 0, fill: [0, 0, 0] };
   let tm = IDENT, tlm = IDENT;
+  let path = []; // sottotracciati: { pts:[[x,y]] in spazio pagina, rect:bool, closed:bool, curved:bool }
+  let sub = null;
+  const P = (x, y) => apply(gs.ctm, x, y);
   const ops = parsed.ops;
   for (let i = 0; i < ops.length; i++) {
     if (++out.opCount > maxOps) { out.truncated = true; return; }
@@ -86,6 +91,19 @@ function run(parsed, res, baseCtm, out, depth, formPath, maxOps, maxDepth) {
       case 'k': gs.fill = colorFrom(nums(a, 4)) || gs.fill; break;
       case 'sc': case 'scn': { const c = colorFrom(a.filter((o) => o.t === 'num').map((o) => o.v)); if (c) gs.fill = c; break; }
       case 'cs': gs.fill = [0, 0, 0]; break;
+      case 'w': gs.lw = num(a[0], 1); break;
+      case 'm': { const n = nums(a, 2); sub = { pts: [P(n[0], n[1])] }; path.push(sub); break; }
+      case 'l': { const n = nums(a, 2); if (!sub) { sub = { pts: [P(n[0], n[1])] }; path.push(sub); } else sub.pts.push(P(n[0], n[1])); break; }
+      case 'c': case 'v': case 'y': { const n = nums(a, op === 'c' ? 6 : 4); if (sub) { sub.curved = true; sub.pts.push(P(n[n.length - 2], n[n.length - 1])); sub.cut = (sub.cut || new Set()).add(sub.pts.length - 1); } break; }
+      case 'h': if (sub) { sub.closed = true; sub = null; } break;
+      case 're': {
+        const [x, y, w, hh] = nums(a, 4);
+        path.push({ pts: [P(x, y), P(x + w, y), P(x + w, y + hh), P(x, y + hh)], closed: true, rect: true });
+        sub = null; break;
+      }
+      case 'S': case 's': case 'f': case 'F': case 'f*': case 'B': case 'B*': case 'b': case 'b*': case 'n':
+        if (op !== 'n') collectRules(path, op, gs, out);
+        path = []; sub = null; break;
       case 'Do': {
         const name = a[0]?.t === 'name' ? a[0].v : null;
         if (name == null) break;
@@ -113,6 +131,38 @@ function run(parsed, res, baseCtm, out, depth, formPath, maxOps, maxDepth) {
     out.finalDepth = stack.length;
     const c = gs.ctm;
     out.endCtmIdentity = Math.abs(c[0] - 1) < 1e-9 && Math.abs(c[1]) < 1e-9 && Math.abs(c[2]) < 1e-9 && Math.abs(c[3] - 1) < 1e-9 && Math.abs(c[4]) < 1e-9 && Math.abs(c[5]) < 1e-9;
+  }
+}
+
+const MAX_RULES = 20000;
+/** Tratti rettilinei di un tracciato dipinto (vedi interpret → rules). */
+function collectRules(path, op, gs, out) {
+  if (out.rules.length >= MAX_RULES) return;
+  const stroke = op === 'S' || op === 's' || op === 'B' || op === 'B*' || op === 'b' || op === 'b*';
+  const fill = op !== 'S' && op !== 's';
+  const scale = Math.sqrt(Math.abs(gs.ctm[0] * gs.ctm[3] - gs.ctm[1] * gs.ctm[2])) || 1;
+  const lw = (gs.lw ?? 1) * scale;
+  for (const sp of path) {
+    const pts = sp.pts;
+    if (!pts || pts.length < 2) continue;
+    if (stroke) {
+      const closed = sp.closed || op === 's' || op === 'b' || op === 'b*';
+      for (let k = 1; k < pts.length + (closed ? 1 : 0); k++) {
+        if (sp.cut?.has(k)) continue; // curva
+        const p = pts[k - 1], q = pts[k % pts.length];
+        if (Math.hypot(q[0] - p[0], q[1] - p[1]) >= 1) out.rules.push({ x0: p[0], y0: p[1], x1: q[0], y1: q[1], w: lw });
+      }
+    } else if (fill && !sp.curved && (pts.length === 4 || (pts.length === 5 && Math.hypot(pts[4][0] - pts[0][0], pts[4][1] - pts[0][1]) < 0.01))) {
+      // rettangolo pieno sottile = filetto (molti programmi disegnano così i bordi delle tabelle)
+      const [p0, p1, p2] = pts;
+      const e1 = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]), e2 = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+      const thin = Math.min(e1, e2), long = Math.max(e1, e2);
+      if (thin > 3 || long < 2 || long < 3 * thin) continue;
+      const m = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      const [a, b] = e1 >= e2 ? [m(p0, pts[3]), m(p1, p2)] : [m(p0, p1), m(pts[3], p2)];
+      out.rules.push({ x0: a[0], y0: a[1], x1: b[0], y1: b[1], w: thin });
+    }
+    if (out.rules.length >= MAX_RULES) return;
   }
 }
 

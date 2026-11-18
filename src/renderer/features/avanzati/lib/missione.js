@@ -2,6 +2,7 @@
 // divisione in parti sotto una soglia. Logica pura (pdf-lib passato come parametro; pixel come {data,width,height}).
 import { aCapo } from './conformita.js';
 import { testoSicuro } from './protocollo.js';
+import { oggiLocale } from './controlli.js';
 
 /**
  * Riquadro del contenuto (pixel non bianchi) di un'immagine RGBA. Tollera polvere e bordi scuri sottili.
@@ -33,7 +34,7 @@ export function ritaglioUtile(r, width, height) {
 /** Nome del file della pratica. */
 export function nomeMissione(cognome, dataIso) {
   const c = String(cognome || 'COGNOME').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z']+/g, '').replace(/'/g, '').toUpperCase() || 'COGNOME';
-  const d = /^\d{4}-\d{2}-\d{2}$/.test(dataIso || '') ? dataIso : new Date().toISOString().slice(0, 10);
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(dataIso || '') ? dataIso : oggiLocale();
   return `Missione_${c}_${d}.pdf`;
 }
 

@@ -69,3 +69,17 @@ Nel browser (anteprima vite):
 - Un documento cifrato, dopo la prima modifica, resta in memoria senza cifratura: la protezione va
   riapplicata al salvataggio (area sicurezza).
 - Le anteprime di intestazioni e filigrana usano caratteri simili, non identici, a quelli del PDF.
+
+## Copia documento fronte/retro
+
+Strumento **«Copia documento fronte/retro»** (categoria Crea, funziona anche senza documenti aperti): come la
+funzione «copia carta d'identità» delle fotocopiatrici. Ingresso: il PDF aperto, altri PDF o foto (JPG, PNG,
+HEIC dove il sistema lo consente), anche trascinati; le coppie fronte/retro si scelgono pagina per pagina
+(predefinite 1-2, 3-4…). In ogni pagina la tessera viene trovata da sola (`logica/copia-documento.js`: fondo
+stimato dalla cornice, contorni, riempimento, inviluppo convesso, rettangolo minimo, lati rifiniti per la
+prospettiva e gli angoli arrotondati) e raddrizzata con un'omografia; gli angoli si regolano a mano (mouse o
+frecce), con «Ruota», «Capovolgi», «Rileva di nuovo», «Tutta la pagina». Uscita: un PDF nuovo (non salvato) con
+fronte sopra e retro sotto, centrati, a 300 dpi, in dimensione reale (ID-1 85,60 × 53,98 mm; carta cartacea
+aperta 150 × 110 mm) o ingrandita, A4 o Letter, a colori o in bianco e nero, contrasto migliorato, filigrana
+facoltativa «Copia per uso esclusivo di … – per … – data» dentro le immagini. Tutto in locale; i file di
+partenza non vengono toccati. Test: `test/copia-documento.test.js`, `test/e2e/copia-documento.mjs`.

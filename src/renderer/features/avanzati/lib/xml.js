@@ -12,7 +12,8 @@ export function decodeXml(bytes) {
   const head = new TextDecoder('latin1').decode(bytes.subarray(0, 200));
   const m = head.match(/encoding\s*=\s*["']([A-Za-z0-9._-]+)["']/);
   let enc = m ? m[1].toLowerCase() : 'utf-8';
-  if (enc === 'iso-8859-15' || enc === 'iso8859-1' || enc === 'latin1') enc = 'iso-8859-1';
+  // iso-8859-15 resta tale: TextDecoder lo conosce (0xA4 = €); forzarlo a iso-8859-1 lo trasformava in ¤
+  if (enc === 'iso8859-1' || enc === 'latin1') enc = 'iso-8859-1';
   try { return new TextDecoder(enc).decode(bytes); } catch { return new TextDecoder('utf-8').decode(bytes); }
 }
 
@@ -41,7 +42,7 @@ export function parseXml(input, { maxDepth = 200 } = {}) {
     if (lt < 0) { addText(stack, s.slice(i)); break; }
     if (lt > i) addText(stack, s.slice(i, lt));
     if (s.startsWith('<!--', lt)) { const e = s.indexOf('-->', lt + 4); if (e < 0) throw new XmlError('Commento non chiuso'); i = e + 3; continue; }
-    if (s.startsWith('<![CDATA[', lt)) { const e = s.indexOf(']]>', lt + 9); if (e < 0) throw new XmlError('Sezione CDATA non chiusa'); stack[stack.length - 1].text += s.slice(lt + 9, e); i = e + 3; continue; }
+    if (s.startsWith('<![CDATA[', lt)) { const e = s.indexOf(']]>', lt + 9); if (e < 0) throw new XmlError('Sezione CDATA non chiusa'); stack[stack.length - 1].text += s.slice(lt + 9, e); i = e + 3; continue; } // CDATA: testo letterale, niente entità
     if (s.startsWith('<?', lt)) { const e = s.indexOf('?>', lt + 2); if (e < 0) throw new XmlError('Istruzione non chiusa'); i = e + 2; continue; }
     if (s.startsWith('<!', lt)) {
       // DOCTYPE (eventualmente con sottoinsieme interno [...]): ignorato, nessuna entità definita viene espansa
@@ -77,15 +78,13 @@ export function parseXml(input, { maxDepth = 200 } = {}) {
     i = k + 1;
   }
   if (stack.length > 1) throw new XmlError(`Elemento <${stack[stack.length - 1].qname}> non chiuso: il file è incompleto`);
-  // normalizza testi
-  const fix = (e) => { e.text = unescapeXml(e.text); e.children.forEach(fix); };
-  fix(root);
   const docEl = root.children[0];
   if (!docEl) throw new XmlError('Documento XML vuoto');
   return docEl;
 }
 
-function addText(stack, t) { const top = stack[stack.length - 1]; if (top.qname !== '#document') top.text += t; }
+// le entità si sciolgono pezzo per pezzo sul testo normale (mai dentro le sezioni CDATA)
+function addText(stack, t) { const top = stack[stack.length - 1]; if (top.qname !== '#document') top.text += unescapeXml(t); }
 
 // --- interrogazione ---
 /** Primo figlio diretto con quel nome locale. */

@@ -23,14 +23,15 @@ Il push del tag avvia il workflow **Release**:
 
 1. controlla che il tag (`v0.2.0`) coincida con `version` di `package.json`, altrimenti si ferma;
 2. crea una **bozza** di release con le note generate da GitHub (elenco delle pull request);
-3. su macOS e su Windows esegue i test, compila, crea i pacchetti, verifica che i moduli del processo main
+3. su macOS, Windows e Linux esegue i test, compila, crea i pacchetti, verifica che i moduli del processo main
    si carichino dal pacchetto (`scripts/verifica-pacchetto.mjs`) e li carica nella bozza.
 
 Poi, a mano, su <https://github.com/lorebiri/leggio/releases>:
 
-1. apri la bozza e controlla che ci siano **6 file**:
+1. apri la bozza e controlla che ci siano **8 file**:
    `Leggio-X.Y.Z-mac-arm64.dmg`, `Leggio-X.Y.Z-mac-x64.dmg`, `Leggio-X.Y.Z-mac-arm64.zip`, `Leggio-X.Y.Z-mac-x64.zip`,
-   `Leggio-X.Y.Z-win-x64-installer.exe`, `Leggio-X.Y.Z-win-x64-portatile.exe`;
+   `Leggio-X.Y.Z-win-x64-installer.exe`, `Leggio-X.Y.Z-win-x64-portatile.exe`, `Leggio-X.Y.Z-linux-x86_64.AppImage`
+   e `SHA256SUMS.txt` (impronte SHA-256, calcolate dal job «Impronte»);
 2. scarica almeno un pacchetto e provalo;
 3. **riscrivi l'inizio delle note in italiano semplice** (vedi «Avviso dentro l'app»), lasciando sotto l'elenco automatico;
    incolla anche il riquadro «Prima apertura» qui sotto;
@@ -111,48 +112,11 @@ Dettagli tecnici:
   sul desktop e nel menu Start, associazione ai file `.pdf` (come programma alternativo: non ruba il predefinito).
   Lo SmartScreen avvisa per gli eseguibili non firmati o con poca «reputazione».
 
-## Firma e notarizzazione (quando ci saranno i certificati)
+## Firma e notarizzazione
 
-### macOS — Developer ID e notarizzazione
-
-Cosa serve (solo Lorenzo può farlo):
-
-1. iscrizione all'**Apple Developer Program** (99 USD/anno, come persona fisica va bene);
-2. un certificato **Developer ID Application** (da Xcode o dal sito Apple Developer), esportato come `.p12` con password;
-3. una **password specifica per app** dell'Apple ID (appleid.apple.com) e il **Team ID**.
-
-Segreti da creare nel repository GitHub (Settings → Secrets and variables → Actions):
-
-| Segreto | Contenuto |
-|---|---|
-| `CSC_LINK` | il file `.p12` codificato in base64 (`base64 -i certificato.p12 \| pbcopy`) |
-| `CSC_KEY_PASSWORD` | la password del `.p12` |
-| `APPLE_ID` | l'Apple ID dello sviluppatore |
-| `APPLE_APP_SPECIFIC_PASSWORD` | la password specifica per app |
-| `APPLE_TEAM_ID` | il Team ID (10 caratteri) |
-
-Modifiche da fare allora:
-
-- in `package.json` → `build.mac`: togliere `"identity": "-"` (electron-builder userà il certificato da `CSC_LINK`)
-  (la notarizzazione parte da sola quando ci sono le variabili `APPLE_*`; non impostare `"notarize": false`); si può togliere `disable-library-validation` da `build/entitlements.mac.plist`;
-- in `.github/workflows/release.yml`, nel job `pacchetti`: togliere `CSC_IDENTITY_AUTO_DISCOVERY: 'false'` e
-  passare i cinque segreti come variabili d'ambiente (solo per il job macOS).
-
-Risultato: nessun avviso al primo avvio su Mac. La notarizzazione aggiunge qualche minuto al workflow.
-
-### Windows — firma del codice
-
-Dal 2023 i certificati di firma devono stare su hardware sicuro (token o servizio cloud), quindi niente file `.pfx`
-semplice. Opzioni, in ordine di convenienza per un progetto libero:
-
-1. **SignPath Foundation** — firma gratuita per progetti open source (richiede domanda e approvazione del progetto;
-   si integra con GitHub Actions);
-2. **Azure Trusted Signing / Artifact Signing** di Microsoft — circa 10 USD/mese, richiede la verifica dell'identità
-   (verificare la disponibilità per persone fisiche in Italia); electron-builder lo supporta con `win.azureSignOptions`;
-3. certificato **OV** da una CA (circa 200–500 €/anno, su token o cloud).
-
-Con la firma l'avviso SmartScreen sparisce subito con Azure/EV, o col tempo man mano che cresce la reputazione (OV).
-*I prezzi sono indicativi (novembre 2026): verificarli prima di acquistare.*
+Tutto (opzioni, costi, passi, segreti) è in **[FIRMA-DEL-CODICE.md](FIRMA-DEL-CODICE.md)**. La pipeline è già
+pronta in `.github/workflows/release.yml` e `scripts/config-firma.cjs`: si accende impostando segreti e
+variabili del repository, senza modificare `package.json`.
 
 ## Pacchetti: cosa contengono
 

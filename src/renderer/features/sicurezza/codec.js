@@ -1,4 +1,5 @@
 // Parti che usano il browser (canvas): ricompressione delle immagini e rendering delle pagine oscurate.
+import { layoutFiligrana } from './logica/documenti-identita.js';
 
 /** Rettangolo PDF → [x, y, w, h] nella viewport (pdf.js 6 non ha più convertToViewportRectangle). */
 export function viewportRect(vp, r) {
@@ -51,7 +52,7 @@ export const browserCodec = {
  * Rende una pagina a ~300 dpi, senza rotazione e senza annotazioni, con i riquadri di oscuramento.
  * → { bytes (JPEG), kind: 'jpeg', view: [x1,y1,x2,y2] }
  */
-export async function renderRedactedPage(pdfjs, pdf, pageIndex, rects, { dpi = 300, color = '#000000', label = '', maxPixels = 36e6, quality = 0.8, signal } = {}) {
+export async function renderRedactedPage(pdfjs, pdf, pageIndex, rects, { dpi = 300, color = '#000000', label = '', watermark = '', maxPixels = 36e6, quality = 0.8, signal } = {}) {
   const page = await pdf.getPage(pageIndex + 1);
   try {
     const base = page.getViewport({ scale: 1, rotation: 0 });
@@ -85,10 +86,26 @@ export async function renderRedactedPage(pdfjs, pdf, pageIndex, rects, { dpi = 3
         ctx.fillText(label, x + bw / 2, y + bh / 2); ctx.restore();
       }
     }
+    // filigrana «Copia per uso esclusivo di …» dentro l'immagine della pagina: non si può togliere
+    if (watermark) drawWatermark(ctx, w, h, watermark);
     const img = await encodePage(canvas, ctx, w, h, quality);
     canvas.width = canvas.height = 1; // libera subito la memoria
     return { ...img, view: page.view.slice() };
   } finally { page.cleanup(); }
+}
+
+/** Righe diagonali ripetute, grigio semitrasparente, su tutta la pagina. */
+export function drawWatermark(ctx, w, h, text) {
+  const font = (size) => `600 ${size}px Helvetica, Arial, sans-serif`;
+  const lay = layoutFiligrana(w, h, text + '     ' + text, (t, size) => { ctx.font = font(size); return ctx.measureText(t).width; });
+  ctx.save();
+  ctx.translate(lay.centro[0], lay.centro[1]);
+  ctx.rotate(lay.angolo);
+  ctx.font = font(lay.dimensione);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(70, 70, 70, 0.30)';
+  for (const r of lay.righe) ctx.fillText(text + '     ' + text, r.x, r.y);
+  ctx.restore();
 }
 
 function contrast(hex) {

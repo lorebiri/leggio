@@ -251,14 +251,19 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16
 @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } }
 
 /* ---------- stampa ---------- */
+/* #print-root è figlio diretto di <body> (print.js lo sposta lì): nascondere #app non lo nasconde più.
+   Prima stava dentro #app e la stampa usciva bianca; «overflow: clip» su html/body (finestra adattiva, più
+   sotto) tagliava poi tutto dopo il primo foglio. In stampa niente ritagli e niente altezze fisse. */
 #print-root { display: none; }
 @media print {
   @page { margin: 0; }
-  body.printing #app, body.printing #overlay-root, body.printing #toast-root { display: none !important; }
-  body.printing #print-root { display: block; }
-  html, body { height: auto; overflow: visible; background: #fff; }
-  .print-page { page-break-after: always; break-after: page; width: 100%; height: 100vh; display: flex; align-items: center; justify-content: center; }
-  .print-page img { max-width: 100%; max-height: 100vh; }
+  body.printing #app, body.printing #overlay-root, body.printing #toast-root, body.printing > :not(#print-root) { display: none !important; }
+  body.printing #print-root { display: block !important; }
+  html, body, body.printing #print-root { height: auto !important; min-height: 0 !important; overflow: visible !important; background: #fff !important; zoom: 1 !important; }
+  /* ogni pagina occupa esattamente un foglio: poco meno di 100vh, così l'arrotondamento non crea fogli bianchi in mezzo */
+  .print-page { break-after: page; page-break-after: always; break-inside: avoid; width: 100vw; height: calc(100vh - 2px); overflow: hidden; display: flex; align-items: center; justify-content: center; margin: 0; padding: 0; box-sizing: border-box; }
+  .print-page:last-child { break-after: auto; page-break-after: auto; }
+  .print-page img { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }
   .print-blank { background: #fff; }
 }
 

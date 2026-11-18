@@ -1,5 +1,5 @@
 // Azioni guidate: file → sequenza di operazioni → dove salvare → avanzamento → rapporto finale.
-import { tutteLeOperazioni, validaSequenza, eseguiSequenza, nomeUscita, SkipError, operazioneProteggi, destinazione } from '../lib/batch-ops.js';
+import { tutteLeOperazioni, validaSequenza, eseguiSequenza, nomeUscita, SkipError, operazioneProteggi, destinazione, nomeUscitaFirmato } from '../lib/batch-ops.js';
 import { chooseFolder, chooseFiles, writeOut, isDesktop, call, fileItem, dirname, basename } from '../native.js';
 import { nomeDalContenuto } from './coda.js';
 import { nuovoLavoro, registra, daFare, conteggi, lavoroValido, registroCsv, chiaveDi, datiCsv, nomeUnico } from '../lib/registro.js';
@@ -254,13 +254,15 @@ export function openBatch(app, deps, preset = null) {
           bytes = prep.bytes; Object.assign(ctx, prep.ctx);
           if (prep.nota) ctx.note = prep.nota;
           const out = await eseguiSequenza(bytes, passi, { PDFLib: app.lib.PDFLib, openPdfLib: (b) => app.lib.openPdfLib(b), savePdfLib: (d) => app.lib.savePdfLib(d), ops, ctx, signal: p.signal });
-          const pdfName = it.name.replace(/(\.xml)?(\.p7m)*$/i, (m) => (m ? '.pdf' : '')).replace(/\.pdf\.pdf$/i, '.pdf');
+          const firmato = /\.(p7m|p7s|m7m|tsd)$/i.test(it.name);
+          const pdfName = firmato ? nomeUscitaFirmato(it.name) : it.name.replace(/(\.xml)?(\.p7m)*$/i, (m) => (m ? '.pdf' : '')).replace(/\.pdf\.pdf$/i, '.pdf');
           const rinomina = opz.nome === 'contenuto' || ctx.rinomina;
           let name = rinomina ? (ctx.nomeFattura || await nomeDalContenuto(out, pdfName, app.settings.get('avanzati.rinomina.regola'))) : nomeUscita(pdfName, { modo: opz.nome });
           if (rinomina && /^Documento(_n\d*)?\.pdf$/i.test(name)) { name = nomeUscita(pdfName, { modo: 'stesso' }); ctx.note = [ctx.note, 'nome non ricavabile dal contenuto: tenuto quello originale'].filter(Boolean).join(' — '); }
           name = nomeUnico(lavoro, rec, `${dest.folder || ''}/${dest.sub || ''}`, name);
           if (rinomina) ctx.note = [ctx.note, `nuovo nome: ${name}`].filter(Boolean).join(' — ');
-          const dove = await scrivi(dest, opz.dest === 'overwrite' && it.path ? basename(it.path) : name, out);
+          // «Sostituisci gli originali»: solo per i PDF; i file firmati e le fatture XML restano intatti (dest.overwrite è false)
+          const dove = await scrivi(dest, opz.dest === 'overwrite' && it.path && dest.overwrite ? basename(it.path) : name, out);
           registra(lavoro, rec, { s: 'ok', dove, nota: ctx.note || '', ms: performance.now() - s0, dati: ctx.dati || null });
         } catch (e) {
           if (e?.name === 'AbortError') break;

@@ -16,16 +16,30 @@ function righeErrore(testo, max = 6) {
   return String(testo || '').split('\n').filter((r) => /\[(ERROR|WARN)\]/.test(r)).slice(-max);
 }
 
+/** Taglia a n caratteri senza spezzare una coppia surrogata (emoji): encodeURIComponent la rifiuterebbe. */
+function taglia(s, n) {
+  const a = Array.from(String(s));
+  return a.length > n ? a.slice(0, n).join('') : String(s);
+}
+
+/** Ultimo elemento di un percorso (separatori / o \, anche raddoppiati come nel JSON del registro). */
+const nomeFile = (p) => p.split(/[\\/]+/).filter(Boolean).pop() || '';
+
 /** Toglie cartelle personali e percorsi completi: resta solo il nome del file. */
 function pulisci(riga, home = '') {
   let s = String(riga);
-  if (home) s = s.split(home).join('~');
-  // percorsi Windows (C:\...\nome.pdf) e POSIX (/Users/.../nome.pdf, ~/...): solo l'ultimo elemento
-  s = s.replace(/(?:[A-Za-z]:)?(?:[\\/][^\\/\s"',:]+)+[\\/]([^\\/\s"',:]+)/g, '…/$1');
-  s = s.replace(/~(?:[\\/][^\\/\s"',:]+)+[\\/]([^\\/\s"',:]+)/g, '…/$1');
-  // la data ISO completa è inutile: bastano giorno e ora
-  s = s.replace(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})\.\d+Z/, '$1 $2');
-  return s.slice(0, 220);
+  if (home) {
+    // la cartella personale compare anche con le barre raddoppiate dal JSON (C:\\Users\\Mario)
+    for (const h of new Set([home, home.replace(/\\/g, '\\\\')])) s = s.split(h).join('~');
+  }
+  // valori JSON fra virgolette che sono percorsi (anche con spazi o di rete \\server\…): solo il nome del file
+  s = s.replace(/"((?:[A-Za-z]:|~|\\\\)?[\\/][^"]*)"/g, (_m, p) => `"…/${nomeFile(p)}"`);
+  // percorsi nel testo libero (C:\...\nome.pdf, /Users/.../nome.pdf, ~/...): solo l'ultimo elemento
+  s = s.replace(/(?:[A-Za-z]:)?(?:[\\/]+[^\\/\s"',:]+)+[\\/]+([^\\/\s"',:]+)/g, '…/$1');
+  s = s.replace(/~(?:[\\/]+[^\\/\s"',:]+)+[\\/]+([^\\/\s"',:]+)/g, '…/$1');
+  // la data ISO completa è inutile: bastano giorno e ora (del registro, in UTC)
+  s = s.replace(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})\.\d+Z/, '$1 $2 UTC');
+  return taglia(s, 220);
 }
 
 /**
@@ -50,7 +64,7 @@ function preparaMail({ versione = '?', sistema = '', versioneSistema = '', error
     `Versione di Leggio: ${versione}`,
     `Sistema: ${SISTEMI[sistema] || sistema || '?'} ${versioneSistema}`.trim(),
   ];
-  if (contesto) testa.push(`Avviso mostrato: ${String(contesto).replace(/\s+/g, ' ').slice(0, 200)}`);
+  if (contesto) testa.push(`Avviso mostrato: ${taglia(String(contesto).replace(/\s+/g, ' '), 200)}`);
   const encode = (o, c) => `mailto:${DESTINATARIO}?subject=${encodeURIComponent(o)}&body=${encodeURIComponent(c)}`;
   let righe = errori.slice();
   let corpo; let url;

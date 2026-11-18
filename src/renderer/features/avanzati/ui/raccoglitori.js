@@ -1,4 +1,5 @@
 // Flussi che raccolgono più file in un PDF: «Pratica di missione», «Fascicolo con indice», «Pacchetto per la rendicontazione».
+import { oggiLocale } from '../lib/controlli.js';
 import { creaFascicolo } from '../lib/fascicolo.js';
 import { nomeMissione, aggiungiRiepilogo, dividiPerDimensione, classificaGiustificativo, nomeGiustificativo } from '../lib/missione.js';
 import { regoleUfficio } from './controlli.js';
@@ -33,7 +34,7 @@ export function praticaMissione(app, deps) {
   const pers = app.services?.profiloCompleto?.().personale || {};
   const pref = app.settings.get('avanzati.missione', {});
   const cognome = h('input', { type: 'text', value: pers.cognome || pref.cognome || '', 'aria-label': 'Cognome' });
-  const data = h('input', { type: 'date', value: new Date().toISOString().slice(0, 10), 'aria-label': 'Data della missione' });
+  const data = h('input', { type: 'date', value: oggiLocale(), 'aria-label': 'Data della missione' });
   const motivo = h('input', { type: 'text', placeholder: 'es. Convegno a Roma, 10–12 novembre', 'aria-label': 'Motivo o destinazione' });
   // soglia PEC unica in tutta l'app: servizio dell'area sicurezza, altrimenti la sua impostazione
   const pec = Number((typeof app.services?.sogliaPec === 'function' ? app.services.sogliaPec() : null) ?? app.settings.get('sic.pec.limitMB', 30)) || 30;

@@ -29,8 +29,11 @@ export async function pageAnalysis(app, pageIndex, doc = app.activeDoc) {
   return m.get(pageIndex);
 }
 
-/** Testo pdf.js e blocchi della pagina, in cache. */
-export async function pageBlocks(doc, pageIndex) {
+/**
+ * Testo pdf.js e blocchi della pagina, in cache. Con app, i filetti disegnati nella pagina (dall'analisi del
+ * content stream) servono a dividere le tabelle in celle.
+ */
+export async function pageBlocks(doc, pageIndex, app = null) {
   const pdf = doc.pdf;
   let m = textCache.get(pdf);
   if (!m) { m = new Map(); textCache.set(pdf, m); }
@@ -38,7 +41,9 @@ export async function pageBlocks(doc, pageIndex) {
     m.set(pageIndex, (async () => {
       const page = await pdf.getPage(pageIndex + 1);
       const tc = await page.getTextContent();
-      return { tc, blocks: groupTextItems(tc.items, tc.styles) };
+      let rules = [];
+      if (app) { try { rules = (await pageAnalysis(app, pageIndex, doc)).r.rules || []; } catch { rules = []; } }
+      return { tc, blocks: groupTextItems(tc.items, tc.styles, { rules }) };
     })());
   }
   return m.get(pageIndex);

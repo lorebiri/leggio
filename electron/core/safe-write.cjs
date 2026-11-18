@@ -40,6 +40,10 @@ function friendly(err, target, phase) {
   return e;
 }
 
+/** Buste firmate (CAdES): l'originale firmato non si riscrive MAI (si perderebbe la firma). */
+const SIGNED_RE = /\.(p7m|p7s|m7m|tsd)$/i;
+const isSignedEnvelopePath = (p) => SIGNED_RE.test(String(p || ''));
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function retry(fn, { tries = 6, base = 60 } = {}) {
@@ -48,11 +52,23 @@ async function retry(fn, { tries = 6, base = 60 } = {}) {
     try { return await fn(); } catch (err) {
       last = err;
       if (!RETRY_CODES.has(err.code)) throw err;
-      await sleep(base * 2 ** i); // 60, 120, 240, 480, 960 ms
+      if (i < tries - 1) await sleep(base * 2 ** i); // 60, 120, 240, 480, 960 ms (niente attesa dopo l'ultimo tentativo)
     }
   }
   throw last;
 }
+
+/** Inizio comune dei temporanei di un file: il nome è accorciato (in byte) perché il temporaneo
+ *  non superi i 255 byte ammessi per un nome di file (prima i nomi oltre ~234 byte non si salvavano). */
+function tempPrefix(target) {
+  let base = '';
+  for (const ch of Array.from(path.basename(target))) {
+    if (Buffer.byteLength(base + ch) > 200) break;
+    base += ch;
+  }
+  return '.' + base + '.';
+}
+const tempName = (target) => `${tempPrefix(target)}${crypto.randomBytes(4).toString('hex')}.leggio-tmp`;
 
 async function writeAndSync(file, data) {
   const fh = await fsp.open(file, 'wx', 0o644);
@@ -103,6 +119,9 @@ async function safeWrite(target, bytes, opts = {}) {
     const e = new Error('Il file supera i 2 GB: Leggio non può salvarlo. Riduci le immagini o dividi il documento.');
     e.userMessage = e.message; e.code = 'EFBIG'; throw e;
   }
+  // un collegamento simbolico si aggiorna nel file a cui punta (il rename lo sostituirebbe con un file
+  // normale lasciando vecchio l'originale)
+  try { if ((await fsp.lstat(target)).isSymbolicLink()) target = await fsp.realpath(target); } catch { /* non esiste ancora */ }
   const dir = path.dirname(target);
   try { const st = await fsp.stat(dir); if (!st.isDirectory()) throw Object.assign(new Error('non è una cartella'), { code: 'ENOTDIR' }); }
   catch (err) { throw friendly(err, target, 'check'); }
@@ -110,8 +129,12 @@ async function safeWrite(target, bytes, opts = {}) {
   let existing = null;
   try { existing = await fsp.stat(target); } catch (err) { if (err.code !== 'ENOENT') throw friendly(err, target, 'check'); }
   if (existing && existing.isDirectory()) throw friendly(Object.assign(new Error(), { code: 'EISDIR' }), target, 'check');
+  if (existing && isSignedEnvelopePath(target)) {
+    const msg = `«${path.basename(target)}» è un file firmato digitalmente: Leggio non lo sovrascrive mai. Salva il documento con un altro nome («Salva come»).`;
+    throw Object.assign(new Error(msg), { userMessage: msg, code: 'ESIGNED', phase: 'check' });
+  }
 
-  const tmp = path.join(dir, `.${path.basename(target)}.${crypto.randomBytes(4).toString('hex')}.leggio-tmp`);
+  const tmp = path.join(dir, tempName(target));
   const cleanupTmp = () => fsp.unlink(tmp).catch(() => {});
   // 1. temporaneo
   step('tmp');
@@ -160,9 +183,9 @@ async function safeWrite(target, bytes, opts = {}) {
 /** Elimina temporanei rimasti da salvataggi interrotti accanto a un file (best effort). */
 async function cleanStaleTemps(target) {
   try {
-    const dir = path.dirname(target); const base = '.' + path.basename(target) + '.';
+    const dir = path.dirname(target); const base = tempPrefix(target);
     for (const f of await fsp.readdir(dir)) if (f.startsWith(base) && f.endsWith('.leggio-tmp')) await fsp.unlink(path.join(dir, f)).catch(() => {});
   } catch { /* cartella non leggibile */ }
 }
 
-module.exports = { safeWrite, friendly, cleanStaleTemps, MAX_BYTES, sameContent };
+module.exports = { safeWrite, isSignedEnvelopePath, friendly, cleanStaleTemps, tempName, MAX_BYTES, sameContent };

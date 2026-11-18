@@ -7,7 +7,9 @@ import { precheck, describeOpenError, MAX_PDF_BYTES, cleanIpcMessage, sniff } fr
 import { repairPdf } from './repair.js';
 import { installGuards, log } from './guard.js';
 import { Recovery } from './recovery.js';
-import { Viewer, isTyping } from './viewer.js';
+import { Viewer } from './viewer.js';
+import { keyRoute, isTextEditable } from './keys.js';
+import { integrateForms } from './forms.js';
 import { Sidebar, thumbnailsPanel, outlinePanel } from './sidebar.js';
 import { ToolRegistry, CATEGORIES } from './tools.js';
 import { Settings } from './settings.js';
@@ -106,14 +108,15 @@ export class App {
     this.saveHooks.sort((a, b) => (a.__order ?? 50) - (b.__order ?? 50));
   }
 
-  /** Byte correnti del documento, compresi i valori dei moduli compilati a schermo. */
+  /**
+   * Byte correnti del documento, compresi i valori dei moduli compilati a schermo.
+   * I valori integrati non sono ancora salvati: il documento resta «modificato» (vedi core/forms.js).
+   */
   async currentBytes(doc = this.activeDoc) {
-    if (doc.pdf && doc.pdf.annotationStorage.size > 0 && doc.formsDirty) {
-      const saved = await doc.pdf.saveDocument();
-      doc.replaceBytes(saved instanceof Uint8Array ? saved : new Uint8Array(saved));
-      doc.formsDirty = false;
-    }
-    return doc.bytes;
+    const wasForms = doc.formsDirty;
+    const bytes = await integrateForms(doc);
+    if (wasForms && !doc.formsDirty) { this.#renderTabs(); this.#updateTitle(); }
+    return bytes;
   }
 
   /**
@@ -213,23 +216,47 @@ export class App {
     return doc.queue.run(label, fn);
   }
 
+  /** Aperture in corso per percorso: due aperture contemporanee dello stesso file danno una sola scheda. */
+  #opening = new Map();
+
   /** Apre byte come nuova scheda. opts: { name, path, dirty } */
-  async openBytes(bytes, { name, path, dirty = false, _repaired = false, page, search, readOnly } = {}) {
+  async openBytes(bytes, opts = {}) {
+    const { path, page, search } = opts;
+    const pending = path && this.#opening.get(path);
+    if (pending) {
+      const d = await pending.catch(() => null);
+      if (d && !d.closed) { this.activate(d); this.#applyOpenOptions(d, { page, search }); return d; }
+    }
     const existing = path && this.docs.find((d) => d.path === path);
     if (existing) { this.activate(existing); this.#applyOpenOptions(existing, { page, search }); return existing; }
+    if (!path) return this.#openNew(bytes, opts);
+    const p = this.#openNew(bytes, opts);
+    this.#opening.set(path, p);
+    try { return await p; } finally { if (this.#opening.get(path) === p) this.#opening.delete(path); }
+  }
+
+  async #openNew(bytes, { name, path, dirty = false, _repaired = false, page, search, readOnly } = {}) {
     const displayName = name || 'Senza titolo.pdf';
     const pre = precheck(bytes, displayName);
     if (pre) { this.#openFailed(pre, displayName); return null; }
     const doc = new Doc({ name, path, bytes });
-    const askPw = (reason) => ui.prompt(reason === 2 ? 'Password errata, riprova:' : `«${doc.name}» è protetto. Inserisci la password:`, '', { title: 'Documento protetto', type: 'password', okLabel: 'Apri' });
-    // i file grandi mostrano l'avanzamento (annullabile) se l'apertura supera qualche istante
+    // i file grandi mostrano l'avanzamento (annullabile) se l'apertura supera qualche istante;
+    // mai mentre si chiede la password (la coprirebbe): si nasconde e riparte dopo la risposta
     const ctrl = new AbortController();
-    let prog = null;
-    const timer = setTimeout(() => {
+    let prog = null; let timer = null; let asking = false;
+    const showProgress = () => {
+      if (asking || prog || ctrl.signal.aborted) return;
       prog = ui.progress(`Apertura di «${doc.name}»`);
       prog.signal.addEventListener('abort', () => ctrl.abort());
       prog.set(null, formatBytes(bytes.length));
-    }, bytes.length > 20 * MB ? 0 : 1200);
+    };
+    const arm = (ms) => { clearTimeout(timer); timer = setTimeout(showProgress, ms); };
+    const askPw = async (reason) => {
+      asking = true; clearTimeout(timer); prog?.close(); prog = null;
+      try { return await ui.prompt(reason === 2 ? 'Password errata, riprova:' : `«${doc.name}» è protetto. Inserisci la password:`, '', { title: 'Documento protetto', type: 'password', okLabel: 'Apri' }); }
+      finally { asking = false; arm(1200); }
+    };
+    arm(bytes.length > 20 * MB ? 0 : 1200);
     try {
       await doc.load(askPw, {
         signal: ctrl.signal,
@@ -248,7 +275,7 @@ export class App {
         const rep = await repairPdf(bytes);
         if (rep) {
           log('info', 'file riparato', { name: displayName, pages: rep.pages });
-          const fixed = await this.openBytes(rep.bytes, { name: displayName.replace(/(\.pdf)?$/i, ' (riparato).pdf'), dirty: true, _repaired: true });
+          const fixed = await this.#openNew(rep.bytes, { name: displayName.replace(/(\.pdf)?$/i, ' (riparato).pdf'), dirty: true, _repaired: true });
           if (fixed) dialog({ title: 'Documento riparato', message: `«${displayName}» era danneggiato e non poteva essere letto così com'è. Leggio ne ha recuperato ${fixed.pageCount} ${fixed.pageCount === 1 ? 'pagina' : 'pagine'}: controlla che il contenuto sia completo e salvalo con un nuovo nome. L'originale non è stato modificato.`, cancelLabel: null, okLabel: 'Ho capito' });
           return fixed;
         }
@@ -439,6 +466,9 @@ export class App {
     if (!d || d.closed) return;
     try {
       await this.#exclusive(d, dir === 'undo' ? 'Annulla' : 'Ripeti', async () => {
+        // i valori dei moduli digitati dopo l'ultima modifica entrano nello stato corrente:
+        // Annulla li toglie insieme a quella modifica e Ripeti li riporta
+        await this.currentBytes(d);
         const prev = { bytes: d.bytes, version: d.version };
         const label = dir === 'undo' ? await d.undo() : await d.redo();
         if (!label) { toast(dir === 'undo' ? 'Niente da annullare' : 'Niente da ripetere'); return; }
@@ -841,6 +871,8 @@ export class App {
       'ui-zoom-reset': () => this.setUiPrefs({ zoom: 1, large: false }),
     };
     if (id.startsWith('tool:')) return this.tools.run(id.slice(5));
+    // Annulla/Ripeti dal menu (⌘/Ctrl+Z, Ctrl+Y) mentre si scrive in un campo: si annulla il testo, non il documento
+    if ((id === 'undo' || id === 'redo') && isTextEditable(document.activeElement)) { document.execCommand(id); return; }
     const needsDoc = !['open', 'tools', 'settings', 'shortcuts', 'toggle-theme', 'open-logs', 'toggle-large-ui', 'ui-zoom-in', 'ui-zoom-out', 'ui-zoom-reset'].includes(id);
     if (needsDoc && !this.activeDoc) return;
     // Annulla/Ripeti/Salva durante un'operazione vengono messi in coda (nessun clic perso); la stampa no
@@ -879,14 +911,19 @@ export class App {
     window.addEventListener('beforeunload', (e) => { if (!window.leggio && this.docs.some((d) => d.dirty || d.formsDirty)) e.preventDefault(); });
     document.addEventListener('keydown', (e) => {
       const mod = isMac ? e.metaKey : e.ctrlKey;
+      // mentre si scrive in un campo i tasti sono del campo (Ctrl+Z annulla il testo); con una finestra
+      // modale aperta niente scorciatoie: non devono agire sul documento dietro la finestra
+      const route = keyRoute({ key: e.key, mod, alt: e.altKey, target: e.target, modal: this.modalOpen() });
+      if (route === 'native') return;
       if (mod && !window.leggio) {
         // nel browser i menu nativi non esistono: replichiamo le scorciatoie principali
         const k = e.key.toLowerCase();
-        if (e.shiftKey && ['+', '=', '-', '_'].includes(k)) { e.preventDefault(); this.command(k === '-' || k === '_' ? 'ui-zoom-out' : 'ui-zoom-in'); return; }
+        const run = (cmd) => { e.preventDefault(); if (route === 'mod') this.command(cmd); };
+        if (e.shiftKey && ['+', '=', '-', '_'].includes(k)) { run(k === '-' || k === '_' ? 'ui-zoom-out' : 'ui-zoom-in'); return; }
         const m = { o: 'open', s: e.shiftKey ? 'save-as' : 'save', p: 'print', f: 'find', k: 'tools', z: e.shiftKey ? 'redo' : 'undo', y: 'redo', w: 'close-tab', '+': 'zoom-in', '=': 'zoom-in', '-': 'zoom-out', '0': 'zoom-reset' }[k];
-        if (m) { e.preventDefault(); this.command(m); return; }
+        if (m) { run(m); return; }
       }
-      if (isTyping(e) || mod || e.altKey) return;
+      if (route !== 'key') return;
       if (e.key === 'Escape') { if (this.tools.active) this.tools.deactivate(); else if (!this.el.findbar.hidden) this.closeFind(); else if (this.el.root.classList.contains('reading')) this.el.root.classList.remove('reading'); }
       if (!this.activeDoc) return;
       if (e.key === 'v' || e.key === 'V') this.command('mode-select');

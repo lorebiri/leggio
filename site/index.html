@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://api.github.com https://github.com https://objects.githubusercontent.com https://release-assets.githubusercontent.com; img-src 'self' data:; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Leggio — il programma per i PDF libero e gratuito, pensato per gli uffici italiani</title>
+<meta name="description" content="Leggio legge, modifica, firma, protegge e converte i PDF, apre e verifica i file .p7m e fa la copia fronte/retro dei documenti d'identità. Gratuito, open source, senza account e senza Internet. Per Windows, macOS e Linux.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="icona.svg" type="image/svg+xml">
+<link rel="stylesheet" href="stile.css">
+<script type="module" src="avvio.js"></script>
+</head>
+<body>
+<a class="salta" href="#contenuto">Vai al contenuto</a>
+
+<header class="testata">
+  <div class="wrap testata-riga">
+    <a class="marchio" href="#contenuto"><img src="icona.svg" alt="" width="36" height="36"> Leggio</a>
+    <nav aria-label="Sezioni della pagina">
+      <ul>
+        <li><a href="#progetto">Il progetto</a></li>
+        <li><a href="#funzioni">Cosa fa</a></li>
+        <li><a href="#confronto">Confronto</a></li>
+        <li><a href="#domande">Domande</a></li>
+        <li><a class="nav-scarica" href="#altri-sistemi">Scarica</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main id="contenuto" tabindex="-1">
+
+  <!-- 1. In alto: titolo, pulsante di download per il sistema di chi visita -->
+  <section class="hero" aria-labelledby="titolo">
+    <div class="wrap hero-griglia">
+      <div class="hero-testo">
+        <h1 id="titolo">Leggio</h1>
+        <p class="sottotitolo">Il programma per i PDF <strong>libero e gratuito</strong>, pensato per chi lavora con i documenti negli uffici italiani.</p>
+        <p class="lead">Leggi, modifica, firma, proteggi e converti i PDF. Apri i file firmati <strong>.p7m</strong>, fai la <strong>copia fronte/retro</strong> dei documenti d'identità, stampa senza sorprese. Senza abbonamento, senza account, senza pubblicità: <strong>i tuoi file restano sul tuo computer.</strong></p>
+
+        <div id="principale" class="principale" aria-live="polite">
+          <!-- contenuto senza JavaScript: avvio.js lo sostituisce con il pulsante giusto per il computer -->
+          <div class="cta">
+            <a class="btn primario" href="https://github.com/lorebiri/leggio/releases/latest">Scarica l'ultima versione <small>da GitHub</small></a>
+            <a class="btn" href="#altri-sistemi">Scegli il file per il tuo computer</a>
+          </div>
+          <p class="nota">Windows 10 e 11 · macOS 12 o successivo · Linux (AppImage, x86_64).</p>
+        </div>
+        <noscript><p class="nota">JavaScript è disattivato: i pulsanti portano alla pagina delle versioni su GitHub, dove trovi tutti i file con lo stesso nome indicato più in basso.</p></noscript>
+        <p class="nota" id="versione" aria-live="polite"></p>
+        <p class="nota altri-link"><a href="#altri-sistemi">Altri sistemi e tutti i file</a> · <a href="#d-avvisi">Perché compare un avviso di sicurezza?</a></p>
+      </div>
+      <picture class="hero-immagine">
+        <source srcset="img/inizio-scuro.webp" media="(prefers-color-scheme: dark)">
+        <img src="img/inizio.webp" width="1280" height="800" fetchpriority="high" alt="La schermata iniziale di Leggio: i pulsanti «Apri un PDF» e «Tutti gli strumenti» e le schede degli strumenti più usati, come Crea PDF, Unisci PDF, Firma e Oscura.">
+      </picture>
+    </div>
+  </section>
+
+  <!-- 2. Il progetto -->
+  <section id="progetto" aria-labelledby="t-progetto">
+    <div class="wrap">
+      <h2 id="t-progetto">Il progetto</h2>
+      <div class="tre">
+        <div>
+          <h3>Che cos'è</h3>
+          <p>Leggio è un programma per computer che apre, modifica, firma e protegge i documenti PDF. Mette insieme in un solo posto le funzioni che di solito sono sparse tra un lettore gratuito, un editor a pagamento e diversi siti web.</p>
+        </div>
+        <div>
+          <h3>Perché esiste</h3>
+          <p>Chi lavora con i documenti spesso deve scegliere tra un abbonamento costoso e i siti «PDF online», dove i file finiscono sui server di qualcun altro. Leggio nasce per dare a tutti le stesse funzioni, gratis e senza che i documenti lascino mai il computer.</p>
+        </div>
+        <div>
+          <h3>Per chi è</h3>
+          <p>Per chi lavora ogni giorno con PDF, firme digitali .p7m e documenti della pubblica amministrazione: <strong>uffici, scuole, comuni, studi professionali</strong>, associazioni. E per chiunque voglia un programma semplice, in italiano, per i propri documenti.</p>
+        </div>
+      </div>
+      <div class="griglia valori">
+        <div class="carta">
+          <h3>Libero e gratuito, per davvero</h3>
+          <p>Leggio è <strong>software libero</strong> con licenza <strong>GPL-3.0</strong>: si può usare, copiare e condividere senza pagare nulla, anche in ufficio. Il <a href="https://github.com/lorebiri/leggio">codice sorgente è pubblico su GitHub</a>: chiunque può controllare che cosa fa.</p>
+        </div>
+        <div class="carta">
+          <h3>I tuoi documenti restano tuoi</h3>
+          <p>Leggio funziona <strong>senza Internet</strong>. I file <strong>non escono mai dal computer</strong>: niente account, niente cloud, niente statistiche d'uso. L'unico collegamento è un controllo facoltativo degli aggiornamenti, una volta al giorno: una richiesta anonima a GitHub, che puoi spegnere nelle Impostazioni.</p>
+        </div>
+        <div class="carta">
+          <h3>Fatto per gli uffici italiani</h3>
+          <p>Interfaccia in italiano, timbri pronti («RICEVUTO», «PAGATO»…), file firmati .p7m, fatture elettroniche, messaggi PEC, oscuramento dei codici fiscali e degli IBAN. Per Windows, macOS e Linux.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Le funzioni -->
+  <section id="funzioni" aria-labelledby="t-funzioni">
+    <div class="wrap">
+      <h2 id="t-funzioni">Cosa fa</h2>
+      <p class="intro">Le novità più importanti, poi tutto il resto. Le immagini sono schermate vere di Leggio, con documenti di esempio inventati.</p>
+
+      <article class="funzione larga" id="f-copia-documento" aria-labelledby="t-copia">
+        <div class="funzione-testo">
+          <p class="etichetta">Novità</p>
+          <h3 id="t-copia">Copia documento fronte/retro</h3>
+          <p>Come la funzione «copia carta d'identità» delle fotocopiatrici. Parti dalla scansione del fronte e del retro di una <strong>carta d'identità, patente o tessera sanitaria</strong>, ognuno su una pagina A4: Leggio trova il documento, lo ritaglia, lo raddrizza e mette fronte e retro <strong>su un solo foglio A4, a grandezza reale (85,6 × 54 mm)</strong>, pronto da stampare.</p>
+          <ul class="punti">
+            <li>Tutto avviene sul tuo computer: le scansioni non vengono inviate da nessuna parte.</li>
+            <li>Se serve, sposti gli angoli a mano, ruoti o capovolgi.</li>
+            <li>Filigrana facoltativa «Copia per uso esclusivo di … – data».</li>
+            <li>Le scansioni di partenza non vengono modificate.</li>
+          </ul>
+        </div>
+        <div class="funzione-immagini coppia">
+          <figure>
+            <img src="img/copia-documento.png" width="1280" height="800" loading="lazy" alt="Lo strumento Copia documento fronte/retro: a sinistra la scansione con il documento di prova riconosciuto e circondato da quattro angoli regolabili, a destra l'anteprima del fronte ritagliato e raddrizzato, con il messaggio «Documento trovato».">
+            <figcaption>Leggio trova da solo il documento nella scansione.</figcaption>
+          </figure>
+          <figure>
+            <img src="img/copia-documento-risultato.webp" width="489" height="663" loading="lazy" alt="Il risultato: un foglio A4 con il fronte sopra e il retro sotto del documento di prova, a grandezza reale e con una filigrana leggera.">
+            <figcaption>Il risultato: fronte e retro su un foglio A4.</figcaption>
+          </figure>
+        </div>
+      </article>
+
+      <article class="funzione inversa" aria-labelledby="t-modifica">
+        <div class="funzione-testo">
+          <p class="etichetta">Novità</p>
+          <h3 id="t-modifica">Modifica del testo, anche nelle tabelle</h3>
+          <p>Correggi un refuso o riscrivi un paragrafo con lo <strong>stesso carattere del documento</strong>. Nelle tabelle di fatture e moduli <strong>modifichi una cella alla volta</strong>: le altre celle restano esattamente dove sono, e i numeri restano allineati.</p>
+          <ul class="punti">
+            <li>Aggiungi testo, immagini, loghi e link.</li>
+            <li>Trova e sostituisci in tutto il documento.</li>
+          </ul>
+        </div>
+        <div class="funzione-immagini">
+          <figure>
+            <img src="img/modifica-tabella.webp" width="1280" height="800" loading="lazy" alt="Una fattura di esempio aperta in modifica: ogni cella della tabella ha un riquadro tratteggiato e nella cella del prezzo si sta scrivendo il nuovo importo «1.250,00».">
+            <figcaption>Una cella della fattura cambiata senza spostare le altre.</figcaption>
+          </figure>
+        </div>
+      </article>
+
+      <article class="funzione" aria-labelledby="t-p7m">
+        <div class="funzione-testo">
+          <p class="etichetta">Novità</p>
+          <h3 id="t-p7m">File firmati .p7m, aperti in sicurezza</h3>
+          <p>Apri i documenti firmati digitalmente (.p7m, anche con più firme) e vedi <strong>chi ha firmato, quando e se il documento è integro</strong>, con spiegazioni in italiano chiaro.</p>
+          <ul class="punti">
+            <li><strong>Il file firmato originale non viene mai toccato</strong>: il PDF contenuto si salva a parte, con un nome diverso.</li>
+            <li>Rapporto di verifica in PDF da allegare alla pratica.</li>
+            <li>In Windows i file .p7m hanno la loro icona e il loro tipo di file.</li>
+          </ul>
+        </div>
+        <div class="funzione-immagini">
+          <figure>
+            <img src="img/p7m.webp" width="1280" height="800" loading="lazy" alt="Una determinazione di esempio aperta da un file .p7m: a sinistra il pannello Firme mostra il firmatario, l'organizzazione, l'integrità della firma e i pulsanti per salvare il PDF contenuto e il rapporto di verifica.">
+            <figcaption>Il pannello «Firme» di un file .p7m.</figcaption>
+          </figure>
+        </div>
+      </article>
+
+      <article class="funzione inversa" aria-labelledby="t-stampa">
+        <div class="funzione-testo">
+          <p class="etichetta">Novità</p>
+          <h3 id="t-stampa">Stampa affidabile, di tutte le pagine</h3>
+          <p>Stampa <strong>tutte le pagine</strong>, anche dei formati grandi, con trasparenze o caratteri incorporati: niente più fogli bianchi o stampe che si fermano alla prima pagina.</p>
+          <ul class="punti">
+            <li>Copie, pagine scelte, fronte/retro, più documenti insieme.</li>
+            <li>Timbro «COPIA» solo sulla carta: il file non cambia.</li>
+          </ul>
+        </div>
+        <div class="funzione-immagini">
+          <figure>
+            <img src="img/stampa.webp" width="1280" height="800" loading="lazy" alt="La finestra Stampa di Leggio con le scelte: numero di copie, pagine, qualità, stampa dei commenti e timbro «COPIA» sulla stampa.">
+            <figcaption>La finestra di stampa.</figcaption>
+          </figure>
+        </div>
+      </article>
+
+      <h3 class="titolo-gruppi" id="t-tutto">E tutto il resto</h3>
+      <div class="gruppi" role="list" aria-labelledby="t-tutto">
+        <article class="carta gruppo" role="listitem" aria-labelledby="g-leggere">
+          <img src="img/lettura-scuro.webp" width="1280" height="800" loading="lazy" alt="Un documento di esempio aperto in vista a due pagine, con il tema scuro.">
+          <h4 id="g-leggere">Leggere e cercare</h4>
+          <p>Più PDF in schede, anche protetti da password. Zoom, due pagine affiancate, modalità lettura, tema chiaro e scuro, caratteri grandi. Ricerca nel testo e in tutti i PDF di una cartella, lettura ad alta voce. Ripara da solo i file danneggiati.</p>
+        </article>
+        <article class="carta gruppo" role="listitem" aria-labelledby="g-commenti">
+          <img src="img/commenti.webp" width="1280" height="800" loading="lazy" alt="Un avviso di esempio con il timbro blu «RICEVUTO» e una riga evidenziata in giallo; a sinistra l'elenco dei commenti.">
+          <h4 id="g-commenti">Commentare</h4>
+          <p>Evidenzia, sottolinea, barra; note, caselle di testo, disegni, forme e misure. Timbri pronti in italiano o personali, riepilogo dei commenti, scambio con Acrobat.</p>
+        </article>
+        <article class="carta gruppo" role="listitem" aria-labelledby="g-pagine">
+          <img src="img/pagine.webp" width="1280" height="800" loading="lazy" alt="La vista Organizza pagine: sei pagine in griglia con i comandi per inserire, ruotare, eliminare, duplicare ed estrarre.">
+          <h4 id="g-pagine">Organizzare le pagine</h4>
+          <p>Riordina, ruota, elimina, estrai e inserisci pagine. Unisci e dividi PDF, anche per la dimensione massima della PEC. Numeri di pagina, intestazioni, filigrane, più pagine per foglio.</p>
+        </article>
+        <article class="carta gruppo" role="listitem" aria-labelledby="g-converti">
+          <img src="img/ocr.webp" width="1280" height="800" loading="lazy" alt="La finestra «Rendi ricercabile» su una scansione: scelta delle lingue, delle pagine e della precisione, con la nota che tutto avviene sul computer, senza Internet.">
+          <h4 id="g-converti">Creare, convertire e OCR</h4>
+          <p>PDF da foto, scansioni, Word, Excel, PowerPoint e pagine web. Esporta in Word, Excel, testo e immagini. Rende ricercabili le scansioni senza Internet. Confronta due versioni di un documento. PDF/A per la conservazione.</p>
+        </article>
+        <article class="carta gruppo" role="listitem" aria-labelledby="g-moduli">
+          <h4 id="g-moduli">Moduli e firme</h4>
+          <p>Compila qualunque modulo, anche quelli non compilabili, e riempi con un clic i tuoi dati o quelli dell'ente. Firma grafica e firma digitale con certificato o con il programma di firma già installato, anche di molti file insieme. Verifica delle firme.</p>
+        </article>
+        <article class="carta gruppo" role="listitem" aria-labelledby="g-proteggi">
+          <img src="img/oscura-documento.webp" width="1280" height="800" loading="lazy" alt="Lo strumento Oscura su un documento d'identità di prova: le zone con codice fiscale, indirizzo e codice MRZ sono segnate in rosso, pronte per essere eliminate.">
+          <h4 id="g-proteggi">Proteggere i dati</h4>
+          <p>Password e limiti a stampa e copia. Oscuramento vero dei dati riservati (codici fiscali, IBAN, email…), anche cercandoli in automatico. Modelli pronti per le copie dei <strong>documenti d'identità</strong>: numero, codice MRZ, firma, foto, codice fiscale e indirizzo vengono eliminati davvero dal file.</p>
+        </article>
+        <article class="carta gruppo" role="listitem" aria-labelledby="g-ufficio">
+          <img src="img/strumenti.webp" width="1280" height="800" loading="lazy" alt="L'elenco di tutti gli strumenti di Leggio, diviso per categorie: archivio d'ufficio, crea e combina, organizza pagine.">
+          <h4 id="g-ufficio">Ufficio e pubblica amministrazione</h4>
+          <p>Archivio d'ufficio sulle cartelle già in uso, con scadenze e pagina «Oggi». Fatture elettroniche impaginate, DURC, messaggi PEC con ricevute e allegati, preparazione per Titulus, dichiarazione di conformità, azioni su molti file insieme.</p>
+        </article>
+        <article class="carta gruppo" role="listitem" aria-labelledby="g-sicuro">
+          <h4 id="g-sicuro">Sicuro e accessibile</h4>
+          <p>Annulla e Ripeti, salvataggio sicuro, recupero dei documenti dopo un arresto improvviso. Uso completo da tastiera, controllo e preparazione dell'accessibilità dei PDF.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. Confronto -->
+  <section id="confronto" aria-labelledby="t-confronto">
+    <div class="wrap">
+      <h2 id="t-confronto">Leggio e le alternative</h2>
+      <p class="intro">Un confronto rapido sulle cose che contano di più per un ufficio. Gli altri programmi cambiano nel tempo: qui sono descritti in generale, per come sono offerti oggi.</p>
+      <p class="nota scorri" aria-hidden="true">Scorri la tabella di lato per vedere tutte le colonne →</p>
+      <div class="tabella-scorre" role="region" aria-labelledby="t-confronto" tabindex="0">
+        <table class="confronto">
+          <caption class="vh">Confronto tra Leggio, Adobe Acrobat Reader, Adobe Acrobat Pro e i siti PDF online</caption>
+          <thead>
+            <tr>
+              <th scope="col"><span class="vh">Caratteristica</span></th>
+              <th scope="col" class="noi">Leggio</th>
+              <th scope="col">Acrobat Reader <small>(gratuito)</small></th>
+              <th scope="col">Acrobat Pro <small>(a pagamento)</small></th>
+              <th scope="col">Siti PDF online <small>(tipici)</small></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Costo</th>
+              <td class="noi"><span class="si">Gratuito</span></td>
+              <td><span class="si">Gratuito</span></td>
+              <td><span class="no">Abbonamento</span></td>
+              <td><span class="forse">Gratis con limiti, o abbonamento</span></td>
+            </tr>
+            <tr>
+              <th scope="row">Funziona senza Internet, i file restano sul computer</th>
+              <td class="noi"><span class="si">Sì</span></td>
+              <td><span class="si">Sì, per leggere e commentare</span></td>
+              <td><span class="forse">In gran parte; alcune funzioni usano il cloud</span></td>
+              <td><span class="no">No: i file vanno caricati sul sito</span></td>
+            </tr>
+            <tr>
+              <th scope="row">Modificare il testo del PDF</th>
+              <td class="noi"><span class="si">Sì, anche le celle delle tabelle</span></td>
+              <td><span class="no">No</span></td>
+              <td><span class="si">Sì</span></td>
+              <td><span class="forse">A volte, con limiti</span></td>
+            </tr>
+            <tr>
+              <th scope="row">Aprire e verificare i file .p7m</th>
+              <td class="noi"><span class="si">Sì</span></td>
+              <td><span class="no">No</span></td>
+              <td><span class="no">No</span></td>
+              <td><span class="forse">Solo su siti dedicati</span></td>
+            </tr>
+            <tr>
+              <th scope="row">Copia documento d'identità fronte/retro su un foglio</th>
+              <td class="noi"><span class="si">Sì, a grandezza reale</span></td>
+              <td><span class="no">No</span></td>
+              <td><span class="no">Non come funzione apposita</span></td>
+              <td><span class="no">Di solito no</span></td>
+            </tr>
+            <tr>
+              <th scope="row">Serve un account</th>
+              <td class="noi"><span class="si">No</span></td>
+              <td><span class="forse">Solo per alcune funzioni</span></td>
+              <td><span class="no">Sì</span></td>
+              <td><span class="forse">Spesso</span></td>
+            </tr>
+            <tr>
+              <th scope="row">Codice sorgente aperto</th>
+              <td class="noi"><span class="si">Sì (GPL-3.0)</span></td>
+              <td><span class="no">No</span></td>
+              <td><span class="no">No</span></td>
+              <td><span class="no">Di solito no</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="nota">Adobe, Acrobat e Acrobat Reader sono marchi di Adobe. Leggio è un progetto indipendente, non collegato ad Adobe. Se trovi un'informazione non aggiornata, <a href="https://github.com/lorebiri/leggio/issues/new/choose">segnalacelo</a>.</p>
+    </div>
+  </section>
+
+  <!-- Tutti i file da scaricare -->
+  <section id="altri-sistemi" aria-labelledby="t-altri">
+    <div class="wrap">
+      <h2 id="t-altri">Scarica Leggio</h2>
+      <p class="intro">Tutti i file dell'ultima versione. Accanto a ognuno, quando disponibile, c'è la sua impronta SHA-256 per <a href="#d-verifica">controllare che il file sia integro</a>. Scarica Leggio solo da questa pagina o dalla <a href="https://github.com/lorebiri/leggio/releases">pagina ufficiale su GitHub</a>.</p>
+      <div class="griglia-file" id="elenco-file">
+        <article class="carta" data-sistema="windows" aria-labelledby="t-win">
+          <h3 id="t-win">Windows 10 e 11</h3>
+          <ul class="file">
+            <li data-file="win-installer"><a class="btn" href="https://github.com/lorebiri/leggio/releases/latest">Installer</a> <span class="file-info">Leggio-<i>versione</i>-win-x64-installer.exe — consigliato, crea l'icona nel menu Start</span></li>
+            <li data-file="win-portatile"><a class="btn" href="https://github.com/lorebiri/leggio/releases/latest">Versione portatile</a> <span class="file-info">Leggio-<i>versione</i>-win-x64-portatile.exe — si avvia senza installare nulla, anche da chiavetta</span></li>
+          </ul>
+        </article>
+        <article class="carta" data-sistema="mac" aria-labelledby="t-mac">
+          <h3 id="t-mac">macOS 12 o successivo</h3>
+          <ul class="file">
+            <li data-file="mac-arm64-dmg"><a class="btn" href="https://github.com/lorebiri/leggio/releases/latest">Mac con chip Apple</a> <span class="file-info">Leggio-<i>versione</i>-mac-arm64.dmg — M1, M2, M3, M4 e successivi</span></li>
+            <li data-file="mac-x64-dmg"><a class="btn" href="https://github.com/lorebiri/leggio/releases/latest">Mac con processore Intel</a> <span class="file-info">Leggio-<i>versione</i>-mac-x64.dmg</span></li>
+            <li data-file="mac-arm64-zip"><a class="btn piccolo" href="https://github.com/lorebiri/leggio/releases/latest">Chip Apple (.zip)</a> <span class="file-info">alternativa al .dmg</span></li>
+            <li data-file="mac-x64-zip"><a class="btn piccolo" href="https://github.com/lorebiri/leggio/releases/latest">Intel (.zip)</a> <span class="file-info">alternativa al .dmg</span></li>
+          </ul>
+          <p class="nota">Non sai che Mac hai? Menu Apple (la mela in alto a sinistra) → <em>Informazioni su questo Mac</em>: se leggi «Chip Apple M…» scegli <strong>chip Apple</strong>, se leggi «Processore Intel» scegli <strong>Intel</strong>.</p>
+        </article>
+        <article class="carta" data-sistema="linux" aria-labelledby="t-linux">
+          <h3 id="t-linux">Linux</h3>
+          <ul class="file">
+            <li data-file="linux-appimage"><a class="btn" href="https://github.com/lorebiri/leggio/releases/latest">AppImage (x86_64)</a> <span class="file-info">Leggio-<i>versione</i>-linux-x86_64.AppImage — rendila eseguibile e aprila</span></li>
+          </ul>
+          <p class="nota" id="linux-presto" hidden>Linux: presto disponibile. Nel frattempo puoi <a href="https://github.com/lorebiri/leggio">compilarlo dal codice sorgente</a> (servono Node.js e <code>npm run dev</code>).</p>
+        </article>
+      </div>
+      <p class="nota" id="somme-nota">Le impronte di tutti i file sono anche nel file <code>SHA256SUMS.txt</code> pubblicato insieme alla versione, sulla <a href="https://github.com/lorebiri/leggio/releases/latest">pagina delle versioni</a>.</p>
+    </div>
+  </section>
+
+  <!-- 5. Domande frequenti -->
+  <section id="domande" aria-labelledby="t-domande">
+    <div class="wrap">
+      <h2 id="t-domande">Domande frequenti</h2>
+      <div class="faq">
+
+        <details id="d-avvisi">
+          <summary><h3>Scaricando o aprendo Leggio compare un avviso di sicurezza: è normale?</h3></summary>
+          <div class="risposta">
+            <p>Sì. Il browser o il sistema possono dire che il file «non viene scaricato spesso» o che «lo sviluppatore non può essere verificato». <strong>Non significa che il file sia dannoso.</strong> Succede perché Leggio, per ora, <strong>non è firmato con un certificato</strong> (un certificato di sviluppatore costa ogni anno) ed è un programma nuovo, quindi Microsoft e Apple non hanno ancora «visto» abbastanza persone scaricarlo. La firma è prevista: quando ci sarà, questi avvisi spariranno.</p>
+            <p class="avviso"><strong>Per stare tranquillo:</strong> scarica Leggio <strong>solo da questa pagina o dalla <a href="https://github.com/lorebiri/leggio/releases">pagina ufficiale su GitHub</a></strong> e <a href="#d-verifica">controlla l'impronta SHA-256</a>. Se trovi Leggio su altri siti, non usarlo.</p>
+            <div class="griglia">
+              <div class="carta">
+                <h4>Microsoft Edge</h4>
+                <ol>
+                  <li>Nell'elenco dei download, passa sul file e premi <em>…</em> (altre azioni).</li>
+                  <li>Scegli <em>Mantieni</em>.</li>
+                  <li>Premi <em>Mostra altro</em>, poi <em>Mantieni comunque</em>.</li>
+                </ol>
+              </div>
+              <div class="carta">
+                <h4>Google Chrome</h4>
+                <ol>
+                  <li>Se il download viene segnalato come insolito, apri l'elenco dei download.</li>
+                  <li>Premi <em>Mantieni</em> accanto al file.</li>
+                </ol>
+              </div>
+              <div class="carta">
+                <h4>Windows: «Windows ha protetto il PC»</h4>
+                <ol>
+                  <li>Nella finestra blu di SmartScreen premi <em>Ulteriori informazioni</em>.</li>
+                  <li>Controlla che il nome sia <em>Leggio-…</em> e premi <em>Esegui comunque</em>.</li>
+                  <li>Non serve la password di amministratore.</li>
+                </ol>
+              </div>
+              <div class="carta">
+                <h4>macOS: «impossibile verificare lo sviluppatore»</h4>
+                <ol>
+                  <li>Apri il file .dmg e trascina Leggio nella cartella <em>Applicazioni</em>.</li>
+                  <li>In <em>Applicazioni</em>, fai clic destro (o Ctrl + clic) su Leggio e scegli <em>Apri</em>, poi ancora <em>Apri</em>.</li>
+                  <li>Da macOS 15 in poi: prova ad aprire Leggio una volta, poi vai in <em>Impostazioni di Sistema → Privacy e sicurezza</em>, scorri in basso e premi <em>Apri comunque</em>.</li>
+                </ol>
+                <p class="nota">Serve solo la prima volta.</p>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <details id="d-verifica">
+          <summary><h3>Come controllo che il file scaricato sia quello giusto?</h3></summary>
+          <div class="risposta">
+            <p>Con l'impronta SHA-256: una «firma» di 64 caratteri calcolata dal contenuto del file. Se cambia anche un solo byte, cambia tutta. Confronta quella del file scaricato con quella mostrata in questa pagina (o nel file <code>SHA256SUMS.txt</code> della versione): devono essere identiche.</p>
+            <div class="griglia">
+              <div class="carta">
+                <h4>Windows</h4>
+                <ol>
+                  <li>Apri il menu Start, scrivi <em>PowerShell</em> e premi Invio.</li>
+                  <li>Scrivi il comando qui sotto (il percorso cambia se hai scaricato altrove) e premi Invio:</li>
+                </ol>
+                <pre><code>Get-FileHash "$env:USERPROFILE\Downloads\Leggio-<i>versione</i>-win-x64-installer.exe" -Algorithm SHA256</code></pre>
+                <p class="nota">Il risultato è nella colonna <em>Hash</em> (in maiuscolo: va bene lo stesso).</p>
+              </div>
+              <div class="carta">
+                <h4>macOS e Linux</h4>
+                <ol>
+                  <li>Apri il Terminale (su Mac: Launchpad → Altro → Terminale).</li>
+                  <li>Scrivi il comando e premi Invio:</li>
+                </ol>
+                <pre><code>shasum -a 256 ~/Downloads/Leggio-<i>versione</i>-mac-arm64.dmg</code></pre>
+                <p class="nota">Su Linux va bene anche <code>sha256sum</code>. Se hai scaricato anche <code>SHA256SUMS.txt</code> nella stessa cartella: <code>shasum -a 256 -c SHA256SUMS.txt --ignore-missing</code>.</p>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <details id="d-gratis">
+          <summary><h3>È davvero gratuito? Dov'è il trucco?</h3></summary>
+          <div class="risposta">
+            <p>Nessun trucco: Leggio è gratuito per tutti, anche per gli enti e le aziende, e non ha versioni «Pro», pubblicità o periodi di prova. È software libero con licenza GPL-3.0: il codice è pubblico e chiunque può controllarlo, migliorarlo e ridistribuirlo alle stesse condizioni.</p>
+          </div>
+        </details>
+
+        <details id="d-privacy">
+          <summary><h3>Leggio invia i miei documenti da qualche parte?</h3></summary>
+          <div class="risposta">
+            <p>No. Tutto, compreso il riconoscimento del testo (OCR) e la copia dei documenti d'identità, avviene sul tuo computer. Non c'è un account, non c'è un cloud e non vengono raccolte statistiche d'uso. L'unico collegamento a Internet è il controllo degli aggiornamenti descritto qui sotto, che non invia dati personali e si può spegnere.</p>
+            <p>Anche questa pagina non usa cookie, statistiche o caratteri scaricati da altri siti: chiede soltanto a GitHub l'elenco dei file dell'ultima versione.</p>
+          </div>
+        </details>
+
+        <details id="d-sistemi">
+          <summary><h3>Su quali computer funziona?</h3></summary>
+          <div class="risposta">
+            <p><strong>Windows 10 e 11</strong> (64 bit, con installer o in versione portatile), <strong>macOS 12 o successivo</strong> (Mac con chip Apple e Mac Intel) e <strong>Linux</strong> a 64 bit (AppImage). Non esiste una versione per telefoni e tablet.</p>
+          </div>
+        </details>
+
+        <details id="d-aggiornamenti">
+          <summary><h3>Come funzionano gli aggiornamenti?</h3></summary>
+          <div class="risposta">
+            <p>Una volta al giorno Leggio chiede a GitHub se esiste una versione nuova: una sola richiesta anonima, senza dati personali. Se c'è, compare un avviso con il pulsante per scaricarla dalla pagina ufficiale; decidi tu se e quando. Apri il file scaricato e segui le istruzioni: documenti e impostazioni restano al loro posto. Il controllo si spegne nelle Impostazioni: in quel caso basta tornare su questa pagina ogni tanto.</p>
+          </div>
+        </details>
+
+        <details id="d-problemi">
+          <summary><h3>Ho trovato un problema o ho un'idea: come la segnalo?</h3></summary>
+          <div class="risposta">
+            <p>Su GitHub c'è un modulo guidato per le segnalazioni e uno per le proposte. Dentro Leggio, il menu Aiuto → «Segnala un problema…» prepara già le informazioni tecniche utili, senza i tuoi documenti.</p>
+            <p><a class="btn" href="https://github.com/lorebiri/leggio/issues/new/choose">Segnala un problema o proponi un'idea</a></p>
+          </div>
+        </details>
+
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="piede">
+  <div class="wrap piede-griglia">
+    <div>
+      <p class="piede-marchio"><img src="icona.svg" alt="" width="28" height="28"> Leggio</p>
+      <p>Il programma per i PDF libero e gratuito. Software libero con licenza <a href="https://github.com/lorebiri/leggio/blob/main/LICENSE">GPL-3.0-or-later</a> © Lorenzo Birindelli.</p>
+    </div>
+    <nav aria-label="Collegamenti utili">
+      <h2 class="piede-titolo">Contatti e progetto</h2>
+      <ul>
+        <li><a href="https://github.com/lorebiri/leggio/issues/new/choose">Segnala un problema o proponi un'idea</a> (GitHub Issues)</li>
+        <li><a href="https://github.com/lorebiri/leggio">Codice sorgente</a></li>
+        <li><a href="https://github.com/lorebiri/leggio/releases">Tutte le versioni</a></li>
+      </ul>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>

@@ -7,6 +7,9 @@ import { removeGlyphs, replaceGlyphRange, placeImage } from './rewrite.js';
 import { loadPage, markSeenCodes, setPageContent, addFontToPage, addXObjectToPage, fontResourceName } from './pdfpage.js';
 import { toLocal, fromLocal, wrapText, diffRange, boxToPage } from './blocks.js';
 import { winAnsiCode } from './fontmodel.js';
+import { embedUnicodeFont } from './unicodefont.js';
+
+export { embedUnicodeFont };
 
 const { StandardFonts } = PDFLib;
 const enc = new TextEncoder();
@@ -24,8 +27,10 @@ export function analyze(pdfDoc, pageIndex) {
 /** Glifi (di tutte le operazioni di testo) il cui centro cade nel box locale del blocco. */
 export function glyphsInBlock(A, block, tolerance = 0.2) {
   const fs = block.fontSize || 10;
-  const [x0, y0, x1, y1] = block.box;
+  let [x0, y0, x1, y1] = block.box;
   const tx = tolerance * fs, ty = 0.12 * fs;
+  // celle di tabella: il limite netto è il filetto (o il centro dello spazio tra le colonne)
+  for (const l of block.lines || []) { if (l.clipL != null) x0 = Math.min(x0, l.clipL + tx); if (l.clipR != null) x1 = Math.max(x1, l.clipR - tx); }
   const out = [];
   A.r.shows.forEach((s, si) => {
     if (!s.glyphs.length) return;
@@ -38,7 +43,8 @@ export function glyphsInBlock(A, block, tolerance = 0.2) {
       // il riquadro di un paragrafo può contenere testo di altri blocchi (tabelle, colonne): conta la riga
       if (block.lines?.length) {
         const [, by] = toLocal(block.angle, g.o[0], g.o[1]);
-        const onLine = block.lines.some((l) => Math.abs(by - l.base) < 0.45 * (l.fs || fs) && lx >= l.left - tx && lx <= l.right + tx);
+        const onLine = block.lines.some((l) => Math.abs(by - l.base) < 0.45 * (l.fs || fs)
+          && (l.clipL != null ? lx >= l.clipL : lx >= l.left - tx) && (l.clipR != null ? lx < l.clipR : lx <= l.right + tx));
         if (!onLine) return;
       }
       out.push(entry(A, s, si, g, gi, efs, block.angle));
@@ -160,7 +166,7 @@ export async function chooseWriterFont(pdfDoc, page, want, text, env = {}, origM
   let f = cache.get(key);
   if (!f) {
     const bytes = await env.loadUnicodeFont({ bold, italic });
-    f = await pdfDoc.embedFont(bytes, { subset: false }); // il sottoinsieme di fontkit fallisce con questi TTF
+    f = await embedUnicodeFont(pdfDoc, bytes, key);
     cache.set(key, f);
   }
   const missing = [];
@@ -284,31 +290,78 @@ export async function editBlock(pdfDoc, pageIndex, block, newText, style = {}, e
     const font = await chooseWriterFont(pdfDoc, A.page, want, newText, env, origModel, cache);
     fontKind = font.kind;
     if (font.missing.length) warnings.push('Alcuni caratteri non sono disponibili nel font: ' + font.missing.join(' '));
-    const lh = (block.lineHeight || blockSize * 1.2) * (size / blockSize);
+    let lh = (block.lineHeight || blockSize * 1.2) * (size / blockSize);
     const width = block.box[2] - block.box[0];
     const single = (block.lines?.length || 1) === 1;
     const align = style.align || block.align || 'left';
     const firstBase = block.lines?.[0]?.base ?? (block.box[3] - size * 0.82);
-    const lines = [];
-    for (const para of newText.split('\n')) {
-      const wr = single ? [para] : wrapText(para, width, (t) => font.width(t, size));
-      wr.forEach((t, k) => lines.push({ text: t, last: k === wr.length - 1 }));
+    let lines = [];
+    let sz = size;
+    if (block.cell && align !== 'justify') {
+      // cella di tabella: il testo resta dentro la cella (a capo nella sua larghezza, oppure rimpicciolito),
+      // con lo stesso allineamento; le altre celle non si spostano
+      const c = layoutCell(block, entries, newText, font, size, lh, align, firstBase);
+      lines = c.lines; sz = c.size; lh = c.lh;
+      if (c.overflow) warnings.push('Il testo nuovo non entra nella cella: controlla che non si sovrapponga alle celle vicine.');
+      else if (sz < size - 0.05) warnings.push(`Il testo è stato rimpicciolito a ${Math.round(sz * 10) / 10} pt per stare nella cella.`);
+    } else {
+      for (const para of newText.split('\n')) {
+        const wr = single ? [para] : wrapText(para, width, (t) => font.width(t, size));
+        wr.forEach((t, k) => lines.push({ text: t, last: k === wr.length - 1 }));
+      }
+      lines.forEach((ln, i) => {
+        const w = font.width(ln.text, size);
+        let x = block.box[0];
+        if (align === 'center') x = block.box[0] + (width - w) / 2;
+        else if (align === 'right') x = block.box[2] - w;
+        ln.x = x; ln.y = firstBase - i * lh;
+      });
     }
-    lines.forEach((ln, i) => {
-      const w = font.width(ln.text, size);
-      let x = block.box[0];
-      if (align === 'center') x = block.box[0] + (width - w) / 2;
-      else if (align === 'right') x = block.box[2] - w;
-      ln.x = x; ln.y = firstBase - i * lh;
-    });
-    extra += textOps({ font, size, color, angle: block.angle, lines, justifyWidth: align === 'justify' ? width : 0, underline: style.underline });
-    const xs = lines.flatMap((l) => [l.x, l.x + font.width(l.text, size)]);
-    extent = boxToPage(block.angle, [Math.min(block.box[0], ...xs), Math.min(block.box[1], lines[lines.length - 1].y - 0.3 * size), Math.max(block.box[2], ...xs), Math.max(block.box[3], firstBase + 0.9 * size)]).rect;
+    extra += textOps({ font, size: sz, color, angle: block.angle, lines, justifyWidth: align === 'justify' ? width : 0, underline: style.underline });
+    const xs = lines.flatMap((l) => [l.x, l.x + font.width(l.text, sz)]);
+    extent = boxToPage(block.angle, [Math.min(block.box[0], ...xs), Math.min(block.box[1], lines[lines.length - 1].y - 0.3 * sz), Math.max(block.box[2], ...xs), Math.max(block.box[3], firstBase + 0.9 * sz)]).rect;
     expect = lines.map((l) => l.text).filter((t) => t.trim());
-    if (!single && lines.length > (block.lines?.length || 1)) warnings.push('Il nuovo testo è più lungo dell\'originale e occupa più righe: controlla che non si sovrapponga al testo sottostante.');
+    if (!block.cell && !single && lines.length > (block.lines?.length || 1)) warnings.push('Il nuovo testo è più lungo dell\'originale e occupa più righe: controlla che non si sovrapponga al testo sottostante.');
   }
   setPageContent(A.page, composeContent(A, replacements, extra));
   return { method, fontKind, warnings, extent, expect };
+}
+
+/**
+ * Impaginazione del testo nuovo dentro una cella: a capo sulle parole entro la larghezza disponibile
+ * (fino ai filetti o alla colonna vicina), rimpicciolito fino al 60% se una parola non entra o se le righe
+ * non stanno nell'altezza della cella. L'allineamento resta quello della cella (a destra resta a destra).
+ */
+export function layoutCell(block, entries, text, font, size, lh, align, firstBase) {
+  let L = block.box[0], R = block.box[2];
+  if (entries?.length) { L = Math.min(...entries.map((e) => e.lx)); R = Math.max(...entries.map((e) => e.rx)); }
+  const [bx0, by0, bx1] = block.cell.bounds || [];
+  const minX = bx0 ?? -Infinity, maxX = bx1 ?? Infinity;
+  const mid = (L + R) / 2;
+  let avail = align === 'right' ? R - minX : align === 'center' ? 2 * Math.min(mid - minX, maxX - mid) : maxX - L;
+  avail = Math.max(avail, R - L);
+  const paras = String(text).split('\n');
+  const origLines = Math.max(1, block.lines?.length || 1);
+  let s = size, wr = [], lhS = lh, overflow = false;
+  for (;;) {
+    lhS = lh * (s / size);
+    const w = (t) => font.width(t, s);
+    wr = Number.isFinite(avail) ? paras.flatMap((p) => wrapText(p, avail, w)) : paras;
+    const maxLines = by0 != null ? Math.max(1, Math.floor((firstBase - by0 - 0.2 * s) / lhS) + 1) : origLines;
+    const wordsFit = !Number.isFinite(avail) || paras.every((p) => p.split(/\s+/).every((x) => w(x) <= avail + 0.01));
+    // senza larghezza nota né fondo della cella rimpicciolire non riduce le righe
+    const linesOk = wr.length <= maxLines || (!Number.isFinite(avail) && by0 == null);
+    const fits = wordsFit && linesOk && wr.every((t) => w(t) <= avail + 0.01);
+    if (fits) break;
+    if (s <= 0.6 * size + 1e-9) { overflow = true; break; }
+    s = Math.max(0.6 * size, s * 0.95);
+  }
+  const lines = wr.map((t, i) => {
+    const w = font.width(t, s);
+    const x = align === 'right' ? R - w : align === 'center' ? mid - w / 2 : L;
+    return { text: t, x, y: firstBase - i * lhS, last: true };
+  });
+  return { lines, size: s, lh: lhS, overflow };
 }
 
 function dominant(entries) {
@@ -358,13 +411,42 @@ export function tryInPlace(A, gt, newText, block) {
   const codeW = (b) => { let w = 0; const step = s.font.codeBytes || 1; for (let i = 0; i < b.length; i += step) w += s.font.widthOfCode(step === 2 ? b[i] * 256 + b[i + 1] : b[i]); return w / 1000; };
   const oldW = region.reduce((t, e) => t + (e.g.w || 0) / 1000, 0);
   const delta = (codeW(midBytes) - oldW) * efs;
-  // altro testo sulla stessa riga dopo l'operatore, che non scorrerebbe
-  const lastOfShow = s.glyphs[s.glyphs.length - 1];
-  const [endX] = toLocal(block.angle, lastOfShow.e[0], lastOfShow.e[1]);
   const lineY = items[0].ly;
-  const others = A.r.shows.some((o, oi) => oi !== si && o.glyphs.some((g) => { const [gx, gy] = toLocal(block.angle, g.o[0], g.o[1]); return Math.abs(gy - lineY) < 0.4 * efs && gx >= endX - 0.1 * efs && gx < endX + 4 * efs + Math.max(0, delta); }));
-  if (others && Math.abs(delta) > 0.15 * efs) return null;
-  if ((block.lines?.length || 1) > 1 && endX + delta > block.box[2] + 0.4 * efs) return null;
+  const mine = gt.refs.filter(Boolean);
+  // glifi di altri blocchi nello stesso operatore dopo il tratto cambiato (es. celle vicine in un solo TJ):
+  // non devono scorrere, si compensa con uno spostamento nel TJ
+  const own = new Set(mine.filter((e) => e.si === si).map((e) => e.gi));
+  const lastGi = region.length ? items[items.length - 1].gi : anchor.gi;
+  let foreign = -1;
+  for (let k = lastGi + 1; k < s.glyphs.length; k++) if (!own.has(k)) { foreign = k; break; }
+  if (block.cell) {
+    // cella: il testo può allungarsi solo fino al limite della cella; se è allineata a destra o al centro
+    // una variazione di lunghezza la sposterebbe, quindi si riscrive (vedi layoutCell)
+    const onLine = mine.filter((e) => Math.abs(e.ly - lineY) < 0.4 * efs);
+    const lastInShow = Math.max(...onLine.filter((e) => e.si === si).map((e) => e.rx));
+    const cellEnd = Math.max(...onLine.map((e) => e.rx));
+    const otherAfter = onLine.some((e) => e.si !== si && e.lx >= lastInShow - 0.1 * efs);
+    if (otherAfter && Math.abs(delta) > 0.15 * efs) return null;
+    if ((block.align === 'right' || block.align === 'center') && Math.abs(delta) > 0.05 * efs) return null;
+    const maxX = block.cell.bounds?.[2];
+    if (maxX != null && delta > 0 && cellEnd + delta > maxX + 0.01) return null;
+    if ((block.lines?.length || 1) > 1 && cellEnd + delta > block.box[2] + 0.4 * efs) return null;
+  } else {
+    // altro testo sulla stessa riga dopo l'operatore, che non scorrerebbe
+    const lastOfShow = s.glyphs[s.glyphs.length - 1];
+    const [endX] = toLocal(block.angle, lastOfShow.e[0], lastOfShow.e[1]);
+    const others = A.r.shows.some((o, oi) => oi !== si && o.glyphs.some((g) => { const [gx, gy] = toLocal(block.angle, g.o[0], g.o[1]); return Math.abs(gy - lineY) < 0.4 * efs && gx >= endX - 0.1 * efs && gx < endX + 4 * efs + Math.max(0, delta); }));
+    if (others && Math.abs(delta) > 0.15 * efs) return null;
+    if ((block.lines?.length || 1) > 1 && endX + delta > block.box[2] + 0.4 * efs) return null;
+  }
+  let comp = null;
+  if (foreign >= 0) {
+    if (!s.fs) return null;
+    const newAdv = (midBytes.length ? s.font.decode(midBytes) : []).reduce((t, g) => t + ((g.w || 0) / 1000) * s.fs + s.tc + (g.space ? s.tw : 0), 0);
+    const oldSpan = region.length ? items[items.length - 1].g.x0 + items[items.length - 1].g.adv - items[0].g.x0 : 0;
+    const shift = newAdv - oldSpan;
+    if (Math.abs(shift) > 1e-9) comp = { before: foreign, num: (shift * 1000) / s.fs };
+  }
   let from, to, bytes;
   const glyphBytes = (g) => { const el = s.elements[g.el]; return el.b.subarray(g.offset, g.offset + g.len); };
   if (region.length) { from = items[0].gi; to = items[items.length - 1].gi; bytes = midBytes; }
@@ -376,11 +458,11 @@ export function tryInPlace(A, gt, newText, block) {
   }
   if (!bytes.length) {
     // cancellazione pura: si toglie il tratto lasciando scorrere il resto dell'operatore
-    const rep = replaceGlyphRange(s, A.parsed.ops[s.opIndex], from, to, new Uint8Array(0));
+    const rep = replaceGlyphRange(s, A.parsed.ops[s.opIndex], from, to, new Uint8Array(0), comp);
     if (!rep) return null;
     return { replacements: new Map([[s.opIndex, rep]]), delta };
   }
-  const rep = replaceGlyphRange(s, A.parsed.ops[s.opIndex], from, to, bytes);
+  const rep = replaceGlyphRange(s, A.parsed.ops[s.opIndex], from, to, bytes, comp);
   if (!rep) return null;
   return { replacements: new Map([[s.opIndex, rep]]), delta };
 }
@@ -440,16 +522,34 @@ export function pageSearchText(A) {
 
 const normCase = (s, cs) => (cs ? s : s.toLocaleLowerCase('it'));
 function isWordChar(ch) { return !!ch && /[\p{L}\p{N}_]/u.test(ch); }
+/**
+ * Testo in minuscolo con mappa verso il testo originale: alcune lettere cambiano lunghezza
+ * (la «İ» turca diventa «i̇», due unità), quindi gli indici non coincidono.
+ * → { hay, start[j], end[j] } (inizio e fine nel testo originale del carattere da cui viene hay[j])
+ */
+function foldWithMap(s, cs) {
+  let hay = ''; const start = []; const end = [];
+  for (let k = 0; k < s.length;) {
+    const ch = String.fromCodePoint(s.codePointAt(k));
+    const low = normCase(ch, cs);
+    for (let j = 0; j < low.length; j++) { start.push(k); end.push(k + ch.length); }
+    hay += low; k += ch.length;
+  }
+  return { hay, start, end };
+}
 
 /** Occorrenze di query nel testo di una pagina. → [{ start, end, refs, text, context, rect }] */
 export function findInPage(A, query, { caseSensitive = false, wholeWord = false } = {}, pst = pageSearchText(A)) {
   if (!query) return [];
-  const hay = normCase(pst.text.replace(/ /g, ' '), caseSensitive);
+  const fold = foldWithMap(pst.text.replace(/ /g, ' '), caseSensitive);
+  const hay = fold.hay;
   const q = normCase(query.replace(/ /g, ' '), caseSensitive);
   const out = [];
-  let i = 0;
-  while ((i = hay.indexOf(q, i)) >= 0) {
-    const end = i + q.length;
+  let hi = 0;
+  while (q && (hi = hay.indexOf(q, hi)) >= 0) {
+    const hEnd = hi + q.length;
+    // indici nel testo originale (e quindi nei riferimenti ai glifi)
+    const i = fold.start[hi]; const end = fold.end[hEnd - 1];
     if (!wholeWord || (!isWordChar(pst.text[i - 1]) && !isWordChar(pst.text[end]))) {
       const refs = pst.refs.slice(i, end);
       const gl = refs.filter(Boolean);
@@ -464,7 +564,7 @@ export function findInPage(A, query, { caseSensitive = false, wholeWord = false 
         });
       }
     }
-    i = end > i ? end : i + 1;
+    hi = hEnd > hi ? hEnd : hi + 1;
   }
   return out;
 }

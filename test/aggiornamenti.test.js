@@ -26,7 +26,7 @@ describe('confronto versioni', () => {
 describe('scelta del file da scaricare', () => {
   const v = '0.2.0';
   const assets = ['mac-arm64.dmg', 'mac-x64.dmg', 'mac-arm64.zip', 'win-x64-installer.exe', 'win-x64-portatile.exe', 'win-x64-installer.exe.blockmap']
-    .map((s) => ({ name: `Leggio-${v}-${s}`, browser_download_url: `https://x/${s}` }));
+    .map((s) => ({ name: `Leggio-${v}-${s}`, browser_download_url: `https://github.com/lorebiri/leggio/releases/download/v${v}/Leggio-${v}-${s}` }));
   it('macOS Apple Silicon e Intel', () => {
     expect(main.pickAsset(assets, { platform: 'darwin', arch: 'arm64' }).name).toBe('Leggio-0.2.0-mac-arm64.dmg');
     expect(main.pickAsset(assets, { platform: 'darwin', arch: 'x64' }).name).toBe('Leggio-0.2.0-mac-x64.dmg');
@@ -35,6 +35,21 @@ describe('scelta del file da scaricare', () => {
     expect(main.pickAsset(assets, { platform: 'win32', arch: 'x64' }).name).toBe('Leggio-0.2.0-win-x64-installer.exe');
     expect(main.pickAsset(assets, { platform: 'win32', arch: 'arm64' }).name).toBe('Leggio-0.2.0-win-x64-installer.exe');
     expect(main.pickAsset(assets, { platform: 'win32', arch: 'x64', portable: true }).name).toBe('Leggio-0.2.0-win-x64-portatile.exe');
+  });
+  it('solo download HTTPS dalle release di lorebiri/leggio (niente eseguibili da altri domini)', () => {
+    const ok = 'https://github.com/lorebiri/leggio/releases/download/v1.0.0/Leggio-1.0.0-win-x64-installer.exe';
+    expect(main.safeDownloadUrl(ok)).toBe(ok);
+    for (const bad of ['http://github.com/lorebiri/leggio/releases/download/v1/x.exe', 'https://evil.example/lorebiri/leggio/releases/download/x.exe',
+      'https://github.com/altro/leggio/releases/download/v1/x.exe', 'https://github.com.evil.io/lorebiri/leggio/releases/download/x.exe',
+      'https://user@github.com/lorebiri/leggio/releases/download/v1/x.exe', 'javascript:alert(1)', '', null]) {
+      expect(main.safeDownloadUrl(bad)).toBeNull();
+    }
+    const alterati = [{ name: 'Leggio-0.2.0-win-x64-installer.exe', browser_download_url: 'https://evil.example/Leggio.exe' }];
+    expect(main.pickAsset(alterati, { platform: 'win32', arch: 'x64' })).toBeNull();
+  });
+  it('Linux: AppImage', () => {
+    const li = [{ name: 'Leggio-0.2.0-linux-x86_64.AppImage', browser_download_url: 'https://github.com/lorebiri/leggio/releases/download/v0.2.0/Leggio-0.2.0-linux-x86_64.AppImage' }];
+    expect(main.pickAsset(li, { platform: 'linux', arch: 'x64' }).name).toBe('Leggio-0.2.0-linux-x86_64.AppImage');
   });
   it('nessun file adatto → null (si apre la pagina della release)', () => {
     expect(main.pickAsset([], { platform: 'darwin', arch: 'arm64' })).toBeNull();
@@ -83,5 +98,16 @@ describe('novità di questa versione', () => {
   it('il file delle novità ha una voce per la versione di package.json', () => {
     expect(NOVITA.some((n) => n.versione === pkg.version)).toBe(true);
     for (const n of NOVITA) { expect(n.punti.length).toBeGreaterThan(0); expect(compareVersions(n.versione, '0.0.0')).toBe(1); }
+  });
+});
+
+describe('controllo automatico: quando ripetere', () => {
+  it('ogni giorno; mai bloccato da una data dell\u2019ultimo controllo nel futuro (orologio sbagliato)', () => {
+    const now = Date.UTC(2026, 10, 13);
+    const DAY = 24 * 3600 * 1000;
+    expect(main.checkDue(undefined, now)).toBe(true);
+    expect(main.checkDue(now - 1000, now)).toBe(false);
+    expect(main.checkDue(now - DAY, now)).toBe(true);
+    expect(main.checkDue(now + 365 * DAY, now)).toBe(true);
   });
 });

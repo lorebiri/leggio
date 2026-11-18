@@ -1,5 +1,6 @@
 // «Prepara per Titulus»: controlla e prepara i file prima del caricamento nel protocollo informatico del CNR.
 // Nessun collegamento a Titulus (Leggio resta offline): si producono copie pronte e un rapporto.
+import { oggiLocale } from '../lib/controlli.js';
 import { valutaPerTitulus, dichiaraPdfA, nomePulito, SOGLIA_MB_PREDEFINITA } from '../lib/titulus.js';
 import { openP7m, looksLikeP7m, overallStatus, innerName } from '../lib/cades.js';
 import { analizza, proponiNome } from '../lib/rinomina.js';
@@ -129,7 +130,7 @@ export function preparaPerTitulus(app, deps) {
       // rapporto PDF e CSV accanto alle copie
       const pdf = await rapportoTitulus(app.lib.PDFLib, righe);
       const csv = '﻿' + ['Esito;File;Problemi;Avvisi;Operazioni;Copia', ...righe.map((x) => [x.esito, x.nome, (x.problemi || []).join(' | '), (x.avvisi || []).join(' | '), x.azioni.join(' | '), x.dove || ''].map((c) => /[;"\n]/.test(String(c)) ? `"${String(c).replace(/"/g, '""')}"` : c).join(';'))].join('\r\n');
-      const giorno = new Date().toISOString().slice(0, 10);
+      const giorno = oggiLocale();
       await writeOut(app, dest, { sub: SUB, name: `Rapporto_Prepara_Titulus_${giorno}.pdf`, bytes: pdf });
       await writeOut(app, dest, { sub: SUB, name: `Rapporto_Prepara_Titulus_${giorno}.csv`, bytes: new TextEncoder().encode(csv) });
       return true;

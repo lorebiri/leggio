@@ -1,6 +1,6 @@
 # Leggio
 
-**Il lettore e editor PDF libero e gratuito per Windows e macOS.**
+**Il lettore e editor PDF libero e gratuito per Windows, macOS e Linux.**
 Leggi, commenta, modifica, organizza, firma, proteggi, converti e rendi ricercabili i tuoi PDF.
 Tutte le funzioni — anche quelle che altrove sono a pagamento — senza abbonamento, senza account,
 senza pubblicità. I tuoi file restano sul tuo computer: Leggio funziona completamente offline.
@@ -11,9 +11,12 @@ Vai su **[Releases](https://github.com/lorebiri/leggio/releases/latest)** e sceg
 
 - **Windows**: `Leggio-x.y.z-win-x64-installer.exe` (oppure `…-portatile.exe`, che non richiede installazione)
 - **macOS**: `Leggio-x.y.z-mac-arm64.dmg` per i Mac con chip Apple (M1, M2, M3…), `Leggio-x.y.z-mac-x64.dmg` per i Mac Intel
+- **Linux**: `Leggio-x.y.z-linux-x86_64.AppImage`
 
-Al primo avvio Windows e macOS possono chiedere conferma perché l'app non è ancora firmata con un certificato:
-le istruzioni sono nella pagina della release.
+Scarica **solo** da GitHub Releases (o dalla pagina di download in `site/`) e, se vuoi, controlla l'impronta
+SHA-256 con il file `SHA256SUMS.txt` della release. Al primo avvio Windows e macOS possono chiedere conferma
+perché l'app non è ancora firmata con un certificato: le istruzioni sono nella pagina di download;
+il piano per la firma è in [docs/FIRMA-DEL-CODICE.md](docs/FIRMA-DEL-CODICE.md).
 
 **Aggiornamenti e privacy**: una volta al giorno Leggio chiede a GitHub se esiste una versione nuova (una sola richiesta anonima, nessun dato inviato, nessuna telemetria); si può disattivare nelle Impostazioni.
 

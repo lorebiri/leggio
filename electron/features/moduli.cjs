@@ -1244,7 +1244,10 @@ async function macCertDer(sha1) {
 // ======================================================================================
 const KNOWN_APPS = /^(dike|arubasign|aruba ?sign|firmaok|firma ?ok|firmacerta|firma ?certa|gosign|go ?sign|file ?protector|namirial|firma4ng|bit4id|infocert)/i;
 let customAppsFile = null;
-function readCustomApps() { try { return JSON.parse(fs.readFileSync(customAppsFile, 'utf8')).filter((a) => a && typeof a.path === 'string' && fs.existsSync(a.path)); } catch { return []; } }
+// solo applicazioni (.app su macOS, .exe su Windows): il file è in userData e non deve poter far avviare
+// interpreti o script qualunque (/bin/sh, python…) se qualcuno lo riscrive
+const APP_EXT = /\.(app|exe)$/i;
+function readCustomApps() { try { return JSON.parse(fs.readFileSync(customAppsFile, 'utf8')).filter((a) => a && typeof a.path === 'string' && path.isAbsolute(a.path) && APP_EXT.test(a.path) && fs.existsSync(a.path)); } catch { return []; } }
 
 /** Programmi di firma trovati (cartelle standard) + quelli scelti dall'utente. */
 function detectSigningApps(platform = process.platform) {
@@ -1351,7 +1354,9 @@ function obj(v, what) { if (v == null || typeof v !== 'object' || Array.isArray(
 /** Credenziale da una richiesta IPC: nuova forma { credential } o vecchia { p12, password }. */
 function credOf(a) { return a.credential ? obj(a.credential, 'credenziale') : { type: 'p12', p12: a.p12, password: a.password }; }
 
-function register({ ipcMain, dialog, getWindow, app }) {
+function register({ ipcMain, dialog, getWindow, app, grants, pathAllowed }) {
+  // file scelti dall'utente (dialoghi, schede aperte, cartelle scelte, cartelle dell'archivio)
+  const usabile = (p) => !!((grants && grants.canUse(p)) || (pathAllowed && pathAllowed(p)));
   try { customAppsFile = path.join(app.getPath('userData'), 'moduli-programmi-firma.json'); } catch {}
   const send = (ch, p) => { try { const w = getWindow && getWindow(); w && w.webContents.send(ch, p); } catch {} };
 
@@ -1388,6 +1393,7 @@ function register({ ipcMain, dialog, getWindow, app }) {
     if (a.paths.length > 500) throw new UserError('Si possono firmare al massimo 500 file per volta.', 'argomenti');
     const paths = a.paths.map((p) => {
       if (typeof p !== 'string' || !p || p.length > 4096 || p.includes('\0') || !path.isAbsolute(p)) throw new UserError('Percorso di file non valido.', 'argomenti');
+      if (!usabile(p)) throw new UserError(`Per sicurezza Leggio firma solo file scelti da te: «${path.basename(p)}» non lo è.`, 'argomenti');
       return p;
     }).filter((p, i, all) => all.indexOf(p) === i);
     const signer = await resolveSigner(credOf(a));
@@ -1417,7 +1423,7 @@ function register({ ipcMain, dialog, getWindow, app }) {
     const prog = detectSigningApps().find((x) => x.id === a.appId);
     if (!prog) throw new UserError('Programma di firma non trovato: sceglilo di nuovo.', 'argomenti');
     let filePath = typeof a.path === 'string' && a.path ? a.path : null;
-    if (filePath && (!path.isAbsolute(filePath) || !fs.existsSync(filePath) || !/\.pdf$/i.test(filePath))) filePath = null;
+    if (filePath && (!path.isAbsolute(filePath) || !fs.existsSync(filePath) || !/\.pdf$/i.test(filePath) || !usabile(filePath))) filePath = null;
     if (!filePath || a.pdf) {
       // copia di lavoro: il documento ha modifiche non salvate o non è ancora su disco
       const pdf = toBuffer(a.pdf, 'PDF', MAX_PDF);

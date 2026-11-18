@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <path d="M190 60 H650 L834 244 V964 H190 Z" fill="#ffffff" stroke="#5f6b70" stroke-width="24" stroke-linejoin="round"/>
+  <path d="M650 60 V244 H834" fill="#e6ecee" stroke="#5f6b70" stroke-width="24" stroke-linejoin="round"/>
+  <rect x="250" y="300" width="470" height="26" rx="13" fill="#c9d3d6"/><rect x="250" y="360" width="470" height="26" rx="13" fill="#c9d3d6"/><rect x="250" y="420" width="470" height="26" rx="13" fill="#c9d3d6"/><rect x="250" y="480" width="300" height="26" rx="13" fill="#c9d3d6"/>
+  <rect x="190" y="610" width="644" height="170" fill="#0f766e"/>
+  <text x="512" y="730" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-weight="700" font-size="140" fill="#ffffff" letter-spacing="6">P7M</text>
+  <path d="M690 820 L650 990 L715 950 L760 1010 L790 840 Z" fill="#b42318" opacity=".9"/>
+  <circle cx="740" cy="800" r="130" fill="#b42318" stroke="#ffffff" stroke-width="18"/>
+  <path d="M685 800 l40 42 l78 -86" fill="none" stroke="#ffffff" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

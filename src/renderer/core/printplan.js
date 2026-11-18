@@ -56,3 +56,22 @@ export function planPrintJobs(files, { duplex = 'simplex', maxPagesPerJob = MAX_
   flush();
   return jobs;
 }
+
+/**
+ * Pixel massimi di una pagina stampata alla qualità scelta (dpi): quanto serve per un foglio A3 a quella
+ * risoluzione, mai oltre 36 milioni (un A0 a 300 dpi ne chiederebbe ~140 e il canvas resterebbe vuoto).
+ */
+export function printPixelBudget(quality) {
+  const dpi = Math.max(72, Math.min(600, Number(quality) || 150));
+  return Math.min(36e6, Math.round(11.7 * 16.5 * dpi * dpi));
+}
+
+/** Limiti sicuri di un canvas in Chromium (oltre, il canvas resta vuoto senza errori: fogli bianchi in stampa). */
+export const CANVAS_MAX_SIDE = 16384;
+export const CANVAS_MAX_PIXELS = 64e6;
+
+/** Scala ridotta perché la pagina stia nei limiti (lato massimo e numero di pixel). */
+export function fitScale(widthPt, heightPt, scale, { maxSide = CANVAS_MAX_SIDE, maxPixels = CANVAS_MAX_PIXELS } = {}) {
+  const w = Math.max(1, widthPt), hgt = Math.max(1, heightPt);
+  return Math.max(0.01, Math.min(scale, maxSide / w, maxSide / hgt, Math.sqrt(maxPixels / (w * hgt))));
+}

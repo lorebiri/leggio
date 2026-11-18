@@ -98,6 +98,13 @@ export const MODELLI = [
     new RegExp(`(?<=(?:^|[,;\\n–-])\\s*)${CAP_COMUNE}`, 'gu'),
     new RegExp(`(?<![\\d\\p{L}])\\d{5}\\s+[A-ZÀ-Ü][\\p{L}'’-]*(?:\\s+[A-ZÀ-Ü][\\p{L}'’-]*){0,3}\\s*\\([A-Z]{2}\\)`, 'gu'),
   ], check: (s) => !/^\d{5}\s/.test(s) || capValido(s) },
+  // righe a lettura ottica dei documenti (CIE, passaporto): lettere maiuscole, cifre e almeno due «<»
+  { id: 'mrz', label: 'Righe MRZ dei documenti (con «<<<»)', esempio: 'IDITACA00000AA4<<<<<<<<<<<<<<<', re: /(?<![A-Z0-9<])[A-Z0-9<]*<<[A-Z0-9<]*(?![A-Z0-9<])/g, check: (s) => s.length >= 10 && /[A-Z0-9]/.test(s) },
+  { id: 'docid', label: 'Numero di carta d\'identità o patente', esempio: 'CA12345AB', res: [
+    /\bC[A-Z]\s?\d{5}\s?[A-Z]{2}\b/g, // CIE
+    /\b[A-Z]{2}\s?\d{7}\b/g, // carta d'identità cartacea
+    /\b[A-Z]{2}\d{7}[A-Z]\b/g, /\bU1[A-Z0-9]{7}[A-Z]\b/g, // patente
+  ] },
   { id: 'carta', label: 'Numero di carta di pagamento', esempio: '4111 1111 1111 1111', re: /\b(?:\d[ -]?){12,18}\d\b/g, check: luhnValido },
 ];
 

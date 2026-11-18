@@ -63,16 +63,31 @@ function compareVersions(a, b) {
 // Nomi prodotti da electron-builder (vedi "build" in package.json):
 //   Leggio-X.Y.Z-mac-arm64.dmg · Leggio-X.Y.Z-mac-x64.dmg
 //   Leggio-X.Y.Z-win-x64-installer.exe · Leggio-X.Y.Z-win-x64-portatile.exe
+//   Leggio-X.Y.Z-linux-x86_64.AppImage
+/**
+ * Solo download dalle release di questo repository, in HTTPS: niente eseguibili da altri domini
+ * (anche se la risposta dell'API fosse alterata). → URL o null.
+ */
+function safeDownloadUrl(u) {
+  let x;
+  try { x = new URL(String(u || '')); } catch { return null; }
+  if (x.protocol !== 'https:' || x.hostname !== 'github.com' || x.username || x.password || x.port) return null;
+  if (!x.pathname.startsWith(`/${REPO}/releases/download/`)) return null;
+  return x.href;
+}
+
 function pickAsset(assets, { platform = process.platform, arch = process.arch, portable = false } = {}) {
-  const list = (assets || []).filter((a) => a && a.name && a.browser_download_url);
+  const list = (assets || []).filter((a) => a && a.name && safeDownloadUrl(a.browser_download_url));
   const find = (re) => list.find((a) => re.test(a.name));
   let a = null;
   if (platform === 'darwin') {
     a = find(new RegExp(`mac-${arch}\\.dmg$`, 'i')) || find(/mac-universal\.dmg$/i) || find(/\.dmg$/i);
   } else if (platform === 'win32') {
     a = portable ? find(/portatile\.exe$/i) : (find(/win-x64-installer\.exe$/i) || find(/installer\.exe$/i));
+  } else if (platform === 'linux') {
+    a = find(/linux-x86_64\.AppImage$/i) || find(/\.AppImage$/i);
   }
-  return a ? { url: a.browser_download_url, name: a.name } : null;
+  return a ? { url: safeDownloadUrl(a.browser_download_url), name: a.name } : null;
 }
 
 function toInfo(release) {
@@ -81,7 +96,7 @@ function toInfo(release) {
   return {
     version,
     name: release.name || `Leggio ${version}`,
-    url: release.html_url || RELEASES,
+    url: /^https:\/\/github\.com\//.test(String(release.html_url || '')) ? release.html_url : RELEASES,
     notes: String(release.body || '').slice(0, 4000),
     publishedAt: release.published_at || null,
     downloadUrl: asset ? asset.url : null,
@@ -138,10 +153,16 @@ function notify(info) {
   if (win.webContents.isLoading()) win.webContents.once('did-finish-load', send); else send();
 }
 
+/** Serve un nuovo controllo? Un'ultima data nel futuro (orologio messo male una volta) non blocca i controlli. */
+function checkDue(lastCheck, now = Date.now()) {
+  const t = Number(lastCheck);
+  return !Number.isFinite(t) || t <= 0 || t > now || now - t >= DAY;
+}
+
 async function autoCheck() {
   if (!autoEnabled()) return;
   const st = readState();
-  const due = testMode() || !st.lastCheck || Date.now() - st.lastCheck >= DAY;
+  const due = testMode() || checkDue(st.lastCheck);
   if (!due) {
     // controllato da poco: ripropone l'ultima versione trovata, se è ancora più nuova
     if (st.found && compareVersions(st.found.version, app.getVersion()) > 0) notify(st.found);
@@ -194,4 +215,4 @@ async function checkInteractive(win) {
   }
 }
 
-module.exports = { setup, check, checkInteractive, compareVersions, parseVersion, pickAsset, toInfo };
+module.exports = { setup, check, checkInteractive, checkDue, compareVersions, parseVersion, pickAsset, toInfo, safeDownloadUrl };

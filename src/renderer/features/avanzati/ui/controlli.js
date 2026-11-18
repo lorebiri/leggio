@@ -1,7 +1,7 @@
 // Riquadro unico «Controlli» sul documento aperto. Parla solo se c'è qualcosa da dire: avvisi brevi, ognuno con
 // un'azione concreta, e in fondo un'unica sezione «Dati da copiare» (Titulus, U-GOV, ordine). Nessuno strumento nuovo.
 // Le regole che cambiano nel tempo vengono da dati/regole-ufficio.json (fonte e data visibili), aggiornabile dall'ufficio.
-import { regole as regoleDa, validaRegole, controlliFattura, controlliContratto, riconosciOrdine, abbinaFatturaOrdini, datiPerUgov } from '../lib/controlli.js';
+import { regole as regoleDa, dataLocaleDaMs, validaRegole, controlliFattura, controlliContratto, riconosciOrdine, abbinaFatturaOrdini, datiPerUgov } from '../lib/controlli.js';
 import { estraiDati } from '../lib/datichiave.js';
 import { analizza } from '../lib/rinomina.js';
 import { datiPerTitulus, testoDatiTitulus } from '../lib/titulus.js';
@@ -61,7 +61,7 @@ async function datiArchivio(app, doc, f) {
     for (const x of r?.righe || []) {
       if (path && x.path === path) {
         if (x.ricezione) { out.ricezione = String(x.ricezione).slice(0, 10); out.fonte = 'metadati'; }
-        else if (x.mtime) { out.ricezione = new Date(x.mtime).toISOString().slice(0, 10); out.fonte = 'stima'; }
+        else if (x.mtime) { out.ricezione = dataLocaleDaMs(+x.mtime) || null; out.fonte = out.ricezione ? 'stima' : null; }
         continue;
       }
       if (x.iban) out.ibanNoti.push({ iban: x.iban, numero: x.numero, data: x.data });

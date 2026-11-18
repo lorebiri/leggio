@@ -137,7 +137,8 @@ export async function pianoDimensione(carica, nPagine, maxByte, { onProgress, si
         okB = lo;
       }
     }
-    passo = Math.max(1, okB - a);
+    // almeno 2: con passo 1 il primo tentativo (a + 1) coincide con okB e il gruppo successivo non crescerebbe mai
+    passo = Math.max(2, okB - a);
     out.push({ indici: [...Array(okB - a).keys()].map((k) => a + k), bytes: okBytes, troppoGrande: okBytes.length > maxByte });
     a = okB;
     onProgress?.(a / nPagine);

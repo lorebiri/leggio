@@ -107,3 +107,19 @@ un assegno o una borsa (testo delle prime pagine, oppure tipo «Incarico o asseg
 Nelle Azioni guidate c'è «Scegli da solo». **Profilo dell'ente vuoto**: una riga propone «Compila il profilo…»
 (`app.tools.run('entity-profile')`); dopo il salvataggio i recapiti dell'ente escono subito dall'elenco; se l'utente
 rinuncia o sceglie «Non ora» non viene più chiesto (`sic.chiediProfiloEnte`).
+
+## Documenti d'identità (copie con dati oscurati)
+
+Strumento **Oscura → «Documento d'identità…»**: modelli per carta d'identità elettronica (fronte e retro),
+carta d'identità cartacea (facciate interne, copertina) e patente italiana (fronte e retro). L'utente sceglie
+i dati da coprire (numero del documento, MRZ, firma, foto, codice fiscale, indirizzo, data e luogo di nascita),
+disegna un riquadro attorno alla tessera nella scansione (o usa tutta la pagina) e Leggio segna le zone del
+modello (`logica/documenti-identita.js`), che si possono togliere o integrare a mano. Nella ricerca ci sono
+anche i modelli «Righe MRZ» e «Numero di carta d'identità o patente».
+
+All'applicazione si può aggiungere la filigrana **«Copia per uso esclusivo di … – per … – data»**: viene
+disegnata dentro l'immagine di tutte le pagine (non si può togliere). Con un modello di documento o con la
+filigrana i metadati (titolo, autore, programma, XMP) vengono sempre rimossi. L'oscuramento è vero: le pagine
+interessate sono ricostruite come immagine già oscurata, il testo sotto le aree viene eliminato, le immagini
+originali tolte dal file, e una verifica finale controlla che i dati non siano più estraibili.
+Collaudi: `test/sicurezza-documenti-identita.test.js`, `test/e2e/redazione-documenti.mjs`.

@@ -295,6 +295,8 @@ export async function copiaPagineEsterne(doc, src, indici) {
     if (!annots) continue;
     for (let k = 0; k < annots.size(); k++) {
       const a = annots.lookup(k);
+      // copyPages copia la /P originale come una pagina a parte, fuori dall'albero: la si rimette sulla pagina copiata
+      if (a instanceof PDFDict && a.get(N('P')) instanceof PDFRef) a.set(N('P'), p.ref);
       if (!isWidget(a)) continue;
       let top = a; const visti = new Set();
       while (top.lookupMaybe(N('Parent'), PDFDict) && !visti.has(top)) { visti.add(top); top = top.lookupMaybe(N('Parent'), PDFDict); }
@@ -453,18 +455,28 @@ export async function estraiInNuovo(src, indici, { titolo } = {}) {
 export async function applicaDisposizione(doc, items, esterni = new Map(), { onProgress, signal } = {}) {
   if (!items.length) throw new ErroreUtente('Il documento deve avere almeno una pagina.');
   const pages = doc.getPages();
-  const usati = nomiCampiEsistenti(doc);
   const usate = new Set();
-  // pagine esterne: copiate a gruppi per file (una copyPages per file)
+  // pagine esterne: copiate a gruppi per file (una copyPages per file), ogni indice una volta sola:
+  // copyPages con lo stesso indice ripetuto restituisce pagine che condividono le stesse /Annots (cache di pdf-lib)
   const perFile = new Map();
   items.forEach((it, k) => { if (it.tipo === 'esterna') { if (!perFile.has(it.file)) perFile.set(it.file, []); perFile.get(it.file).push(k); } });
   const copiateEst = new Map();
+  const ripetuteEst = []; // [k, pagina già copiata] da clonare come le pagine interne
   for (const [file, ks] of perFile) {
     const src = esterni.get(file);
     if (!src) throw new Error('File esterno mancante: ' + file);
-    const nuove = await copiaPagineEsterne(doc, src, ks.map((k) => items[k].indice));
-    ks.forEach((k, j) => copiateEst.set(k, nuove[j]));
+    const distinti = [...new Set(ks.map((k) => items[k].indice))];
+    const nuove = await copiaPagineEsterne(doc, src, distinti);
+    const perIndice = new Map(distinti.map((i, j) => [i, nuove[j]]));
+    const viste = new Set();
+    for (const k of ks) {
+      const i = items[k].indice;
+      if (!viste.has(i)) { viste.add(i); copiateEst.set(k, perIndice.get(i)); } else ripetuteEst.push([k, perIndice.get(i)]);
+    }
   }
+  // dopo la copia delle esterne, così i cloni non riprendono i nomi dei campi appena copiati
+  const usati = nomiCampiEsistenti(doc);
+  for (const [k, p] of ripetuteEst) copiateEst.set(k, clonaPagina(doc, p, usati));
   const out = new Array(items.length);
   await aBlocchi(items.length, (k) => {
     const it = items[k];

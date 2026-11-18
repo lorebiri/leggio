@@ -50,7 +50,12 @@ export function selectionByPage(app) {
       }
     }
   }
-  for (const [p, e] of byPage) { e.lines = mergeLineRects(e.rects); if (!e.lines.length) byPage.delete(p); }
+  for (const [p, e] of byPage) {
+    // /Rotate della pagina: sulle pagine ruotate le righe sono verticali nello spazio PDF
+    e.rotation = app.viewer.pdfViewer?.getPageView?.(p)?.pdfPage?.rotate || 0;
+    e.lines = mergeLineRects(e.rects, e.rotation);
+    if (!e.lines.length) byPage.delete(p);
+  }
   return byPage.size ? byPage : null;
 }
 
@@ -75,7 +80,7 @@ export async function markupSelection(app, kind, { color, opacity } = {}) {
         const h = Math.max(6, last[3] - last[1]);
         await createAnnot(pdfDoc, pageIndex, { type: 'Caret', rect: [last[2] - h * 0.35, last[1] - h * 0.25, last[2] + h * 0.35, last[1] + h * 0.45], color: c, text: note || '' }, { author: who });
       } else {
-        await createAnnot(pdfDoc, pageIndex, { type: kind, quadPoints: linesToQuadPoints(g.lines), color: c, opacity: op, text: g.text.replace(/\s+/g, ' ').trim().slice(0, 2000) }, { author: who });
+        await createAnnot(pdfDoc, pageIndex, { type: kind, quadPoints: linesToQuadPoints(g.lines, g.rotation), color: c, opacity: op, text: g.text.replace(/\s+/g, ' ').trim().slice(0, 2000) }, { author: who });
       }
     }
   });
@@ -212,7 +217,7 @@ async function noteOnSelection(app, groups) {
   window.getSelection()?.removeAllRanges();
   await edit(app, 'Nota aggiunta al testo', async (pdfDoc) => {
     for (const [pageIndex, g] of groups) {
-      await createAnnot(pdfDoc, pageIndex, { type: 'Highlight', quadPoints: linesToQuadPoints(g.lines), color: rgb(colorOf(app, 'Highlight')), opacity: S(app, 'markup.opacity', 1), text: txt.t }, { author: who });
+      await createAnnot(pdfDoc, pageIndex, { type: 'Highlight', quadPoints: linesToQuadPoints(g.lines, g.rotation), color: rgb(colorOf(app, 'Highlight')), opacity: S(app, 'markup.opacity', 1), text: txt.t }, { author: who });
       break; // un solo commento anche se la selezione attraversa più pagine
     }
   });

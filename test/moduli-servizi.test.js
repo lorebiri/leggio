@@ -16,7 +16,8 @@ const PW = 'segreta123';
 /** Processo principale finto: registra i canali veri di moduli.cjs. */
 function fakeMain() {
   const h = {}; const sent = [];
-  M.register({ ipcMain: { handle: (c, f) => { h[c] = f; } }, dialog: { showOpenDialog: async () => { throw new Error('nessuna finestra deve aprirsi'); } }, getWindow: () => ({ webContents: { send: (c, p) => sent.push([c, p]) } }), app: { getPath: () => tmpdir() } });
+  // i file da firmare stanno in una cartella «scelta dall'utente» (come le cartelle dell'archivio)
+  M.register({ pathAllowed: (p) => p.startsWith(dir), ipcMain: { handle: (c, f) => { h[c] = f; } }, dialog: { showOpenDialog: async () => { throw new Error('nessuna finestra deve aprirsi'); } }, getWindow: () => ({ webContents: { send: (c, p) => sent.push([c, p]) } }), app: { getPath: () => tmpdir() } });
   return { invoke: (ch, a) => h['feat:' + ch]({}, a), sent };
 }
 /** App finta: registra dialoghi, avvisi ed eventi. */

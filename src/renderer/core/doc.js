@@ -3,6 +3,7 @@
 import { openPdfJs, destroyPdf } from './pdf.js';
 import { History } from './history.js';
 import { TaskQueue } from './queue.js';
+import { integrateForms } from './forms.js';
 
 let nextId = 1;
 
@@ -74,13 +75,18 @@ export class Doc {
     this.version = this.#newVersion();
     return this.history.push(label, prevVersion, prev);
   }
-  /** → Promise<label|null> */
+  /**
+   * → Promise<label|null>. I valori dei moduli digitati dopo l'ultima modifica vengono prima integrati
+   * nello stato corrente: Annulla li toglie insieme a quella modifica e Ripeti li riporta.
+   */
   async undo() {
+    await integrateForms(this);
     const r = await this.history.undo(this.version, this.bytes);
     if (!r) return null;
     this.bytes = r.bytes; this.version = r.version; return r.label;
   }
   async redo() {
+    await integrateForms(this);
     const r = await this.history.redo(this.version, this.bytes);
     if (!r) return null;
     this.bytes = r.bytes; this.version = r.version; return r.label;

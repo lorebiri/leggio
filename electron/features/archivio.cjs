@@ -54,7 +54,7 @@ const caseInsensitive = process.platform === 'win32' || process.platform === 'da
 const chiave = (p) => (caseInsensitive ? path.resolve(p).toLowerCase() : path.resolve(p));
 function dentro(root, p) {
   const rel = path.relative(chiave(root), chiave(p));
-  return rel === '' || (!!rel && !rel.startsWith('..') && !path.isAbsolute(rel));
+  return rel === '' || (!!rel && rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel));
 }
 function conTempo(promise, ms, msg) {
   let t;
@@ -409,7 +409,11 @@ function senderOk(e) {
   return url.split('#')[0].split('?')[0] === index;
 }
 
+/** Il percorso sta in una cartella collegata all'archivio (scelta dall'utente): gli altri moduli possono usarlo. */
+function pathAllowed(p) { try { return typeof p === 'string' && path.isAbsolute(p) && !!cartellaDi(p); } catch { return false; } }
+
 module.exports = {
+  pathAllowed,
   register,
   _test: { S, cartellaDiRete, aggiungiCartella, scansiona, leggi, indiceManifesto, indiceBlocco, indiceScrivi, statiLeggi, statiScrivi, cancellaIndice, scriviCopia, copiaFile, leggiConfig, dentro, safeName, UserError, init(dir) { S.dir = dir; S.config = { versione: 1, cartelle: [] }; S.destinazioni.clear(); } },
 };

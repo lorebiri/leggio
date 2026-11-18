@@ -112,9 +112,13 @@ export async function savePdfLib(doc, opts = {}) {
 export async function newPdfLib() { const d = await PDFLib.PDFDocument.create(); d.registerFontkit(fontkit); return d; }
 
 /** Rende una pagina pdf.js su canvas alla scala indicata. → HTMLCanvasElement */
-export async function renderPageToCanvas(pdf, pageIndex, scale = 1, { annotationMode = pdfjs.AnnotationMode.ENABLE, background } = {}) {
+import { fitScale } from './printplan.js';
+export { fitScale, CANVAS_MAX_SIDE, CANVAS_MAX_PIXELS } from './printplan.js';
+
+export async function renderPageToCanvas(pdf, pageIndex, scale = 1, { annotationMode = pdfjs.AnnotationMode.ENABLE, background, maxSide, maxPixels } = {}) {
   const page = await pdf.getPage(pageIndex + 1);
-  const viewport = page.getViewport({ scale });
+  const base = page.getViewport({ scale: 1 });
+  const viewport = page.getViewport({ scale: fitScale(base.width, base.height, scale, { maxSide, maxPixels }) });
   const canvas = document.createElement('canvas');
   canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
   const ctx = canvas.getContext('2d');
