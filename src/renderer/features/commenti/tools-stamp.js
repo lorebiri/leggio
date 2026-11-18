@@ -135,12 +135,13 @@ export function stampTool(app) {
             num.addEventListener('change', () => { const n = parseInt(num.value, 10); if (n >= 0) setS(app, 'stampCounters', { ...S(app, 'stampCounters', {}), [cur.id]: n }); });
             opts.append(H('label', { class: 'lg-opt' }, H('span', {}, 'Prossimo n.'), num));
           }
-          opts.append(
+          // append() del DOM scrive «null» per i valori vuoti: si tolgono i pulsanti che non servono
+          opts.append(...[
             H('button', { class: 'btn small', onclick: async () => { if (await editCustomStamp(app)) render(); } }, 'Nuovo timbro…'),
             H('button', { class: 'btn small', onclick: async () => { if (await imageStamp(app)) render(); } }, 'Da immagine…'),
             cur.custom ? H('button', { class: 'btn small', onclick: async () => { if (cur.image) return app.ui.toast('I timbri da immagine si possono solo eliminare'); if (await editCustomStamp(app, cur)) render(); } }, 'Modifica') : null,
             cur.custom ? H('button', { class: 'btn small', onclick: async () => { if (!(await app.ui.confirm(`Eliminare il timbro «${cur.label}» dalla tua raccolta? I timbri già messi nei documenti restano.`, { okLabel: 'Elimina', danger: true }))) return; setS(app, 'stamps', S(app, 'stamps', []).filter((s) => s.id !== cur.id)); setS(app, 'stamp.current', 'ricevuto'); render(); } }, 'Elimina') : null,
-            H('span', { class: 'lg-hint' }, 'Clic sulla pagina per timbrare.'));
+            H('span', { class: 'lg-hint' }, 'Clic sulla pagina per timbrare.')].filter(Boolean));
         };
         render();
         app.viewer.setMode('tool', 'copy');

@@ -12,7 +12,7 @@ Data: 18 novembre 2026.
   chiesta da Lorenzo); pagina di download e presentazione in `site/` con workflow per GitHub Pages (non
   pubblicato); come funzione secondaria, oscuramento dei documenti d'identità con filigrana.
 - **Pacchetto Linux** (AppImage) aggiunto e provato.
-- Test automatici: **prima 711 superati** (68 file) → **dopo 789 superati** (75 file; gli stessi 3 test saltati di prima, solo per macOS); collaudi nel browser e nell'app vera
+- Test automatici: **prima 711 superati** (68 file) → **dopo 792 superati** (75 file; gli stessi 3 test saltati di prima, solo per macOS); collaudi nel browser e nell'app vera
   tutti superati (elenco in fondo).
 - **Decisione principale per Lorenzo: la firma del codice** (raccomandata SignPath Foundation, gratuita).
 
@@ -147,6 +147,7 @@ nessun foglio bianco. Non verificabile qui: una stampante fisica Windows (serve 
 | Azioni guidate «Sostituisci gli originali» scriveva il PDF impaginato **sopra la fattura `.xml`** | alta | come per i .p7m: PDF accanto, l'XML resta |
 | `scripts/verifica-pacchetto.mjs` non trovava l'eseguibile su Linux (nome in minuscolo) | bassa | corretto |
 | L'avviso di aggiornamento avrebbe aperto qualunque URL fornito dall'API | media | solo release del progetto in HTTPS |
+| Strumento Timbro: nella barra compariva la scritta «nullnull» accanto ai pulsanti (timbri predefiniti) | bassa | corretto (collaudo nel browser prima/dopo) |
 | Pagine a due colonne con poco spazio tra le colonne: unite riga per riga in modifica | media | corretto con la correzione delle tabelle |
 | Moduli a griglia: l'etichetta si univa al valore, e il valore con le righe sotto | media | corretto |
 | Correzione «in loco» di una cella: le altre celle nello stesso comando di testo si spostavano | media | corretto |
@@ -230,19 +231,28 @@ prima di applicare (il riepilogo lo ricorda); la tessera va inquadrata con un ri
 rotazioni di 90°, non inclinazioni). Le pagine oscurate diventano immagini (file più grande; il testo fuori
 dalle aree resta ricercabile).
 
-### B. Pagina di download (`site/`)
+### B. Pagina di download e presentazione del progetto (`site/`)
 
-- Riconosce il sistema e propone il pulsante giusto (Windows installer o portatile; Mac Apple Silicon o Intel;
-  Linux AppImage), con tutti gli altri file sotto «Altri sistemi»; versione, data, dimensioni e **impronte
-  SHA-256** (con pulsante Copia) lette dall'ultima release di GitHub; senza JavaScript o se GitHub non risponde,
-  porta alla pagina delle release.
-- Istruzioni per controllare l'impronta e per superare gli avvisi di Edge, Chrome, SmartScreen e macOS.
-- Funzioni principali, schermate vere dell'app, privacy, segnalazione dei problemi (GitHub Issues).
-- Italiano, versione per telefono, tema chiaro e scuro, accessibile (salto al contenuto, focus visibile,
-  contrasti AA), CSP restrittiva, nessun tracciamento.
-- Workflow `.github/workflows/pages.yml` **solo manuale**: nulla viene pubblicato da sé.
-- Test: `test/sito-download.test.js` (18) e 87 controlli Playwright (390 e 1280 px, chiaro e scuro, Windows,
-  Mac, Linux, Android, API che risponde 403, tastiera).
+Non solo download: la pagina presenta il progetto.
+- **In alto**: titolo, sottotitolo e pulsante di download giusto per il sistema di chi visita (Windows installer o
+  portatile; Mac Apple Silicon o Intel; Linux AppImage), con la schermata dell'app (chiara o scura secondo il tema).
+- **Il progetto**: cos'è Leggio, perché esiste, per chi è (uffici, scuole, comuni, professionisti che lavorano con
+  PDF, firme .p7m e documenti della pubblica amministrazione); libero e gratuito (GPL-3.0, codice su GitHub);
+  privacy (funziona senza Internet, i file restano sul computer).
+- **Cosa fa**: le novità con schermate vere — copia documento fronte/retro (lo strumento e il foglio finale),
+  modifica del testo e delle celle delle tabelle, file .p7m, stampa affidabile — e gli altri 8 gruppi di funzioni.
+- **Confronto** prudente con Acrobat Reader, Acrobat Pro e i siti PDF online (senza prezzi non verificabili).
+- **Scarica**: tutti i file con le impronte **SHA-256** lette dall'ultima release; senza JavaScript o se GitHub
+  non risponde, link alla pagina delle release.
+- **Domande frequenti**: avvisi di sicurezza di Edge, Chrome, SmartScreen e macOS con i passi per superarli,
+  verifica dell'impronta, gratuità, privacy, sistemi, aggiornamenti, segnalazioni.
+- **Piè di pagina**: segnalazione dei problemi (GitHub Issues), codice sorgente, licenza; nessuna email.
+- Italiano, versione per telefono, tema chiaro e scuro, accessibile (salto al contenuto, focus visibile, titoli
+  in ordine, contrasti AA), CSP restrittiva, nessuna risorsa esterna né tracciamento.
+- Schermate rifatte dall'app finale con `site/strumenti/schermate.mjs` (documenti inventati, nessun documento
+  d'identità vero). Workflow `.github/workflows/pages.yml` **solo manuale**: nulla viene pubblicato da sé.
+- Test: `test/sito-download.test.js` (21) e 52 controlli Playwright (390 e 1280 px, chiaro e scuro, Windows,
+  Mac, Linux, telefono, GitHub che non risponde, senza JavaScript, tastiera).
 
 ---
 
@@ -254,7 +264,7 @@ vera su display virtuale (xvfb), sicurezza di Electron, `npm audit`, PDF di ogni
 | Controllo | Prima (inizio di questo lavoro) | Dopo |
 |---|---|---|
 | `npm ci` | ok | ok |
-| `npx vitest run` | 711 superati, 3 saltati (68 file) | **789 superati**, 3 saltati (75 file), 0 falliti |
+| `npx vitest run` | 711 superati, 3 saltati (68 file) | **792 superati**, 3 saltati (75 file), 0 falliti |
 | `npx vite build` | ok | ok |
 | Pacchetto Linux AppImage + `verifica-pacchetto` | non previsto | costruito, si avvia, moduli ok |
 | Installer Windows: script NSIS | associazioni standard | `installer.nsh` compila con makensis |
