@@ -4,6 +4,7 @@
 // di sistema. Nel browser si usa window.print() (le opzioni si scelgono nella finestra del browser).
 import { h, dialog, withProgress, toast, parsePageRanges } from './ui.js';
 import { openPdfJs, destroyPdf, renderPageToCanvas, pdfjs } from './pdf.js';
+import { printPixelBudget } from './printplan.js';
 import { platform } from './platform.js';
 import { normalizePreset, planPrintJobs, MAX_PAGES_PER_JOB } from './printplan.js';
 import { cleanIpcMessage } from './errors.js';
@@ -73,7 +74,7 @@ export async function printSources(app, sources, { preset: given } = {}) {
     if (v.remember) app.settings.set('printPreset', preset);
   }
 
-  const root = document.getElementById('print-root');
+  const root = printRoot();
   const urls = [];
   const opened = []; // documenti pdf.js aperti per la stampa (da liberare)
   try {
@@ -113,12 +114,17 @@ export async function printSources(app, sources, { preset: given } = {}) {
           done++;
           if (item.blank) { root.append(h('div', { class: 'print-page print-blank' })); continue; }
           const f = files[item.file];
+          // pagine grandi (A0, striscioni): risoluzione limitata a quella utile sul foglio e ai limiti del canvas,
+          // altrimenti Chromium crea un canvas vuoto e il foglio esce bianco
           const cv = await renderPageToCanvas(f.pdf, item.page, +preset.quality / 72, {
             annotationMode: preset.annots ? pdfjs.AnnotationMode.ENABLE_STORAGE : pdfjs.AnnotationMode.DISABLE, background: '#fff',
+            maxPixels: printPixelBudget(preset.quality),
           });
           if (preset.copyStamp) stampCopy(cv);
-          const blob = await new Promise((res) => cv.toBlob(res, 'image/jpeg', 0.9));
+          // trasparenze e font incorporati sono già «appiattiti» nell'immagine (sfondo bianco, niente alfa nel JPEG)
+          const blob = await new Promise((res) => cv.toBlob(res, 'image/jpeg', 0.92));
           cv.width = 0; cv.height = 0;
+          if (!blob) throw new Error(`La pagina ${item.page + 1} di «${f.name}» non può essere preparata per la stampa (memoria insufficiente). Prova con la qualità «Bozza» o stampa meno pagine alla volta.`);
           const url = URL.createObjectURL(blob); urls.push(url);
           const img = new Image(); img.src = url;
           await img.decode();
@@ -145,8 +151,20 @@ export async function printSources(app, sources, { preset: given } = {}) {
   }
 }
 
+/** Area di stampa: sempre figlia diretta di <body> (se stesse dentro #app, il CSS di stampa la nasconderebbe). */
+function printRoot() {
+  let root = document.getElementById('print-root');
+  if (!root) { root = document.createElement('div'); root.id = 'print-root'; }
+  if (root.parentElement !== document.body) document.body.append(root);
+  return root;
+}
+
+/** Attende che il browser abbia disegnato le immagini prima di stampare (su Windows altrimenti fogli bianchi). */
+function nextPaint() { return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 0)))); }
+
 async function sendToPrinter(preset) {
   document.body.classList.add('printing');
+  await nextPaint();
   try {
     if (platform.isElectron) {
       const r = await platform.print({
