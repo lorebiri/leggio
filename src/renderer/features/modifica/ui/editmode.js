@@ -20,11 +20,11 @@ export function editContentTool(app) {
     const layer = toolLayer(overlay, LAYER);
     layer.innerHTML = '';
     const version = doc.bytes;
-    pageBlocks(doc, pageIndex).then(({ blocks }) => {
+    pageBlocks(doc, pageIndex, app).then(({ blocks }) => {
       if (!S.active || doc.bytes !== version || !layer.isConnected) return;
       for (const b of blocks) {
         if (!b.text.trim()) continue;
-        const el = h('div', { class: 'lgm-block', title: 'Fai clic per modificare il testo', 'data-block': b.id });
+        const el = h('div', { class: 'lgm-block' + (b.cell ? ' cell' : ''), title: b.cell ? 'Fai clic per modificare questa cella' : 'Fai clic per modificare il testo', 'data-block': b.id });
         place(el, rectToCss(app, pageIndex, b.rect), 2);
         el.addEventListener('mousedown', (e) => { if (e.button === 0) e.stopPropagation(); });
         el.addEventListener('click', (e) => { e.stopPropagation(); openEditor(pageIndex, b, e, false); });
@@ -104,12 +104,15 @@ export function editContentTool(app) {
     const st = S.style;
     const size = (st.size || b.fontSize) * k;
     const lh = (b.lineHeight || b.fontSize * 1.2) * ((st.size || b.fontSize) / b.fontSize) * k;
-    const single = b.lines.length === 1;
+    // cella di tabella: l'editor va a capo nella larghezza disponibile della cella, come farà il testo nel PDF
+    const cellBox = cellCss(E.pageIndex, b, css);
+    const cellW = cellBox?.width || 0;
+    const single = b.lines.length === 1 && !cellW;
     const ed = h('div', { class: 'lgm-editor', contenteditable: 'plaintext-only', spellcheck: 'true', lang: 'it', role: 'textbox', 'aria-multiline': 'true', 'aria-label': 'Modifica testo (Invio per confermare, Esc per annullare)' });
     ed.textContent = E.text;
     Object.assign(ed.style, {
-      left: css.left - 3 + 'px', top: css.top - 3 + 'px', minWidth: css.width + 6 + 'px', minHeight: css.height + 6 + 'px',
-      width: single ? 'auto' : css.width + 6 + 'px', whiteSpace: single ? 'pre' : 'pre-wrap',
+      left: (cellBox ? cellBox.left : css.left) - 3 + 'px', top: css.top - 3 + 'px', minWidth: css.width + 6 + 'px', minHeight: css.height + 6 + 'px',
+      width: single ? 'auto' : (cellW || css.width) + 6 + 'px', whiteSpace: single ? 'pre' : 'pre-wrap',
       fontSize: size + 'px', lineHeight: lh + 'px', fontFamily: editorFont(), color: rgbToCss(st.color), background: rgbToCss(E.bg),
       fontWeight: st.bold ? '700' : '400', fontStyle: st.italic ? 'italic' : 'normal', textAlign: st.align === 'justify' ? 'justify' : st.align,
     });
@@ -132,6 +135,14 @@ export function editContentTool(app) {
     E.el = ed;
     ed.focus({ preventScroll: true });
     if (E.click) { placeCaret(ed, E.click); E.click = null; }
+  }
+
+  /** Riquadro CSS utile di una cella (dai suoi limiti), oppure null se il blocco non è una cella o i limiti non sono noti. */
+  function cellCss(pageIndex, b, css) {
+    const bd = b.cell?.bounds;
+    if (!bd || bd[0] == null || bd[2] == null || b.angle) return null;
+    const full = rectToCss(app, pageIndex, [bd[0], b.rect[1], bd[2], b.rect[3]]);
+    return full.width > css.width ? full : null;
   }
 
   const readText = (ed) => ed.innerText.replace(/ /g, ' ').replace(/\n$/, '');
