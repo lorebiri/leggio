@@ -7,6 +7,7 @@ import { applyRedaction, hasImages, findSignatures } from './redigi.js';
 import { getPreset, preselect, FIRMA, datiEnte, isDatoEnte, presetConsigliato } from './logica/preset.js';
 import { presetMenu, rigaProfiloEnte } from './ui-conferma.js';
 import { setMeasure } from './logica/testo.js';
+import { MODELLI_DOCUMENTO, CAMPI_DOCUMENTO, ORIENTAMENTI, zoneDocumento, campiDelLato, testoFiligrana, dataItaliana, modelloDocumento } from './logica/documenti-identita.js';
 setMeasure(measureChars);
 import { esclusioneEnte, st, salvaCopia, copyName, signatureCount, avvisoFirma, boxAvviso } from './comune.js';
 
@@ -33,7 +34,7 @@ function drawPage(app, i) {
     let css;
     const vp = app.viewer.getViewport(i); if (!vp) continue;
     const [l, t, w, hh] = viewportRect(vp, m.rect); css = { left: l, top: t, width: w, height: hh };
-    const el = app.ui.h('div', { class: 'lg-red' + (m.on ? '' : ' off') + (m.source === 'pagina' ? ' page' : ''), title: (m.text ? `«${m.text}» — ` : '') + (m.on ? 'sarà oscurato' : 'escluso: non sarà oscurato'), style: { left: css.left + 'px', top: css.top + 'px', width: css.width + 'px', height: css.height + 'px' } },
+    const el = app.ui.h('div', { class: 'lg-red' + (m.on ? '' : ' off') + (m.source === 'pagina' ? ' page' : ''), title: (m.text ? `«${m.text}» — ` : m.label ? `${m.label} — ` : '') + (m.on ? 'sarà oscurato' : 'escluso: non sarà oscurato'), style: { left: css.left + 'px', top: css.top + 'px', width: css.width + 'px', height: css.height + 'px' } },
       app.ui.h('button', { class: 'lg-x', title: 'Togli questa area', 'aria-label': 'Togli questa area', onpointerdown: (e) => e.stopPropagation(), onclick: (e) => { e.stopPropagation(); removeMark(app, m.id); } }, '×'));
     ov.append(el);
   }
@@ -100,6 +101,8 @@ function wirePointer(app) {
     if (!q) return;
     const rect = normRect([d.p[0], d.p[1], q[0], q[1]]);
     if (rect[2] - rect[0] < 3 || rect[3] - rect[1] < 3) return;
+    // modello di documento d'identità in attesa: il riquadro disegnato è il bordo della tessera
+    if (active.pendingTemplate) { placeTemplate(app, d.i, rect); return; }
     addMark(app, { page: d.i, rect, source: 'area' });
     redrawAll(app);
   };
@@ -146,6 +149,7 @@ export function redactTool() {
       active.applyBtn = h('button', { class: 'btn small primary', onclick: () => applyRedactions(app).catch((e) => app.reportError(e, 'Oscuramento non riuscito')) }, 'Applica oscuramento…');
       opts.append(...active.modeBtns,
         h('button', { class: 'btn small', onclick: () => openSearchPanel(app) }, 'Cerca e oscura…'),
+        h('button', { class: 'btn small', title: 'Modelli pronti per carta d\'identità elettronica, carta cartacea e patente', onclick: () => chooseIdTemplate(app).catch((e) => app.reportError(e, 'Documento d\'identità')) }, 'Documento d\'identità…'),
         h('button', { class: 'btn small', onclick: () => markPages(app).catch((e) => app.reportError(e, 'Pagine intere')) }, 'Pagine intere…'),
         h('button', { class: 'btn small', onclick: () => clearMarks(app) }, 'Togli tutti i segni'),
         active.counter, active.applyBtn);
@@ -165,6 +169,56 @@ export function redactTool() {
       if (n) app.ui.toast(`Hai ${n} aree segnate non ancora oscurate: riapri «Oscura» per applicarle.`, { kind: 'warning', timeout: 5000 });
     },
   };
+}
+
+// ---------- documenti d'identità ----------
+/** Sceglie modello, lato e campi; poi l'utente disegna il riquadro della tessera (o usa tutta la pagina). */
+async function chooseIdTemplate(app) {
+  const prev = app.settings.get('sic.idTemplate', {});
+  const lati = (id) => Object.keys(modelloDocumento(id)?.lati || {});
+  const v = await app.ui.dialog({
+    title: 'Oscura un documento d\'identità', okLabel: 'Avanti', width: 560,
+    body: app.ui.h('p', { class: 'muted' }, 'Scegli il documento e i dati da coprire. Poi trascina un riquadro attorno alla tessera nella scansione: Leggio segna le zone del modello, che puoi controllare, togliere o allargare prima di oscurare. Fronte e retro sulla stessa pagina: ripeti per ciascun lato.'),
+    fields: [
+      { type: 'select', name: 'modello', label: 'Documento', value: prev.modello || 'cie', options: MODELLI_DOCUMENTO.map((m) => ({ value: m.id, label: `${m.nome} — ${m.formato}` })) },
+      { type: 'select', name: 'lato', label: 'Lato', value: prev.lato || 'fronte', options: [
+        { value: 'fronte', label: 'Fronte (CIE, patente)' }, { value: 'retro', label: 'Retro (CIE, patente)' },
+        { value: 'interno', label: 'Facciate interne (carta cartacea)' }, { value: 'esterno', label: 'Copertina e retro (carta cartacea)' }] },
+      { type: 'select', name: 'orientamento', label: 'Come appare nella scansione', value: String(prev.orientamento ?? 0), options: ORIENTAMENTI.map((o) => ({ value: String(o.value), label: o.label })) },
+      ...CAMPI_DOCUMENTO.map((c) => ({ type: 'checkbox', name: 'c_' + c.id, label: c.label, value: prev.campi ? prev.campi.includes(c.id) : c.predefinito })),
+      { type: 'checkbox', name: 'pagina', label: 'La pagina contiene solo questo lato del documento (usa tutta la pagina, senza disegnare)', value: false },
+    ],
+    validate: (x) => {
+      if (!lati(x.modello).includes(x.lato)) return x.modello === 'cartacea' ? 'Per la carta cartacea scegli «Facciate interne» o «Copertina e retro».' : 'Per CIE e patente scegli «Fronte» o «Retro».';
+      if (!CAMPI_DOCUMENTO.some((c) => x['c_' + c.id])) return 'Scegli almeno un dato da coprire.';
+      return null;
+    },
+  });
+  if (!v) return;
+  const campi = CAMPI_DOCUMENTO.filter((c) => v['c_' + c.id]).map((c) => c.id);
+  const tpl = { modello: v.modello, lato: v.lato, orientamento: Number(v.orientamento) || 0, campi };
+  app.settings.set('sic.idTemplate', tpl);
+  if (!active) return;
+  active.pendingTemplate = tpl;
+  if (v.pagina) {
+    const i = app.viewer.page - 1;
+    const page = await app.activeDoc.pdf.getPage(i + 1);
+    placeTemplate(app, i, page.view.slice());
+    return;
+  }
+  setMode(app, 'area');
+  app.ui.toast('Trascina un riquadro esattamente attorno al bordo del documento.', { timeout: 7000 });
+}
+
+function placeTemplate(app, pageIndex, rect) {
+  const tpl = active.pendingTemplate; active.pendingTemplate = null;
+  const zone = zoneDocumento(tpl.modello, tpl.lato, tpl.campi, rect, { orientamento: tpl.orientamento });
+  for (const z of zone) addMark(app, { page: pageIndex, rect: z.rect, source: 'modello', text: undefined, label: z.label });
+  redrawAll(app);
+  const assenti = tpl.campi.filter((c) => !campiDelLato(tpl.modello, tpl.lato).some((x) => x.id === c));
+  const nomi = assenti.map((c) => CAMPI_DOCUMENTO.find((x) => x.id === c)?.label.toLowerCase()).filter(Boolean);
+  app.ui.toast(`${zone.length} ${zone.length === 1 ? 'zona segnata' : 'zone segnate'} dal modello. Controlla che coprano bene i dati (puoi aggiungere riquadri a mano).${nomi.length ? ` Su questo lato non ci sono: ${nomi.join(', ')}.` : ''}`, { timeout: 9000 });
+  active.idUsed = true;
 }
 
 async function clearMarks(app) {
@@ -341,7 +395,10 @@ async function applyRedactions(app) {
     fields: [
       { type: 'color', name: 'color', label: 'Colore dei riquadri', value: app.settings.get('sic.redColor', '#000000') },
       { type: 'text', name: 'label', label: 'Testo sui riquadri (facoltativo)', value: app.settings.get('sic.redLabel', ''), placeholder: 'es. OMISSIS' },
-      { type: 'checkbox', name: 'sanitize', label: 'Rimuovi anche le informazioni nascoste', help: 'Proprietà, metadati, commenti, allegati, livelli nascosti, JavaScript.', value: app.settings.get('sic.redSanitize', true) },
+      { type: 'checkbox', name: 'sanitize', label: 'Rimuovi anche le informazioni nascoste e i metadati', help: 'Proprietà (autore, titolo, programma), metadati XMP, commenti, allegati, livelli nascosti, JavaScript.', value: app.settings.get('sic.redSanitize', true) },
+      { type: 'text', name: 'wmDest', label: 'Filigrana: «Copia per uso esclusivo di…» (facoltativa)', value: '', placeholder: 'es. Comune di Pisa — Ufficio Tributi' },
+      { type: 'text', name: 'wmFin', label: 'Finalità (facoltativa)', value: '', placeholder: 'es. pratica TARI 2026' },
+      { type: 'text', name: 'wmData', label: 'Data della filigrana', value: dataItaliana() },
       { type: 'radio', name: 'out', value: nSig ? 'copy' : app.settings.get('sic.redOut', 'copy'), options: [
         { value: 'copy', label: `Salva una copia «${copyName(doc, 'oscurato')}» (consigliato: l'originale resta intatto)` },
         { value: 'doc', label: 'Applica al documento aperto (si può annullare finché non salvi)' }] },
@@ -349,13 +406,16 @@ async function applyRedactions(app) {
   });
   if (!v) return;
   app.settings.set('sic.redColor', v.color); app.settings.set('sic.redLabel', v.label); app.settings.set('sic.redSanitize', v.sanitize); app.settings.set('sic.redOut', v.out);
+  const watermark = testoFiligrana({ destinatario: v.wmDest, finalita: v.wmFin, data: v.wmData });
+  // copie di documenti d'identità o con filigrana: i metadati si tolgono sempre
+  const doSanitize = v.sanitize || !!watermark || on.some((m) => m.source === 'modello');
   const { pdfjs } = app.lib;
     const result = await app.ui.withProgress('Oscuramento in corso…', async (p) => {
     // termini da cercare ovunque nella verifica: risultati della ricerca e testo selezionato,
     // esclusi quelli che l'utente ha deliberatamente lasciato visibili altrove
     const offTexts = new Set(marks(app).filter((m) => !m.on && m.text).map((m) => m.text.toLowerCase()));
     const globalTerms = [...new Set(on.filter((m) => m.text && !offTexts.has(m.text.toLowerCase())).map((m) => m.text))];
-    const r = await applyRedaction({ pdfjs, pdf: doc.pdf, bytes, password: doc.password, byPage, globalTerms, color: v.color, label: v.label.trim(), doSanitize: v.sanitize, signal: p.signal, onProgress: (f, t) => p.set(f, t) });
+    const r = await applyRedaction({ pdfjs, pdf: doc.pdf, bytes, password: doc.password, byPage, globalTerms, color: v.color, label: v.label.trim(), watermark, doSanitize, signal: p.signal, onProgress: (f, t) => p.set(f, t) });
     return { ...r, areas: on.length };
   });
   if (!result) return;
@@ -376,6 +436,7 @@ async function applyRedactions(app) {
     result.annots ? `${result.annots} commenti, link o campi eliminati perché si trovavano nelle aree` : null,
     result.outlineChanged ? `${result.outlineChanged} segnalibri ripuliti` : null,
     result.structure ? 'struttura per l\'accessibilità tolta (poteva contenere il testo oscurato)' : null,
+    result.watermark ? `filigrana «${watermark}» inserita nell'immagine di tutte le pagine (non si può togliere)` : null,
     result.san ? `informazioni nascoste rimosse: ${sanTot} elementi (proprietà, metadati, allegati, commenti, livelli…)` : null,
     `verifica superata: nessuno dei testi oscurati è più presente nel file (${(result.ms / 1000).toFixed(1).replace('.', ',')} s)`,
   ].filter(Boolean);

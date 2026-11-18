@@ -64,8 +64,10 @@ export async function hasImages(page, OPS) {
  * Applica l'oscuramento. pdf: PDFDocumentProxy degli stessi byte. byPage: Map(i → rects PDF).
  * globalTerms: testi da cercare ovunque nella verifica. → risultato con { out, ver, … }
  */
-export async function applyRedaction({ pdfjs, pdf, bytes, password, byPage, globalTerms = [], color = '#000000', label = '', doSanitize = true, signal, onProgress }) {
+export async function applyRedaction({ pdfjs, pdf, bytes, password, byPage, globalTerms = [], color = '#000000', label = '', watermark = '', doSanitize = true, signal, onProgress }) {
   const t0 = performance.now();
+  // con la filigrana tutte le pagine diventano immagini con la filigrana dentro (non rimovibile)
+  if (watermark) { byPage = new Map(byPage); for (let i = 0; i < pdf.numPages; i++) if (!byPage.has(i)) byPage.set(i, []); }
   const { doc: pdfDoc } = await openDecrypted(bytes, password ?? '');
   const font = await embedTextFont(pdfDoc);
   const pages = [...byPage.keys()].sort((a, b) => a - b);
@@ -80,7 +82,7 @@ export async function applyRedaction({ pdfjs, pdf, bytes, password, byPage, glob
     const words = pageWords(tc.items, tc.styles);
     const keep = wordsOutside(words, rects);
     removedWords += words.length - keep.length;
-    const img = await renderRedactedPage(pdfjs, pdf, i, rects, { color, label, dpi: pages.length > 60 ? 200 : 300, quality: 0.8, signal });
+    const img = await renderRedactedPage(pdfjs, pdf, i, rects, { color, label, watermark, dpi: pages.length > 60 ? 200 : 300, quality: 0.8, signal });
     const r = await redactPage(pdfDoc, i, { image: img, view: img.view, rects, keepWords: keep, font });
     annots += r.annots; fields += r.fields;
   }
@@ -99,5 +101,5 @@ export async function applyRedaction({ pdfjs, pdf, bytes, password, byPage, glob
   const out = await pdfDoc.save({ useObjectStreams: true });
   onProgress?.((pages.length + 1) / (pages.length + 2), 'Verifica: controllo che i dati oscurati non siano più presenti…');
   const ver = await verifyRedaction(pdfjs, out, byPage, globalTerms, { signal, getDocumentOptions: PDFJS_ASSETS });
-  return { out, ver, pages: pages.length, areas: [...byPage.values()].reduce((a, r) => a + r.length, 0), removedTexts: removedWords, annots, fields, outlineChanged, structure, san, ms: performance.now() - t0 };
+  return { out, ver, watermark: !!watermark, pages: pages.length, areas: [...byPage.values()].reduce((a, r) => a + r.length, 0), removedTexts: removedWords, annots, fields, outlineChanged, structure, san, ms: performance.now() - t0 };
 }
