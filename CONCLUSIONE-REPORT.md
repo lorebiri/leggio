@@ -8,10 +8,11 @@ Data: 18 novembre 2026.
 
 - **4 bug segnalati dagli utenti: tutti riprodotti, coperti da test e corretti** (download «non sicuro»: tutto
   il possibile senza spendere + pipeline di firma pronta; testo nelle tabelle; file .p7m; stampa di fogli bianchi).
-- **2 funzioni nuove**: oscuramento dei documenti d'identità con modelli pronti e filigrana «Copia per uso
-  esclusivo di…»; pagina di download in `site/` con workflow per GitHub Pages (non pubblicato).
+- **Funzioni nuove**: **copia documento fronte/retro** su un solo foglio in dimensione reale (la «redazione»
+  chiesta da Lorenzo); pagina di download e presentazione in `site/` con workflow per GitHub Pages (non
+  pubblicato); come funzione secondaria, oscuramento dei documenti d'identità con filigrana.
 - **Pacchetto Linux** (AppImage) aggiunto e provato.
-- Test automatici: **prima 711 superati** (68 file) → **dopo **770 superati** (74 file; gli stessi 3 test saltati di prima, solo per macOS)**; collaudi nel browser e nell'app vera
+- Test automatici: **prima 711 superati** (68 file) → **dopo 789 superati** (75 file; gli stessi 3 test saltati di prima, solo per macOS); collaudi nel browser e nell'app vera
   tutti superati (elenco in fondo).
 - **Decisione principale per Lorenzo: la firma del codice** (raccomandata SignPath Foundation, gratuita).
 
@@ -154,7 +155,51 @@ nessun foglio bianco. Non verificabile qui: una stampante fisica Windows (serve 
 
 ## 2. Funzioni nuove
 
-### A. Oscuramento dei documenti d'identità
+### A. Copia documento fronte/retro su un foglio
+
+Come la funzione «copia carta d'identità» delle fotocopiatrici. Chi riceve la scansione di un documento (carta
+d'identità elettronica, patente, tessera sanitaria, tesserino del codice fiscale) con il fronte su una pagina A4
+e il retro su un'altra, ottiene **un solo foglio con fronte e retro, ritagliati, dritti e in dimensione reale**.
+
+**Come si usa.** Strumenti → **«Copia documento fronte/retro»** (anche senza documenti aperti):
+1. si parte dal PDF aperto, oppure si aggiungono PDF o **foto** (JPG, PNG, HEIC dove il sistema lo consente),
+   anche **trascinandoli**; con più documenti nello stesso PDF le **coppie** fronte/retro si scelgono pagina per
+   pagina (proposte: 1-2, 3-4…);
+2. Leggio **trova la tessera** in ogni pagina (anche ruotata, spostata, fotografata di sbieco, su fondi diversi,
+   bianca su bianco, con l'ombra dello scanner) e mostra il ritaglio raddrizzato; se sbaglia si trascinano i
+   **4 angoli** (anche da tastiera) o si usa «Ruota», «Capovolgi», «Rileva di nuovo», «Tutta la pagina»;
+3. opzioni: documento (**tessera ID-1 85,60 × 53,98 mm** oppure **carta d'identità cartacea** aperta
+   150 × 110 mm), foglio **A4 o Letter**, **dimensione reale (1:1)** o ingrandita, colori o **bianco e nero**,
+   **miglioramento del contrasto**, **filigrana** facoltativa «Copia per uso esclusivo di … – per … – data»;
+4. **«Crea il PDF»**: un PDF nuovo, un foglio per coppia, fronte sopra e retro sotto, centrati, con un sottile
+   contorno per ritagliare, a **300 dpi**. Si salva con «Salva con nome»; i file di partenza non cambiano.
+
+Tutto avviene sul computer: nessun dato viene inviato.
+
+**Come funziona il rilevamento** (`src/renderer/features/pagine/logica/copia-documento.js`): colore del fondo
+stimato dalla cornice della pagina, pixel diversi dal fondo più i contorni forti, chiusura e riempimento,
+componente più grande che non tocca il bordo, inviluppo convesso, rettangolo di area minima, lati rifiniti con le
+rette dei bordi (esclusi gli angoli arrotondati) per correggere la prospettiva, omografia per raddrizzare;
+orientamento orizzontale automatico (90°).
+
+**Test.** `test/copia-documento.test.js` (19) con scansioni sintetiche: tessera dritta, spostata, ruotata di 7° e
+-23°, su fondo grigio scuro, su fondo «legno» rumoroso, bianca su bianco, in prospettiva, con l'ombra del
+coperchio, in verticale, capovolta, pagina vuota; impaginazione A4/Letter, reale/ingrandita, carta cartacea;
+**nel PDF l'immagine misura 85,6 × 53,98 mm**. Collaudo nell'interfaccia vera `test/e2e/copia-documento.mjs`
+(**13/13**): da un PDF di due pagine e da due foto trascinate esce un foglio A4 con fronte e retro a
+85,60 × 53,98 mm, centrati, 1011 × 638 pixel (300 dpi), ritaglio con il contenuto giusto, bianco e nero; la
+scansione di partenza resta identica. Il collaudo ha trovato e fatto correggere un errore (immagini disegnate
+alla dimensione in pixel invece che in millimetri).
+
+**Limiti.** Quando la tessera è in verticale non si può sapere se è girata a destra o a sinistra: se esce
+capovolta, basta «Capovolgi» (il 180° non si riconosce in automatico). La misura della carta cartacea viene dalla
+scheda PRADO del Consiglio UE (150 × 110 mm aperta) e va confermata con un documento vero. Per la stampa 1:1 la
+finestra di stampa di altri programmi non deve usare «Adatta alla pagina» (la stampa di Leggio è già al 100%).
+Non provato con scansioni di documenti veri (non ce ne sono qui, per ovvi motivi di riservatezza).
+
+### A2. Oscuramento dei documenti d'identità (funzione secondaria)
+
+Realizzata prima della correzione di Jarvis sul significato di «redazione»: resta disponibile.
 
 **Come si usa.** Apri la scansione → strumento **Oscura** → **«Documento d'identità…»**:
 1. scegli il documento — **carta d'identità elettronica** (fronte/retro), **carta d'identità cartacea**
@@ -185,8 +230,6 @@ prima di applicare (il riepilogo lo ricorda); la tessera va inquadrata con un ri
 rotazioni di 90°, non inclinazioni). Le pagine oscurate diventano immagini (file più grande; il testo fuori
 dalle aree resta ricercabile).
 
-> Se per Lorenzo «redazione» voleva dire altro (per esempio compilare documenti), questa parte si riadatta.
-
 ### B. Pagina di download (`site/`)
 
 - Riconosce il sistema e propone il pulsante giusto (Windows installer o portatile; Mac Apple Silicon o Intel;
@@ -211,7 +254,7 @@ vera su display virtuale (xvfb), sicurezza di Electron, `npm audit`, PDF di ogni
 | Controllo | Prima (inizio di questo lavoro) | Dopo |
 |---|---|---|
 | `npm ci` | ok | ok |
-| `npx vitest run` | 711 superati, 3 saltati (68 file) | **770 superati**, 3 saltati (74 file), 0 falliti |
+| `npx vitest run` | 711 superati, 3 saltati (68 file) | **789 superati**, 3 saltati (75 file), 0 falliti |
 | `npx vite build` | ok | ok |
 | Pacchetto Linux AppImage + `verifica-pacchetto` | non previsto | costruito, si avvia, moduli ok |
 | Installer Windows: script NSIS | associazioni standard | `installer.nsh` compila con makensis |
@@ -225,7 +268,8 @@ vera su display virtuale (xvfb), sicurezza di Electron, `npm audit`, PDF di ogni
 | Electron: stampa (`stampa-electron.cjs`, nuovo) | **0/4** | 4/4 |
 | Browser: nucleo (`nucleo-correzioni.mjs`) | 12/12 | 12/12 |
 | Browser: stampa (`stampa.mjs`, nuovo) | **1/8** | 8/8 |
-| Browser: documenti d'identità (`redazione-documenti.mjs`, nuovo) | — | 9/9 |
+| Browser: copia documento fronte/retro (`copia-documento.mjs`, nuovo) | — | 13/13 |
+| Browser: oscuramento documenti d'identità (`redazione-documenti.mjs`, nuovo) | — | 9/9 |
 | Browser: PDF di ogni tipo (`pdf-vari.mjs`, nuovo) | — | 22/22 |
 | Browser: modifica di una cella (`tabelle-modifica.mjs`, nuovo) | **2/6** | 6/6 |
 
@@ -259,7 +303,8 @@ I .p7m firmati sono provati in `p7m-app.mjs` e nei test CAdES esistenti.
 4. **Pacchetto Linux**: tenerlo nelle release (costruito e provato qui) o toglierlo.
 5. **Associazione dei .p7m su Windows**: oggi Leggio diventa il programma predefinito per i .p7m solo se non ce n'è
    già uno. Va bene così o deve solo comparire in «Apri con»?
-6. **Significato di «redazione»**: confermare che si intendesse l'oscuramento.
+6. **Copia documento fronte/retro**: provarla con una scansione vera e confermare la misura della carta
+   d'identità cartacea (150 × 110 mm aperta).
 7. **`npm audit`**: 6 avvisi «moderate» solo negli strumenti di build (minimatch dentro electron-builder): si
    può aggiungere un `overrides` in `package.json` (cambio di dipendenze) o aspettare electron-builder.
 8. **Prova su Windows reale**: stampa su una stampante fisica, installer (icone e tipo dei .p7m in Esplora
@@ -296,6 +341,13 @@ dati personali.
 - PDF da foto, scansioni, Word, Excel, PowerPoint, pagine web; esportazione in Word, Excel, testo, immagini.
 - OCR: rende ricercabili le scansioni, senza Internet; confronto tra due versioni; PDF/A per la conservazione.
 
+**Copia dei documenti (novità)**
+- **Copia documento fronte/retro**: dalla scansione del fronte e del retro di carta d'identità, patente o tessera
+  sanitaria, Leggio trova la tessera, la ritaglia e la raddrizza da solo e mette fronte e retro su **un solo
+  foglio, in dimensione reale**, pronto da stampare o da allegare. Funziona con PDF e foto, anche con più
+  documenti insieme; bianco e nero, contrasto, filigrana «Copia per uso esclusivo di … – data».
+  Tutto sul computer, nessun dato inviato.
+
 **Moduli e firme**
 - Compilare qualunque modulo, anche non compilabile; riempire con un clic i dati personali o dell'ente.
 - Firma digitale con certificato o con il programma già installato (Dike, ArubaSign…), anche di molti file.
@@ -306,7 +358,7 @@ dati personali.
 **Proteggere i dati**
 - Password e limiti a stampa, copia e modifica.
 - Oscuramento vero dei dati riservati (codici fiscali, IBAN, email, telefoni…), anche cercandoli da solo.
-- **Novità: copie dei documenti d'identità** (carta d'identità elettronica o cartacea, patente) con modelli pronti:
+- Copie dei documenti d'identità con dati oscurati (carta d'identità elettronica o cartacea, patente), con modelli pronti:
   si scelgono i dati da coprire (numero, codice MRZ, firma, foto, codice fiscale, indirizzo), che vengono
   eliminati davvero dal file, con la filigrana **«Copia per uso esclusivo di … – data»** e senza metadati.
 - Pulizia dei dati nascosti; preparazione per la pubblicazione; riduzione delle dimensioni per la PEC.
