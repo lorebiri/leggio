@@ -49,6 +49,28 @@ describe('migrazione dalla 0.2', () => {
     expect(b.profilo().nome).toBe('Ugo');
     expect(legacy.getItem('leggio.moduli.profilo.v1')).toBe(null);
   });
+
+  it('una migrazione interrotta a metà non lascia firme doppie al riavvio', async () => {
+    const legacy = memoryStorage();
+    legacy.setItem('leggio.moduli.firme.v1', JSON.stringify([
+      { id: 'a', kind: 'signature', dataUrl: PNG, w: 30, h: 10 },
+      { id: 'b', kind: 'initials', dataUrl: PNG, w: 10, h: 10 },
+    ]));
+    const backend = createMemoryBackend();
+    const scrivi = backend.scriviBlob; let n = 0;
+    backend.scriviBlob = async (id, d) => { if (++n === 2) throw new Error('disco pieno'); return scrivi(id, d); };
+    const a = createArchivio({ backend, legacyStorage: legacy });
+    expect(await a.apri()).toBe(true);
+    expect(a.firme()).toHaveLength(0);
+    // un'altra modifica nella stessa sessione viene salvata: non deve fissare la migrazione a metà
+    a.salvaProfilo({ nome: 'Ada' }); await a.salvaOra();
+    expect(legacy.getItem('leggio.moduli.firme.v1')).not.toBe(null);
+    backend.scriviBlob = scrivi;
+    const b = createArchivio({ backend, legacyStorage: legacy });
+    await b.apri();
+    expect(b.firme()).toHaveLength(2);
+    expect(legacy.getItem('leggio.moduli.firme.v1')).toBe(null);
+  });
 });
 
 describe('password', () => {

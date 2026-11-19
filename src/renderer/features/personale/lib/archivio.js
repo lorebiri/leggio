@@ -125,6 +125,11 @@ export function createArchivio({ backend, legacyStorage = null, chiediPassword =
     if (!Array.isArray(firmeVecchie)) firmeVecchie = [];
     if (!profiloVecchio || typeof profiloVecchio !== 'object' || Array.isArray(profiloVecchio)) profiloVecchio = {};
     let n = 0;
+    // se qualcosa va storto si torna allo stato di prima: un salvataggio successivo non deve fissare una
+    // migrazione a metà (al prossimo avvio le firme verrebbero copiate due volte, o il localStorage resterebbe)
+    const prima = { firme: indice.firme.slice(), profilo: { ...indice.profilo }, migrazioni: { ...indice.migrazioni } };
+    const annulla = () => { indice.firme = prima.firme; indice.profilo = prima.profilo; indice.migrazioni = prima.migrazioni; };
+    try {
     for (const [i, f] of firmeVecchie.entries()) {
       if (!f || typeof f.dataUrl !== 'string' || !f.dataUrl.startsWith('data:image/')) continue;
       try {
@@ -140,6 +145,7 @@ export function createArchivio({ backend, legacyStorage = null, chiediPassword =
     indice.migrazioni['firme-0.2'] = ora();
     sporco = true;
     await salvaOra();
+    } catch (e) { annulla(); sporco = false; purgaInAttesa = false; throw e; }
     // solo dopo il salvataggio riuscito: via dal localStorage (che non è cifrato)
     try { legacyStorage.removeItem(LEGACY.firme); legacyStorage.removeItem(LEGACY.profilo); } catch { /* */ }
     log('info', 'archivio personale: migrazione dalla 0.2', { firme: n, profilo: Object.keys(profiloVecchio).length });
