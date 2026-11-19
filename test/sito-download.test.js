@@ -292,7 +292,8 @@ describe('index.html', () => {
     expect(html).not.toMatch(/<(script|link)\b(?![^>]*rel="canonical")[^>]*(src|href)="(https?:)?\/\//);
     expect(html).not.toMatch(/\bstyle="|<style\b|\bon[a-z]+="/);
     const esterni = [...html.matchAll(/<(?!link rel="canonical")[^>]*href="(https?:[^"]+)"/g)].map((m) => m[1]);
-    for (const u of esterni) expect(u, u).toMatch(/^https:\/\/github\.com\/lorebiri\/leggio(\/|$)/);
+    // unica eccezione: il sito dell'autore, nel piè di pagina
+    for (const u of esterni) expect(u, u).toMatch(/^(https:\/\/github\.com\/lorebiri\/leggio(\/|$)|https:\/\/lorebiri\.github\.io\/$)/);
     expect(html).not.toMatch(/mailto:/);
   });
 });
