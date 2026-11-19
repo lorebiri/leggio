@@ -301,9 +301,15 @@ describe('sicurezza.html (avvisi di sicurezza)', () => {
   const testo = html.replace(/<[^>]+>/g, ' ');
 
   it('spiega il perché in modo onesto e invita a scaricare solo dalle fonti ufficiali', () => {
-    for (const t of ['non ha ancora una firma digitale a pagamento', 'Non vuol dire che contenga un virus', 'reputazione',
+    for (const t of ['non ha una firma digitale a pagamento', 'per ora non è previsto', 'La versione portatile non aiuta', 'ufficio informatico', 'Non vuol dire che contenga un virus', 'reputazione',
       'Il codice è aperto', 'li costruisce GitHub', 'SHA-256', 'solo dalla pagina ufficiale', 'GitHub Releases']) expect(testo, t).toContain(t);
     expect(html).toContain('href="https://github.com/lorebiri/leggio/releases"');
+  });
+  it('nessuna promessa di una firma in arrivo (scelta di Lorenzo: budget zero)', () => {
+    const pagine = [['sicurezza.html', html], ['index.html', readFileSync(join(SITO, 'index.html'), 'utf8')]];
+    for (const [nome, t] of pagine) {
+      for (const r of [/firma è prevista/i, /è prevista, e quando/i, /versione firmata/i, /quando ci sarà/i, /non è \(ancora\) firmato/i, /non ha ancora una firma/i, /per ora, non è firmato/i, /spariranno/i, /sparirà/i]) expect(t, `${nome}: ${r}`).not.toMatch(r);
+    }
   });
   it('una guida per sistema, apribile, con le ancore usate dalla pagina principale', () => {
     for (const id of ['perche', 'guide', 'windows', 'mac', 'linux', 'smart-app-control', 'antivirus', 'verifica']) expect(html, id).toContain(`id="${id}"`);

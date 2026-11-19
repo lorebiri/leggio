@@ -86,13 +86,13 @@ Per rivedere «Novità di questa versione»: nella console degli strumenti svilu
 
 ## Prima apertura: cosa vedono gli utenti (finché l'app non è firmata)
 
-Leggio per ora **non è firmato** con certificati Apple o Microsoft (costano, vedi sotto). L'app è sicura, ma i
+Leggio **non è firmato** con certificati Apple o Microsoft: hanno un costo annuale e, per scelta di Lorenzo (budget zero), la firma per ora non è prevista. L'app è sicura, ma i
 sistemi operativi avvisano al primo avvio. Testo da incollare nelle note di ogni release:
 
 ```markdown
 ### Prima apertura
 
-Leggio per ora non è firmato digitalmente ed è un programma nuovo: Windows e macOS avvisano per prudenza, non perché
+Leggio è gratuito e non è firmato digitalmente (la firma ha un costo annuale, per ora non previsto) ed è un programma nuovo: Windows e macOS avvisano per prudenza, non perché
 ci sia un virus. Scaricalo solo da https://lorebiri.github.io/leggio/ o da questa pagina, e controlla l'impronta
 SHA-256 con il file `SHA256SUMS.txt` qui sotto.
 **Guida passo per passo, con le figure:** https://lorebiri.github.io/leggio/sicurezza.html
@@ -107,7 +107,7 @@ Da macOS 15 Sequoia il vecchio «clic destro → Apri» non basta più. Può ser
 (Edge: **…** → **Mantieni** → **Mostra altro** → **Mantieni comunque**). All'avvio, se compare «Windows ha protetto
 il PC», premi **Ulteriori informazioni** e poi **Esegui comunque**. Leggio si installa solo per il tuo utente e non
 chiede la password di amministratore. Se il blocco viene dal Controllo intelligente delle app di Windows 11 o
-dall'antivirus, leggi la guida.
+dall'antivirus, leggi la guida (la versione portatile viene bloccata allo stesso modo).
 
 **Linux** — Rendi eseguibile l'AppImage (`chmod +x Leggio-*.AppImage`); se non parte, installa `libfuse2`
 (su Ubuntu 24.04 `libfuse2t64`).
