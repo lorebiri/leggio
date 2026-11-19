@@ -133,7 +133,7 @@ I modelli sono gli stessi dello studio di fattibilità (`docs/IA-FATTIBILITA.md`
 - Gemma 4 E2B Q4_K_M, SHA-256 `740185b2…34b8`;
 - Qwen3.5-2B Q4_K_M, SHA-256 `aaf42c8b…9223`.
 
-La versione di llama.cpp è b12538, la stessa dello studio.
+La versione di llama.cpp è b12540, la prima release pubblicata dopo la b12538 usata nello studio.
 
 I documenti di prova, pubblici, sono in `documenti.json`:
 

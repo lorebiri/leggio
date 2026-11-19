@@ -158,7 +158,7 @@ function Prepara-Modello($m) {
 # ---------------------------------------------------------------- 3. le prove
 $doc = (Get-Content -Raw -Encoding UTF8 -Path (Join-Path $Qui 'documenti.json') | ConvertFrom-Json).documenti
 if ($Breve) { $doc = @($doc[0], $doc[1]) }
-$Sistema = 'Sei l''assistente di un ufficio pubblico italiano. Lavori solo sul documento fornito: non aggiungere informazioni che non ci sono. Rispondi in italiano corretto.'
+$PromptSistema = 'Sei l''assistente di un ufficio pubblico italiano. Lavori solo sul documento fornito: non aggiungere informazioni che non ci sono. Rispondi in italiano corretto.'
 $schemaDomanda = @{ type = 'object'; properties = @{ risposta = @{ type = 'string' }; pagina = @{ type = @('integer', 'null') } }; required = @('risposta', 'pagina') }
 $schemaDati = @{ type = 'object'; properties = @{ importo = @{ type = @('string', 'null') }; cig = @{ type = @('string', 'null') }; cup = @{ type = @('string', 'null') }; rup = @{ type = @('string', 'null') } }; required = @('importo', 'cig', 'cup', 'rup') }
 
@@ -171,7 +171,7 @@ function Normalizza($s) {
 
 function Chiedi($porta, $testo, $compito, $max, $schema) {
   $corpo = @{
-    messages = @(@{ role = 'system'; content = $Sistema }, @{ role = 'user'; content = "DOCUMENTO:`n$testo`n`n---`n$compito" })
+    messages = @(@{ role = 'system'; content = $PromptSistema }, @{ role = 'user'; content = "DOCUMENTO:`n$testo`n`n---`n$compito" })
     max_tokens = $max; temperature = 0; seed = 1; cache_prompt = $true
     chat_template_kwargs = @{ enable_thinking = $false }; reasoning_format = 'none'
   }
@@ -239,7 +239,7 @@ function Prova-Modello($m) {
         $pg = ($risp -and $risp.pagina -eq $q.pagina)
         if ($ok) { $giuste++ }; if ($ok -and $pg) { $pagine++ }
         $esito.compiti += [ordered]@{ documento = $d.id; compito = 'domanda'; secondi = $r.secondi; giusta = $ok; pagina_giusta = $pg }
-        Scrivi ("    domanda: {0} s - {1}" -f $r.secondi, $(if ($ok) { 'giusta' } else { 'sbagliata' }))
+        Scrivi ("    domanda: {0} s - {1}{2}" -f $r.secondi, $(if ($ok) { 'giusta' } else { 'sbagliata' }), $(if ($ok -and $pg) { ', pagina giusta' } elseif ($ok) { ', pagina diversa' } else { '' }))
       }
       if (-not $Breve -and $d.id -like '02-*') {
         $r = Chiedi $porta $d.testo 'Scrivi un riassunto del documento in 5 frasi brevi, in italiano corretto, usando solo informazioni presenti.' 300 $null

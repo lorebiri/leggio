@@ -20,8 +20,8 @@ permissions:
   contents: read
 
 env:
-  # stessa versione di llama.cpp usata nello studio di fattibilità (commit 8043748)
-  LLAMA_TAG: b12538
+  # llama.cpp: prima release dopo la versione usata nello studio di fattibilità (b12538, commit 8043748)
+  LLAMA_TAG: b12540
 
 jobs:
   kit:
