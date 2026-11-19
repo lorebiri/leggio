@@ -35,7 +35,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download $env:LLAMA_TAG -R ggml-org/llama.cpp -p "llama-$env:LLAMA_TAG-bin-win-cpu-x64.zip" -D scaricati
+          # non tutte le versioni hanno una release: si prende la prima pubblicata a partire da LLAMA_TAG
+          $min = [int]($env:LLAMA_TAG.TrimStart('b'))
+          $rel = gh api "repos/ggml-org/llama.cpp/releases?per_page=100" | ConvertFrom-Json
+          $scelta = $rel | Where-Object { $_.tag_name -match '^b\d+$' -and [int]$_.tag_name.TrimStart('b') -ge $min } |
+                    Sort-Object { [int]$_.tag_name.TrimStart('b') } | Select-Object -First 1
+          if (-not $scelta) { throw "nessuna release da $env:LLAMA_TAG in poi" }
+          $tag = $scelta.tag_name
+          "Release scelta: $tag"
+          # impronte dei pacchetti (servono anche all'app: download su richiesta con verifica SHA-256)
+          $scelta.assets | Where-Object { $_.name -match 'bin-(win-cpu-x64|win-cpu-arm64|macos-arm64|macos-x64|ubuntu-x64)\.(zip|tar\.gz)$' } |
+            ForEach-Object { "{0}  {1}  {2}" -f $_.digest, $_.size, $_.name }
+          gh release download $tag -R ggml-org/llama.cpp -p "llama-$tag-bin-win-cpu-x64.zip" -D scaricati
+          $env:LLAMA_TAG = $tag
           $zip = Get-ChildItem scaricati/*.zip | Select-Object -First 1
           Expand-Archive $zip.FullName -DestinationPath kit-prova-ia/llama -Force
           # alcune versioni mettono i file in una sottocartella: li riporta in llama/
