@@ -1,7 +1,7 @@
 # Leggio 0.3 — firme, timbri, rubrica e compilazione in serie
 
-Branch `claude/firme-rubrica-0.3` (da main 0.2.2). La versione in package.json **non** è cambiata e non c'è stato
-nessun merge o rilascio: decide Lorenzo. Dettagli tecnici in `docs/aree/personale.md` e `docs/aree/moduli.md`.
+Branch `claude/firme-rubrica-0.3` (da main 0.2.2). La versione in package.json è 0.3.0; non c'è stato
+nessun merge, tag o rilascio: decide Lorenzo. Dettagli tecnici in `docs/aree/personale.md` e `docs/aree/moduli.md`.
 
 ## Cosa c'è e come si usa
 
