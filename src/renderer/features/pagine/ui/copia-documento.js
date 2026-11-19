@@ -76,13 +76,26 @@ export async function apriCopiaDocumento(app) {
   pane.el.addEventListener('drop', (e) => {
     e.preventDefault(); e.stopPropagation(); pane.el.classList.remove('cd-drop');
     const files = [...(e.dataTransfer?.files || [])];
-    (async () => { for (const f of files) await aggiungiFile({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) }); })().catch((err) => app.reportError(err, 'File non aggiunti'));
+    aggiungiTutti(files.map((f) => ({ name: f.name, leggi: async () => new Uint8Array(await f.arrayBuffer()) })));
   });
+
+  // un file non valido non deve fermare gli altri: si aggiungono tutti quelli buoni e si segnalano gli altri insieme
+  async function aggiungiTutti(voci) {
+    const scartati = [];
+    for (const v of voci) {
+      try { await aggiungiFile({ name: v.name, bytes: v.bytes || await v.leggi() }); } catch (err) { scartati.push([v.name, err]); }
+    }
+    if (scartati.length === 1) app.reportError(scartati[0][1], 'File non aggiunto');
+    else if (scartati.length > 1) {
+      for (const [, err] of scartati) console.warn('Copia documento: file non aggiunto —', err);
+      app.ui.dialog({ title: 'Alcuni file non sono stati aggiunti', message: scartati.map(([n, err]) => { const m = String(err?.message || err); return m.includes(n) ? m : `«${n}»: ${m}`; }).join('\n'), cancelLabel: null, okLabel: 'Ho capito' });
+    }
+  }
 
   // ---------- sorgenti ----------
   async function scegliFile() {
     const files = await app.platform.openFiles({ multiple: true, raw: true, title: 'Scansioni del documento', filters: [{ name: 'PDF e foto', extensions: ['pdf', 'jpg', 'jpeg', 'png', 'heic', 'heif', 'webp'] }] });
-    for (const f of files || []) await aggiungiFile(f);
+    await aggiungiTutti((files || []).map((f) => ({ name: f.name, bytes: f.bytes })));
   }
   async function aggiungiDoc(doc) {
     const { pdf } = await openPdfJs(await app.currentBytes(doc), { password: doc.password });

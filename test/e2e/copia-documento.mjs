@@ -122,6 +122,27 @@ try {
   const r2 = await verificaUscita();
   check('dalle foto: un foglio con due lati in scala reale', r2.pagine === 1 && r2.cm.length === 2 && r2.cm.every((q) => Math.abs(q.w - 85.6) < 0.05), JSON.stringify({ p: r2.pagine, cm: r2.cm, imgs: r2.imgs }));
   check('bianco e nero', r2.foto && Math.abs(r2.foto[0] - r2.foto[1]) < 6 && Math.abs(r2.foto[1] - r2.foto[2]) < 6, JSON.stringify(r2.foto));
+
+  // ---------- 3) file non validi trascinati insieme a foto buone: non fermano le altre ----------
+  await page.evaluate(async () => { const app = __leggio; for (const d of [...app.docs]) { d.dirty = false; await app.closeDoc(d); } app.tools.run('copia-documento'); });
+  await page.waitForSelector('.cd-vuoto');
+  await page.evaluate(async (SC) => {
+    const scan = eval(SC);
+    const dt = new DataTransfer();
+    dt.items.add(new File(['appunti'], 'nota.txt', { type: 'text/plain' }));
+    dt.items.add(new File([new Uint8Array([0xff, 0xd8, 0xff, 1, 2, 3])], 'rovinata.jpg', { type: 'image/jpeg' }));
+    for (const [lato, n] of [['fronte', 'fronte.png'], ['retro', 'retro.png']]) {
+      const c = scan(lato, { cx: 100, cy: 120, angolo: 4, fondo: '#ffffff' }); const b = await new Promise((r) => c.toBlob(r, 'image/png'));
+      dt.items.add(new File([b], n, { type: 'image/png' }));
+    }
+    document.querySelector('.av-pane').dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+  }, SCANSIONE);
+  await page.waitForFunction(() => document.querySelectorAll('.cd-stato').length === 2 && [...document.querySelectorAll('.dlg')].length, null, { timeout: 30000 }).catch(() => {});
+  const st3 = await page.$$eval('.cd-stato', (els) => els.map((e) => e.textContent));
+  const msg3 = await page.evaluate(() => [...document.querySelectorAll('.dlg')].map((d) => d.textContent).join(' | '));
+  check('un file non valido nel gruppo non ferma gli altri: le due foto buone sono aggiunte', st3.length === 2 && st3.every((s) => /^Documento trovato/.test(s)), st3.join(' | '));
+  check('i file scartati sono elencati tutti in un solo messaggio', /nota\.txt/.test(msg3) && /rovinata\.jpg/.test(msg3), msg3);
+  await page.keyboard.press('Escape');
   check('nessun errore nella pagina', errors.length === 0, errors.join(' | '));
 } catch (e) { check('collaudo completato', false, e.message); }
 await browser.close();
