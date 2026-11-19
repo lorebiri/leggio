@@ -1,0 +1,30 @@
+{
+  "id": "14-fattura-esempio-unife",
+  "url": "https://www.unife.it/progetto/glfe/faq/linee-guida-per-la-gestione-delle-fatture-elettroniche/allegato-3_fattura-elettronica-parcella-professionisti",
+  "fonte": "Università degli Studi di Ferrara - Linee guida per la gestione delle fatture elettroniche, allegato 3 (esempio di parcella elettronica annotata)",
+  "tipo": "fattura",
+  "data_documento": "2015-11-06",
+  "campi": {
+    "oggetto": "Fattura elettronica TD06 (parcella) di un professionista verso l'Università degli Studi di Ferrara",
+    "importo": "2.277,62",
+    "importo_note": "Importo totale documento (imponibile 1.866,90 + IVA 410,72); netto a pagare 1.918,60 dopo ritenuta di 359,02",
+    "cig": "0833176694",
+    "cup": "F78G10000330002",
+    "scadenze": [],
+    "controparte": "Università degli Studi di Ferrara",
+    "rup": null
+  },
+  "domande": [
+    {"domanda": "Qual è il numero del documento?", "risposta": "PA0082015", "accettabili": [], "pagina": 2},
+    {"domanda": "A quanto ammonta la ritenuta d'acconto?", "risposta": "359.02", "accettabili": ["359,02"], "pagina": 2},
+    {"domanda": "Qual è l'importo netto del pagamento?", "risposta": "1918.60", "accettabili": ["1.918,60", "1918,60"], "pagina": 3}
+  ],
+  "riassunto": "Il documento è un esempio annotato di fattura elettronica di tipo TD06 (parcella), pubblicato dall'Università di Ferrara nelle sue linee guida per il controllo delle fatture. La parcella n. PA0082015 del 6 novembre 2015 è emessa da un professionista verso l'Università degli Studi di Ferrara, tramite l'intermediario SATA S.r.l., con riferimento al contratto n. 233, al CIG 0833176694 e al CUP F78G10000330002. L'importo totale è di 2.277,62 euro, con imponibile di 1.866,90 euro, IVA al 22% di 410,72 euro e contributo cassa al 4% di 71,80 euro. Dopo la ritenuta d'acconto del 20% (359,02 euro) il netto da pagare con bonifico è di 1.918,60 euro. Le note a margine indicano quando la fattura va rifiutata, per esempio se CIG e CUP non sono negli appositi campi o se compare la scissione dei pagamenti dopo il 14/07/2018.",
+  "punti_chiave": [
+    "Esempio di parcella elettronica TD06 verso l'Università di Ferrara",
+    "Numero PA0082015 del 6 novembre 2015, contratto n. 233",
+    "CIG 0833176694 e CUP F78G10000330002",
+    "Totale 2.277,62 euro; ritenuta 359,02; netto 1.918,60",
+    "Note di controllo: casi in cui la fattura va rifiutata"
+  ]
+}

@@ -1,0 +1,7 @@
+{
+ "modello": "Qwen3.5-4B-Q4_K_M.gguf",
+ "caricamento_s": 3.5,
+ "ctx": 16384,
+ "ram_picco_mb": 13053,
+ "totale_s": 9159
+}

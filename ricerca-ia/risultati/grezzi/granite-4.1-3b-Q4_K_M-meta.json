@@ -1,0 +1,7 @@
+{
+ "modello": "granite-4.1-3b-Q4_K_M.gguf",
+ "caricamento_s": 3.49,
+ "ctx": 16384,
+ "ram_picco_mb": 13066,
+ "totale_s": 9262
+}

@@ -1,0 +1,5 @@
+node_modules/
+modelli/
+banco/pdf/
+*.gguf
+__pycache__/

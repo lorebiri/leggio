@@ -1,0 +1,31 @@
+{
+  "id": "09-avviso-carta-spesa-pisa",
+  "url": "https://www.comune.pisa.it/content/download/24260/556586/file/ALLEGATO%20A-%20Bando%20Carta%20spesa%202025.pdf",
+  "fonte": "Comune di Pisa - Direzione DD07 Sociale (avviso pubblico; data non riportata nel testo, successivo alla delibera di Giunta n. 131 del 05/06/2025)",
+  "tipo": "avviso",
+  "data_documento": null,
+  "campi": {
+    "oggetto": "Avviso pubblico per la concessione di un contributo una tantum alle famiglie residenti con nucleo di 1 o 2 componenti e ISEE fino a 15.000,00 euro per l'acquisto di beni di prima necessità",
+    "importo": "170.000,00",
+    "importo_note": "Fondo complessivo stanziato con delibera di Giunta n. 131/2025; contributo di 200,00 euro (1 componente) o 300,00 euro (2 componenti)",
+    "cig": null,
+    "cup": null,
+    "scadenze": ["2025-07-30"],
+    "controparte": null,
+    "rup": "Massimiliano Bacchiet"
+  },
+  "domande": [
+    {"domanda": "Quanto spetta a un nucleo familiare con due componenti?", "risposta": "€ 300,00", "accettabili": ["300,00", "300 euro"], "pagina": 2},
+    {"domanda": "Su quale supporto viene erogato il contributo al beneficiario?", "risposta": "Sulla tessera sanitaria", "accettabili": ["tessera sanitaria"], "pagina": 4},
+    {"domanda": "Qual è la percentuale minima del controllo a campione sui beneficiari?", "risposta": "almeno del 20%", "accettabili": ["20%"], "pagina": 4}
+  ],
+  "riassunto": "Il Comune di Pisa pubblica un avviso per un contributo una tantum destinato all'acquisto di beni di prima necessità (Carta spesa 2025). Possono chiederlo i residenti con nucleo familiare di 1 o 2 componenti e ISEE fino a 15.000,00 euro, cioè famiglie escluse dalla carta acquisti nazionale. Il fondo è di 170.000,00 euro, stanziato con la delibera di Giunta n. 131 del 05/06/2025, e il contributo è di 200,00 euro per un componente e 300,00 euro per due, caricato sulla tessera sanitaria. Le domande si presentano online con SPID, CNS o CIE dal 30/06/2025 alle ore 12:00 fino alle ore 23:59 del 30/07/2025, e la graduatoria dà priorità all'ISEE più basso. Sono previsti controlli a campione su almeno il 20% dei beneficiari; il responsabile del procedimento è il Dott. Massimiliano Bacchiet.",
+  "punti_chiave": [
+    "Contributo una tantum per beni di prima necessità a nuclei di 1-2 persone con ISEE fino a 15.000 euro",
+    "Fondo di 170.000,00 euro (delibera di Giunta n. 131/2025)",
+    "200,00 euro per 1 componente, 300,00 euro per 2, sulla tessera sanitaria",
+    "Domande online dal 30/06/2025 al 30/07/2025 ore 23:59",
+    "Graduatoria per ISEE crescente; controlli su almeno il 20%",
+    "Responsabile del procedimento: Massimiliano Bacchiet"
+  ]
+}

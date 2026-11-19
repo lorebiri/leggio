@@ -1,0 +1,11 @@
+{
+  "name": "leggio-ricerca-ia",
+  "private": true,
+  "type": "module",
+  "description": "Studio di fattibilità: IA locale per Leggio (non fa parte dell'app)",
+  "license": "GPL-3.0-or-later",
+  "dependencies": {
+    "node-llama-cpp": "^3.22.3",
+    "pdfjs-dist": "^6.5.438"
+  }
+}

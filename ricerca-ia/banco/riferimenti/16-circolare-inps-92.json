@@ -1,0 +1,30 @@
+{
+  "id": "16-circolare-inps-92",
+  "url": "https://www.rgs.mef.gov.it/_Documenti/VERSIONE-I/CIRCOLARI/2025/19/Circolare-INPS-del-19-maggio-2025-n.-92.pdf",
+  "fonte": "INPS - Direzione Centrale Ammortizzatori Sociali (copia pubblicata dalla Ragioneria Generale dello Stato come allegato alla circolare RGS n. 19/2025)",
+  "tipo": "circolare",
+  "data_documento": "2025-05-19",
+  "campi": {
+    "oggetto": "Corresponsione dell'Assegno per il nucleo familiare. Nuovi livelli reddituali per il periodo 1° luglio 2025 – 30 giugno 2026",
+    "importo": null,
+    "importo_note": "Nessun importo principale: la circolare rinvia alle tabelle allegate",
+    "cig": null,
+    "cup": null,
+    "scadenze": [],
+    "controparte": null,
+    "rup": null
+  },
+  "domande": [
+    {"domanda": "Di quanto è risultata la variazione dell'indice FOI tra il 2024 e il 2023?", "risposta": "+ 0,8 per cento", "accettabili": ["0,8 per cento", "0,8%", "0,8"], "pagina": 2},
+    {"domanda": "Chi firma la circolare?", "risposta": "Valeria Vittimberga", "accettabili": ["Il Direttore Generale Valeria Vittimberga", "Vittimberga"], "pagina": 2},
+    {"domanda": "Qual è il numero della circolare?", "risposta": "92", "accettabili": ["Circolare n. 92", "n. 92"], "pagina": 1}
+  ],
+  "riassunto": "Con la circolare n. 92 del 19 maggio 2025 l'INPS comunica i nuovi livelli di reddito familiare per l'Assegno per il nucleo familiare. I nuovi livelli valgono dal 1° luglio 2025 al 30 giugno 2026. La rivalutazione è pari alla variazione dell'indice FOI calcolata dall'ISTAT tra il 2024 e il 2023, cioè +0,8 per cento, come previsto dal decreto-legge n. 69 del 1988. Riguarda solo i nuclei senza figli e orfanili (coniugi, fratelli, sorelle e nipoti), perché per quelli con figli l'assegno è stato sostituito dall'Assegno unico dal 1° marzo 2022. Le tabelle con i nuovi livelli e gli importi mensili sono allegate; la circolare è firmata dal Direttore Generale Valeria Vittimberga.",
+  "punti_chiave": [
+    "Nuovi livelli di reddito per l'Assegno per il nucleo familiare",
+    "Validità dal 1° luglio 2025 al 30 giugno 2026",
+    "Rivalutazione pari all'indice FOI: +0,8 per cento",
+    "Solo nuclei senza figli e orfanili (Assegno unico dal 1° marzo 2022)",
+    "Tabelle e importi mensili nell'allegato n. 1"
+  ]
+}

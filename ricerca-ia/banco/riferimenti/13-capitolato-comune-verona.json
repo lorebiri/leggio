@@ -1,0 +1,30 @@
+{
+  "id": "13-capitolato-comune-verona",
+  "url": "https://www.comune.verona.it/ocmultibinary/download/14406/315541/5/53cdce1d5ef2dbfaa483973fa5987936.pdf/file/All.%2BC%2BCapitolato%2Baccoglienza%2B30%2Bposti.pdf",
+  "fonte": "Comune di Verona - Servizi Sociali, capitolato speciale (Allegato C; data non riportata nel testo)",
+  "tipo": "capitolato",
+  "data_documento": null,
+  "campi": {
+    "oggetto": "Capitolato speciale per interventi di accoglienza invernale e contrasto alla grave marginalità mediante l'attivazione di 30 posti di accoglienza per persone in stato di grave disagio sociale",
+    "importo": "107.029,20",
+    "importo_note": "Importo presunto IVA esclusa (nel testo scritto \"107.029.20\"); costi della sicurezza da interferenze pari a zero",
+    "cig": null,
+    "cup": null,
+    "scadenze": ["2026-04-30"],
+    "controparte": null,
+    "rup": null
+  },
+  "domande": [
+    {"domanda": "Qual è il periodo di durata del contratto?", "risposta": "Dal 24 novembre 2025 al 30 aprile 2026", "accettabili": ["24 novembre 2025", "30 aprile 2026"], "pagina": 2},
+    {"domanda": "Qual è il massimale minimo della polizza assicurativa richiesta all'affidatario?", "risposta": "euro 5.000.000,00", "accettabili": ["5.000.000,00"], "pagina": 6},
+    {"domanda": "Quale penale si applica per la mancata sostituzione del personale assente nei tempi stabiliti?", "risposta": "€ 2.000,00", "accettabili": ["2.000,00"], "pagina": 9}
+  ],
+  "riassunto": "Il capitolato speciale del Comune di Verona (Servizi Sociali) regola l'affidamento dell'accoglienza invernale per persone senza dimora in grave disagio sociale, con 30 posti letto notturni. Il servizio comprende uno spazio a bassa soglia con 13 posti per uomini segnalati da Polizia Locale e Unità di Strada e l'accoglienza di 13 uomini e 4 donne inviati dai servizi sociali, con pasto serale, docce e custodia notturna dalle 20.00 alle 7.00. L'importo presunto è di 107.029,20 euro IVA esclusa, senza costi per rischi da interferenza, e il contratto dura dal 24 novembre 2025 al 30 aprile 2026, con possibile esecuzione anticipata e variazioni fino a un quinto. L'affidatario deve avere una polizza con massimale di almeno 5.000.000,00 euro e una garanzia definitiva; le fatture elettroniche, con CIG e split payment, sono pagate entro 60 giorni. Sono previste penali da 200,00 a 2.000,00 euro per ogni inadempimento e il foro competente è quello di Verona.",
+  "punti_chiave": [
+    "Accoglienza notturna invernale per persone senza dimora a Verona (30 posti)",
+    "Durata dal 24 novembre 2025 al 30 aprile 2026",
+    "Importo presunto 107.029,20 euro IVA esclusa",
+    "Polizza RC con massimale di almeno 5.000.000,00 euro e garanzia definitiva",
+    "Pagamento a 60 giorni con split payment; penali da 200 a 2.000 euro; foro di Verona"
+  ]
+}

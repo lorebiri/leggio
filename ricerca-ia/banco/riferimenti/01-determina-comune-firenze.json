@@ -1,0 +1,31 @@
+{
+  "id": "01-determina-comune-firenze",
+  "url": "https://affidamenti.comune.fi.it/sites/affidamenti.comune.fi.it/files/profilo/aggiudicazione-definitiva/20251031/Determinazione_Dirigenziale_Completa-DD_2025_08056_07773.pdf",
+  "fonte": "Comune di Firenze - Direzione Servizi Tecnici, Servizio Belle Arti e Fabbrica di Palazzo Vecchio (profilo del committente)",
+  "tipo": "determina",
+  "data_documento": "2025-10-30",
+  "campi": {
+    "oggetto": "PN Metro Plus 2021-2027, Priorità 7 - S. M. Novella: rigenerazione funzionale. Decisione a contrarre e affidamento all'ing. Leonardo Paolini dell'incarico di supporto al RUP per PFTE, progetto esecutivo e direzione lavori operativa opere strutturali (Accoglienza istituzionale - Aula Magna)",
+    "importo": "15.500,00",
+    "importo_note": "Compenso netto, al netto di IVA e oneri; spesa complessiva impegnata 19.666,40 euro (oneri 4% 620,00 + IVA 22% 3.546,40)",
+    "cig": "B894591E90",
+    "cup": "H17B24000130001",
+    "scadenze": [],
+    "controparte": "ing. Leonardo Paolini",
+    "rup": "Giorgio Caselli"
+  },
+  "domande": [
+    {"domanda": "Qual è la spesa complessiva impegnata per l'incarico, compresi oneri e IVA?", "risposta": "€ 19.666,40", "accettabili": ["19.666,40"], "pagina": 10},
+    {"domanda": "Con quale numero di procedura sulla piattaforma S.T.A.R.T. è stata richiesta l'offerta?", "risposta": "38640/2025", "accettabili": ["n. 38640/2025", "procedura n. 38640/2025"], "pagina": 8},
+    {"domanda": "Quale quota degli affidamenti è stata stabilita per il campione da sorteggiare per le verifiche dei requisiti?", "risposta": "2%", "accettabili": ["quota del 2%", "2% degli affidamenti"], "pagina": 12}
+  ],
+  "riassunto": "Con la determina DD/2025/07773 del 30 ottobre 2025 il Comune di Firenze affida all'ing. Leonardo Paolini il supporto al RUP per il PFTE, il progetto esecutivo e la direzione lavori operativa delle opere strutturali dell'Aula Magna nel complesso di Santa Maria Novella. L'intervento fa parte dell'operazione FI7.5.1.1.b \"S. M. Novella: rigenerazione funzionale\" del PN Metro Plus 2021-2027 (6.000.000,00 euro), con CUP H17B24000130001 e CIG B894591E90. L'affidamento è diretto ai sensi dell'art. 50, comma 1, lett. b) del D.Lgs. 36/2023, tramite la piattaforma S.T.A.R.T. (procedura 38640/2025), perché la verifica di personale interno ha dato esito negativo. Il compenso è di 15.500,00 euro netti, cioè 19.666,40 euro con oneri al 4% e IVA al 22%, impegnati sull'imp. 2025/8776. Il Responsabile Unico del Progetto è l'arch. Giorgio Caselli.",
+  "punti_chiave": [
+    "Supporto al RUP per PFTE, progetto esecutivo e DL strutturale dell'Aula Magna di Santa Maria Novella",
+    "PN Metro Plus 2021-2027, Priorità 7 Rigenerazione urbana",
+    "Affidamento diretto all'ing. Leonardo Paolini tramite START (art. 50, c. 1, lett. b)",
+    "15.500,00 euro netti, 19.666,40 euro complessivi",
+    "CIG B894591E90, CUP H17B24000130001",
+    "RUP arch. Giorgio Caselli"
+  ]
+}

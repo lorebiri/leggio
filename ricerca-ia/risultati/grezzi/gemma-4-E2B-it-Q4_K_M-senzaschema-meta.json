@@ -1,0 +1,7 @@
+{
+ "modello": "gemma-4-E2B-it-Q4_K_M.gguf",
+ "caricamento_s": 2.77,
+ "ctx": 16384,
+ "ram_picco_mb": 4880,
+ "totale_s": 684
+}

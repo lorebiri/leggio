@@ -1,0 +1,182 @@
+{
+ "01-determina-comune-firenze": {
+  "A": "Qwen3.5-0.8B-Q4_K_M",
+  "B": "Qwen3.5-4B-Q4_K_M",
+  "C": "Velvet-2B-Q4_K_M",
+  "D": "Qwen3.5-2B-Q4_K_M",
+  "E": "granite-4.1-3b-Q4_K_M",
+  "F": "Ministral-3-3B-Instruct-2512-Q4_K_M",
+  "G": "gemma-4-E2B-it-Q4_K_M"
+ },
+ "02-determina-comune-verona": {
+  "A": "Qwen3.5-4B-Q4_K_M",
+  "B": "granite-4.1-3b-Q4_K_M",
+  "C": "Qwen3.5-2B-Q4_K_M",
+  "D": "Velvet-2B-Q4_K_M",
+  "E": "Ministral-3-3B-Instruct-2512-Q4_K_M",
+  "F": "gemma-4-E2B-it-Q4_K_M",
+  "G": "Qwen3.5-0.8B-Q4_K_M"
+ },
+ "03-determina-comune-pisa": {
+  "A": "Qwen3.5-4B-Q4_K_M",
+  "B": "Qwen3.5-2B-Q4_K_M",
+  "C": "Velvet-2B-Q4_K_M",
+  "D": "Qwen3.5-0.8B-Q4_K_M",
+  "E": "gemma-4-E2B-it-Q4_K_M",
+  "F": "granite-4.1-3b-Q4_K_M",
+  "G": "Ministral-3-3B-Instruct-2512-Q4_K_M"
+ },
+ "04-determina-unifi": {
+  "A": "Qwen3.5-2B-Q4_K_M",
+  "B": "gemma-4-E2B-it-Q4_K_M",
+  "C": "Ministral-3-3B-Instruct-2512-Q4_K_M",
+  "D": "Qwen3.5-4B-Q4_K_M",
+  "E": "granite-4.1-3b-Q4_K_M",
+  "F": "Qwen3.5-0.8B-Q4_K_M",
+  "G": "Velvet-2B-Q4_K_M"
+ },
+ "05-delibera-giunta-torino-563": {
+  "A": "granite-4.1-3b-Q4_K_M",
+  "B": "Qwen3.5-4B-Q4_K_M",
+  "C": "gemma-4-E2B-it-Q4_K_M",
+  "D": "Qwen3.5-0.8B-Q4_K_M",
+  "E": "Ministral-3-3B-Instruct-2512-Q4_K_M",
+  "F": "Qwen3.5-2B-Q4_K_M",
+  "G": "Velvet-2B-Q4_K_M"
+ },
+ "06-delibera-giunta-torino-748": {
+  "A": "gemma-4-E2B-it-Q4_K_M",
+  "B": "Ministral-3-3B-Instruct-2512-Q4_K_M",
+  "C": "Qwen3.5-4B-Q4_K_M",
+  "D": "Velvet-2B-Q4_K_M",
+  "E": "Qwen3.5-0.8B-Q4_K_M",
+  "F": "granite-4.1-3b-Q4_K_M",
+  "G": "Qwen3.5-2B-Q4_K_M"
+ },
+ "07-bando-concorso-unifi": {
+  "A": "Velvet-2B-Q4_K_M",
+  "B": "gemma-4-E2B-it-Q4_K_M",
+  "C": "Qwen3.5-0.8B-Q4_K_M",
+  "D": "Qwen3.5-2B-Q4_K_M",
+  "E": "granite-4.1-3b-Q4_K_M",
+  "F": "Qwen3.5-4B-Q4_K_M",
+  "G": "Ministral-3-3B-Instruct-2512-Q4_K_M"
+ },
+ "08-bando-gara-comune-ragusa": {
+  "A": "Qwen3.5-2B-Q4_K_M",
+  "B": "Velvet-2B-Q4_K_M",
+  "C": "Qwen3.5-0.8B-Q4_K_M",
+  "D": "gemma-4-E2B-it-Q4_K_M",
+  "E": "Qwen3.5-4B-Q4_K_M",
+  "F": "Ministral-3-3B-Instruct-2512-Q4_K_M",
+  "G": "granite-4.1-3b-Q4_K_M"
+ },
+ "09-avviso-carta-spesa-pisa": {
+  "A": "Qwen3.5-0.8B-Q4_K_M",
+  "B": "Ministral-3-3B-Instruct-2512-Q4_K_M",
+  "C": "Qwen3.5-4B-Q4_K_M",
+  "D": "gemma-4-E2B-it-Q4_K_M",
+  "E": "granite-4.1-3b-Q4_K_M",
+  "F": "Qwen3.5-2B-Q4_K_M",
+  "G": "Velvet-2B-Q4_K_M"
+ },
+ "10-avviso-tari-pisa": {
+  "A": "Qwen3.5-2B-Q4_K_M",
+  "B": "Velvet-2B-Q4_K_M",
+  "C": "Qwen3.5-4B-Q4_K_M",
+  "D": "Qwen3.5-0.8B-Q4_K_M",
+  "E": "granite-4.1-3b-Q4_K_M",
+  "F": "Ministral-3-3B-Instruct-2512-Q4_K_M",
+  "G": "gemma-4-E2B-it-Q4_K_M"
+ },
+ "11-disciplinare-gara-unipi": {
+  "A": "Velvet-2B-Q4_K_M",
+  "B": "Qwen3.5-2B-Q4_K_M",
+  "C": "gemma-4-E2B-it-Q4_K_M",
+  "D": "Qwen3.5-4B-Q4_K_M",
+  "E": "Ministral-3-3B-Instruct-2512-Q4_K_M",
+  "F": "Qwen3.5-0.8B-Q4_K_M",
+  "G": "granite-4.1-3b-Q4_K_M"
+ },
+ "12-contratto-regione-lazio": {
+  "A": "Qwen3.5-4B-Q4_K_M",
+  "B": "Ministral-3-3B-Instruct-2512-Q4_K_M",
+  "C": "Velvet-2B-Q4_K_M",
+  "D": "granite-4.1-3b-Q4_K_M",
+  "E": "Qwen3.5-0.8B-Q4_K_M",
+  "F": "Qwen3.5-2B-Q4_K_M",
+  "G": "gemma-4-E2B-it-Q4_K_M"
+ },
+ "13-capitolato-comune-verona": {
+  "A": "Qwen3.5-4B-Q4_K_M",
+  "B": "Velvet-2B-Q4_K_M",
+  "C": "granite-4.1-3b-Q4_K_M",
+  "D": "Qwen3.5-0.8B-Q4_K_M",
+  "E": "Ministral-3-3B-Instruct-2512-Q4_K_M",
+  "F": "Qwen3.5-2B-Q4_K_M",
+  "G": "gemma-4-E2B-it-Q4_K_M"
+ },
+ "14-fattura-esempio-unife": {
+  "A": "granite-4.1-3b-Q4_K_M",
+  "B": "Ministral-3-3B-Instruct-2512-Q4_K_M",
+  "C": "Velvet-2B-Q4_K_M",
+  "D": "Qwen3.5-2B-Q4_K_M",
+  "E": "gemma-4-E2B-it-Q4_K_M",
+  "F": "Qwen3.5-4B-Q4_K_M",
+  "G": "Qwen3.5-0.8B-Q4_K_M"
+ },
+ "15-rendiconto-spese-firenze": {
+  "A": "granite-4.1-3b-Q4_K_M",
+  "B": "Qwen3.5-4B-Q4_K_M",
+  "C": "Velvet-2B-Q4_K_M",
+  "D": "Qwen3.5-0.8B-Q4_K_M",
+  "E": "Ministral-3-3B-Instruct-2512-Q4_K_M",
+  "F": "Qwen3.5-2B-Q4_K_M",
+  "G": "gemma-4-E2B-it-Q4_K_M"
+ },
+ "16-circolare-inps-92": {
+  "A": "Velvet-2B-Q4_K_M",
+  "B": "granite-4.1-3b-Q4_K_M",
+  "C": "gemma-4-E2B-it-Q4_K_M",
+  "D": "Qwen3.5-0.8B-Q4_K_M",
+  "E": "Ministral-3-3B-Instruct-2512-Q4_K_M",
+  "F": "Qwen3.5-2B-Q4_K_M",
+  "G": "Qwen3.5-4B-Q4_K_M"
+ },
+ "17-circolare-mef-rgs-20": {
+  "A": "Ministral-3-3B-Instruct-2512-Q4_K_M",
+  "B": "granite-4.1-3b-Q4_K_M",
+  "C": "Qwen3.5-2B-Q4_K_M",
+  "D": "Velvet-2B-Q4_K_M",
+  "E": "Qwen3.5-4B-Q4_K_M",
+  "F": "gemma-4-E2B-it-Q4_K_M",
+  "G": "Qwen3.5-0.8B-Q4_K_M"
+ },
+ "18-comunicato-anac": {
+  "A": "Ministral-3-3B-Instruct-2512-Q4_K_M",
+  "B": "Qwen3.5-4B-Q4_K_M",
+  "C": "gemma-4-E2B-it-Q4_K_M",
+  "D": "Velvet-2B-Q4_K_M",
+  "E": "granite-4.1-3b-Q4_K_M",
+  "F": "Qwen3.5-2B-Q4_K_M",
+  "G": "Qwen3.5-0.8B-Q4_K_M"
+ },
+ "19-verbale-seggio-gara-prap": {
+  "A": "Qwen3.5-2B-Q4_K_M",
+  "B": "Ministral-3-3B-Instruct-2512-Q4_K_M",
+  "C": "Qwen3.5-0.8B-Q4_K_M",
+  "D": "granite-4.1-3b-Q4_K_M",
+  "E": "Qwen3.5-4B-Q4_K_M",
+  "F": "Velvet-2B-Q4_K_M",
+  "G": "gemma-4-E2B-it-Q4_K_M"
+ },
+ "20-verbale-conferenza-servizi": {
+  "A": "granite-4.1-3b-Q4_K_M",
+  "B": "Qwen3.5-2B-Q4_K_M",
+  "C": "gemma-4-E2B-it-Q4_K_M",
+  "D": "Ministral-3-3B-Instruct-2512-Q4_K_M",
+  "E": "Qwen3.5-4B-Q4_K_M",
+  "F": "Velvet-2B-Q4_K_M",
+  "G": "Qwen3.5-0.8B-Q4_K_M"
+ }
+}

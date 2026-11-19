@@ -1,0 +1,31 @@
+{
+  "id": "20-verbale-conferenza-servizi",
+  "url": "https://commissari.gov.it/media/5k1k35fv/verbale-chiusura_cds_n_14_signed.pdf",
+  "fonte": "Commissario Straordinario per la bonifica ambientale e rigenerazione urbana dell'area Bagnoli-Coroglio - Struttura Commissariale",
+  "tipo": "verbale",
+  "data_documento": "2025-11-10",
+  "campi": {
+    "oggetto": "Verbale conclusivo della Conferenza di Servizi asincrona per l'approvazione dei progetti delle opere RTN a 220 kV e della Cabina Primaria Bagnoli con rete MT (Quarto Stralcio di Rigenerazione Urbana del PRARU) e delle modifiche al PRARU",
+    "importo": null,
+    "importo_note": "Nessun importo indicato",
+    "cig": null,
+    "cup": null,
+    "scadenze": ["2025-10-10", "2025-10-20", "2025-10-30"],
+    "controparte": "Terna S.p.A.",
+    "rup": "Giuseppe Napolitano"
+  },
+  "domande": [
+    {"domanda": "In quale data il Commissario Straordinario ha indetto la Conferenza di Servizi?", "risposta": "30/09/2025", "accettabili": ["in data 30/09/2025", "30 settembre 2025"], "pagina": 1},
+    {"domanda": "Entro quale data i soggetti invitati dovevano far pervenire le proprie determinazioni?", "risposta": "30 ottobre 2025", "accettabili": ["entro la data del 30 ottobre 2025"], "pagina": 1},
+    {"domanda": "Quale ministero ha inviato una nota fuori termine il 10/11/2025?", "risposta": "Ministero della Salute", "accettabili": ["nota n. 7457 del Ministero della Salute"], "pagina": 5}
+  ],
+  "riassunto": "Il verbale chiude la Conferenza di Servizi asincrona indetta il 30/09/2025 dal Commissario Straordinario per Bagnoli-Coroglio. Approva i progetti delle opere sulla rete a 220 kV di Terna e della Cabina Primaria Bagnoli con la rete MT di e-distribuzione, che formano il Quarto Stralcio di Rigenerazione Urbana del PRARU. Le amministrazioni e i gestori invitati dovevano esprimersi entro il 30 ottobre 2025; dopo una richiesta di integrazioni del Comune di Napoli e la risposta di Terna, sono arrivati 12 pareri, tutti favorevoli con prescrizioni, mentre chi non si è espresso si considera d'accordo senza condizioni. La conferenza si conclude con esito positivo, che vale come autorizzazione alla costruzione e all'esercizio, dichiarazione di pubblica utilità, vincolo per la servitù di elettrodotto, delega dei poteri espropriativi a Terna e variante urbanistica automatica. Il Responsabile del Procedimento, ing. Giuseppe Napolitano, propone al Commissario di approvare i progetti con l'apposito decreto.",
+  "punti_chiave": [
+    "Conferenza di Servizi asincrona per l'elettrificazione di Bagnoli (RTN 220 kV e Cabina Primaria con rete MT)",
+    "Quarto Stralcio di Rigenerazione Urbana del PRARU",
+    "Indetta il 30/09/2025, pareri entro il 30 ottobre 2025",
+    "Pareri tutti favorevoli con prescrizioni; esito positivo",
+    "Effetti: autorizzazione, pubblica utilità, servitù di elettrodotto, espropri delegati a Terna, variante urbanistica",
+    "Responsabile del Procedimento ing. Giuseppe Napolitano"
+  ]
+}

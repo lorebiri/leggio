@@ -1,0 +1,7 @@
+{
+ "modello": "Ministral-3-3B-Instruct-2512-Q4_K_M.gguf",
+ "caricamento_s": 3.93,
+ "ctx": 16384,
+ "ram_picco_mb": 13289,
+ "totale_s": 10512
+}

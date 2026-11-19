@@ -1,0 +1,25 @@
+{
+ "nota": "Richieste di ricerca nell'archivio scritte come le farebbe un impiegato, parafrasando e senza riusare le parole chiave dell'oggetto. Per ognuna c'è il documento giusto. Servono a provare la ricerca per significato (embedding) contro la ricerca per parole (BM25).",
+ "richieste": [
+  {"q": "incarico a un ingegnere esterno per aiutare il responsabile nei progetti di riqualificazione vicino alla stazione fiorentina", "doc": "01-determina-comune-firenze"},
+  {"q": "chi segue la sicurezza del cantiere per il nuovo fabbricato con bar e spogliatoi al campo sportivo", "doc": "02-determina-comune-verona"},
+  {"q": "cerchiamo dipendenti comunali disponibili a fare interviste alle famiglie per il conteggio ISTAT degli abitanti", "doc": "03-determina-comune-pisa"},
+  {"q": "trasferimento dei portali internet dell'università su piattaforma in cloud del consorzio interuniversitario", "doc": "04-determina-unifi"},
+  {"q": "collaborazione con le associazioni no profit per lo sportello dedicato ai ragazzi", "doc": "05-delibera-giunta-torino-563"},
+  {"q": "regole per dare soldi alle iniziative ricreative e di svago dei cittadini nel prossimo anno", "doc": "06-delibera-giunta-torino-748"},
+  {"q": "assunzione stabile di informatici in ateneo tramite prove scritte e orali", "doc": "07-bando-concorso-unifi"},
+  {"q": "gara per rifare l'asfalto e sistemare le strade comunali in Sicilia", "doc": "08-bando-gara-comune-ragusa"},
+  {"q": "aiuto economico per comprare cibo e beni essenziali destinato a chi vive da solo o in coppia con reddito basso", "doc": "09-avviso-carta-spesa-pisa"},
+  {"q": "sconto sulla tassa della spazzatura per i nuclei con poco reddito", "doc": "10-avviso-tari-pisa"},
+  {"q": "appalto per ritirare e smaltire i residui chimici e pericolosi dei laboratori universitari", "doc": "11-disciplinare-gara-unipi"},
+  {"q": "contratto con i professionisti che controllano i lavori dell'impianto solare e di condizionamento della Regione", "doc": "12-contratto-regione-lazio"},
+  {"q": "posti letto per i senzatetto durante i mesi freddi", "doc": "13-capitolato-comune-verona"},
+  {"q": "esempio di parcella elettronica di un consulente verso l'ateneo emiliano", "doc": "14-fattura-esempio-unife"},
+  {"q": "quanto ha speso il sindaco per omaggi, cerimonie e ospiti istituzionali l'anno scorso", "doc": "15-rendiconto-spese-firenze"},
+  {"q": "nuove soglie di reddito per gli assegni ai lavoratori con figli a carico da luglio", "doc": "16-circolare-inps-92"},
+  {"q": "come pagare allo Stato con un trasferimento dal conto corrente", "doc": "17-circolare-mef-rgs-20"},
+  {"q": "si può affidare un incarico a un professionista senza compenso?", "doc": "18-comunicato-anac"},
+  {"q": "apertura delle offerte per i lavori nel carcere piemontese", "doc": "19-verbale-seggio-gara-prap"},
+  {"q": "approvazione delle linee elettriche ad alta tensione per la riqualificazione dell'area ex industriale a Napoli", "doc": "20-verbale-conferenza-servizi"}
+ ]
+}

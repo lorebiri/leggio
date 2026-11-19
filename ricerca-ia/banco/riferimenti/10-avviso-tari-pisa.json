@@ -1,0 +1,30 @@
+{
+  "id": "10-avviso-tari-pisa",
+  "url": "https://www.comune.pisa.it/content/download/26664/634963/file/Allegato%20A%20-%20Bando%20TARI%202025%20Famiglie%20-.pdf",
+  "fonte": "Comune di Pisa - avviso pubblico \"Bonus TARI Famiglie 2025\" (data non riportata nel testo; apertura domande 28/11/2025)",
+  "tipo": "avviso",
+  "data_documento": null,
+  "campi": {
+    "oggetto": "Avviso pubblico per l'assegnazione di contributi a parziale ristoro della TARI alle famiglie residenti con ISEE fino a 25.000,00 euro (Bonus TARI Famiglie 2025)",
+    "importo": "270.000,00",
+    "importo_note": "Fondo complessivo stanziato; contributo pari al 40% della TARI 2025 pagata, fino al 60% in caso di residui",
+    "cig": null,
+    "cup": null,
+    "scadenze": ["2026-01-30", "2026-11-30"],
+    "controparte": null,
+    "rup": "Federico Vola"
+  },
+  "domande": [
+    {"domanda": "Quale percentuale della TARI 2025 pagata viene rimborsata ai beneficiari?", "risposta": "40%", "accettabili": ["del 40%", "40 per cento"], "pagina": 2},
+    {"domanda": "Entro quale data il beneficiario deve riscuotere il contributo per non decadere?", "risposta": "30/11/2026", "accettabili": ["entro il 30/11/2026", "30 novembre 2026"], "pagina": 5},
+    {"domanda": "Con quale società il Comune svolge l'istruttoria per individuare i beneficiari?", "risposta": "S.E.Pi. S.p.A.", "accettabili": ["S.E.Pi.", "SEPI"], "pagina": 1}
+  ],
+  "riassunto": "Il Comune di Pisa pubblica l'avviso \"Bonus TARI Famiglie 2025\" per rimborsare in parte la tassa rifiuti 2025 alle famiglie residenti con ISEE fino a 25.000,00 euro. Il fondo è di 270.000,00 euro e l'istruttoria è svolta con S.E.Pi. S.p.A. Il contributo è pari al 40% della TARI 2025 dovuta e pagata per l'abitazione di residenza, fino al 60% se restano fondi, ed è ridotto in proporzione se le domande superano il budget. Le domande si presentano online con SPID, CIE o CNS dal 28 novembre 2025 alle ore 23:59 del 30 gennaio 2026, e la TARI deve essere pagata entro la scadenza del bando. Sono previsti controlli su almeno il 20% dei richiedenti, il contributo va riscosso entro il 30/11/2026 e il responsabile del procedimento è il Dott. Federico Vola.",
+  "punti_chiave": [
+    "Rimborso parziale della TARI 2025 per famiglie con ISEE fino a 25.000 euro",
+    "Fondo di 270.000,00 euro, istruttoria con S.E.Pi. S.p.A.",
+    "Contributo del 40% della TARI pagata (fino al 60% con residui)",
+    "Domande online dal 28/11/2025 al 30/01/2026; TARI pagata entro la scadenza",
+    "Riscossione entro il 30/11/2026; responsabile Federico Vola"
+  ]
+}

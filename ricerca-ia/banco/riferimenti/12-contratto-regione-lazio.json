@@ -1,0 +1,31 @@
+{
+  "id": "12-contratto-regione-lazio",
+  "url": "https://www.regione.lazio.it/sites/default/files/amministrazione-trasparente/atti-procedure-affidamento/Schema-di-contratto-BC16D5A484.pdf",
+  "fonte": "Regione Lazio - Amministrazione trasparente, atti delle procedure di affidamento (schema di contratto; data non riportata, successivo al 12/06/2026)",
+  "tipo": "contratto",
+  "data_documento": null,
+  "campi": {
+    "oggetto": "Schema di contratto di appalto dei servizi tecnici di direzione dei lavori e coordinamento della sicurezza in fase di esecuzione per la piastra integrata energetica polivalente (fotovoltaico e climatizzazione) sul Mercato ortofrutticolo di Fondi (MOF), PR Lazio FESR 2021-2027",
+    "importo": "1.187.721,29",
+    "importo_note": "Importo complessivo stimato dell'appalto di servizi, incluse spese generali, esclusi IVA e oneri; 772.018,84 non ribassabile (65%) e 415.702,45 ribassabile (35%). Importo contrattuale lasciato in bianco nello schema",
+    "cig": "BC16D5A484",
+    "cup": "F72F23000320001",
+    "scadenze": [],
+    "controparte": null,
+    "rup": "Giorgia Boca"
+  },
+  "domande": [
+    {"domanda": "Qual è l'importo complessivo dell'appalto dei lavori per la piastra energetica?", "risposta": "€ 26.072.048,04", "accettabili": ["26.072.048,04"], "pagina": 5},
+    {"domanda": "In quanti giorni sono previste le lavorazioni secondo il Capitolato tecnico?", "risposta": "427 giorni naturali e consecutivi", "accettabili": ["427 giorni"], "pagina": 10},
+    {"domanda": "Quale foro è competente per le controversie?", "risposta": "Foro di Roma", "accettabili": ["Autorità Giudiziaria del Foro di Roma"], "pagina": 21}
+  ],
+  "riassunto": "Il documento è lo schema di contratto con cui la MOF S.c.p.A., soggetto attuatore per la Regione Lazio, affiderà la direzione dei lavori e il coordinamento della sicurezza in esecuzione per la piastra energetica polivalente (fotovoltaico e climatizzazione) del Mercato ortofrutticolo di Fondi. L'intervento è finanziato dal PR Lazio FESR 2021-2027 e i lavori valgono 26.072.048,04 euro; i servizi tecnici sono stimati in 1.187.721,29 euro, di cui 772.018,84 non ribassabili e 415.702,45 ribassabili (CIG BC16D5A484, CUP F72F23000320001). L'affidamento avviene con procedura aperta sopra soglia, offerta economicamente più vantaggiosa (80 punti tecnica, 20 economica) e inversione procedimentale; importo, ribasso e dati dell'appaltatore sono lasciati in bianco. Il contratto disciplina durata (lavorazioni in 427 giorni), corrispettivo, tracciabilità, garanzia definitiva e polizza professionale, penali dell'1 per mille al giorno, risoluzione e recesso. La RUP è l'Arch. Giorgia Boca e le controversie spettano al Foro di Roma.",
+  "punti_chiave": [
+    "Schema di contratto per DL e coordinamento sicurezza della piastra energetica del MOF di Fondi",
+    "Lavori da 26.072.048,04 euro finanziati dal PR Lazio FESR 2021-2027",
+    "Servizi tecnici stimati 1.187.721,29 euro (65% non ribassabile, 35% ribassabile)",
+    "CIG BC16D5A484, CUP F72F23000320001; OEPV 80/20",
+    "Penali dell'1 per mille al giorno; lavorazioni in 427 giorni; Foro di Roma",
+    "RUP Arch. Giorgia Boca"
+  ]
+}

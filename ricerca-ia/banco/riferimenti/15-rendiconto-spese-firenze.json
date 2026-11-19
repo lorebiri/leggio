@@ -1,0 +1,30 @@
+{
+  "id": "15-rendiconto-spese-firenze",
+  "url": "https://www.comune.fi.it/system/files/2025-04/UTF-8RIEPILOGO%20SPESE%20RAPPRESENTANZA.pdf",
+  "fonte": "Comune di Firenze - riepilogo delle spese di rappresentanza 2024 (pubblicato ad aprile 2025)",
+  "tipo": "fattura",
+  "data_documento": null,
+  "campi": {
+    "oggetto": "Spese di rappresentanza 2024",
+    "importo": "8.815,55",
+    "importo_note": "Totale spese sostenute nel 2024",
+    "cig": null,
+    "cup": null,
+    "scadenze": [],
+    "controparte": null,
+    "rup": null
+  },
+  "domande": [
+    {"domanda": "A quanto ammonta il totale delle spese di rappresentanza sostenute?", "risposta": "€ 8.815,55", "accettabili": ["8.815,55"], "pagina": 2},
+    {"domanda": "Quanto è costata la fornitura di 5 Fiorini d'Oro acquistata da Salocchi Andrea?", "risposta": "€ 1.982,50", "accettabili": ["1.982,50"], "pagina": 1},
+    {"domanda": "Quanto è stato speso per la fornitura floreale per le cerimonie istituzionali ricorrenti?", "risposta": "€ 396,00", "accettabili": ["396,00"], "pagina": 1}
+  ],
+  "riassunto": "Il documento è il riepilogo delle spese di rappresentanza sostenute dal Comune di Firenze nel 2024. Per ogni spesa riporta l'oggetto, il fornitore, l'occasione e l'importo. Le voci principali riguardano omaggi istituzionali come i Fiorini d'Oro (1.916,62 e 1.982,50 euro), premi dei Quartieri, passpartout per pergamene e fiori per le cerimonie (396,00 euro). Altre spese servono al decoro della Famiglia del Gonfalone e del Corteo Storico (riparazioni, lavanderia) e a ricorrenze come le feste dei patroni e l'anniversario di Dante a Ravenna. Il totale delle spese sostenute è di 8.815,55 euro.",
+  "punti_chiave": [
+    "Spese di rappresentanza 2024 del Comune di Firenze",
+    "Omaggi istituzionali: Fiorini d'Oro, premi dei Quartieri, pergamene",
+    "Decoro della Famiglia del Gonfalone e del Corteo Storico",
+    "Ricorrenze: patroni della città e anniversario di Dante",
+    "Totale 8.815,55 euro"
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "id": "04-determina-unifi",
+  "url": "https://amministrazionetrasparente.unifi.it/upload/sub/personale/trasparenza/bandi_gara_contratti/affidamenti/2024/2024-UNFICLE-0183172.pdf",
+  "fonte": "Università degli Studi di Firenze - Area per l'innovazione e gestione dei sistemi informativi ed informatici (prot. 2024-UNFICLE-0183172; data non riportata nel testo, atto successivo al 04/07/2024)",
+  "tipo": "determina",
+  "data_documento": null,
+  "campi": {
+    "oggetto": "Decisione a contrarre e affidamento diretto a favore del Consorzio CINECA della fornitura in SAAS del servizio di migrazione dei siti web di Ateneo (fase 1)",
+    "importo": "222.698,88",
+    "importo_note": "Importo complessivo massimo oltre IVA al 22% (271.692,63 euro IVA compresa); con contributo ANAC di 250,00 euro il totale è 222.948,88 oltre IVA",
+    "cig": "B2AB8DD43B",
+    "cup": null,
+    "scadenze": [
+      "2024-12-31"
+    ],
+    "controparte": "Consorzio CINECA",
+    "rup": "Fabrizio Fioravanti"
+  },
+  "domande": [
+    {
+      "domanda": "Qual è l'importo complessivo massimo dell'affidamento IVA compresa?",
+      "risposta": "€ 271.692,63 IVA compresa",
+      "accettabili": [
+        "271.692,63"
+      ],
+      "pagina": 1
+    },
+    {
+      "domanda": "Chi è stato nominato RUP e con quale nota?",
+      "risposta": "Ing Fabrizio Fioravanti",
+      "accettabili": [
+        "Fabrizio Fioravanti",
+        "nota prot.156134 del 04/07/2024"
+      ],
+      "pagina": 4
+    },
+    {
+      "domanda": "Su quale codice univoco ufficio devono essere emesse le fatture?",
+      "risposta": "5F1SMO",
+      "accettabili": [],
+      "pagina": 7
+    }
+  ],
+  "riassunto": "Con questa determina il Dirigente dell'Area sistemi informativi dell'Università di Firenze, Ing. Marius B. Spinu, affida direttamente al Consorzio CINECA il servizio in SAAS di migrazione dei siti web di Ateneo (fase 1), compreso il Portale Amministrazione trasparente. L'importo massimo è di 222.698,88 euro oltre IVA (271.692,63 euro IVA compresa), più 250,00 euro di contributo ANAC, con CIG B2AB8DD43B. L'affidamento è in house ai sensi dell'art. 7, comma 2, del D.Lgs. 36/2023, perché CINECA è un consorzio pubblico sottoposto a controllo analogo congiunto, ed è stato autorizzato dal CdA il 21/12/2023. La spesa è divisa tra il budget 2024 (172.599,44 euro, con giornate a consumo da usare entro il 31/12/2024) e il budget 2025 (50.349,44 euro). Il RUP è l'Ing. Fabrizio Fioravanti e le fatture, sul codice univoco 5F1SMO, vanno pagate entro 30 giorni dal ricevimento.",
+  "punti_chiave": [
+    "Affidamento diretto in house a CINECA (art. 7, comma 2, D.Lgs. 36/2023)",
+    "Migrazione in SAAS dei siti web di Ateneo e del Portale Amministrazione trasparente",
+    "Importo massimo 222.698,88 euro oltre IVA (271.692,63 IVA compresa), CIG B2AB8DD43B",
+    "Spesa divisa tra budget 2024 e 2025; mandato del CdA del 21/12/2023",
+    "RUP Ing. Fabrizio Fioravanti; fatture su codice 5F1SMO pagate entro 30 giorni"
+  ]
+}

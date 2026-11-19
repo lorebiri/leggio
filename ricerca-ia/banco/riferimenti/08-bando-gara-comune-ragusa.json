@@ -1,0 +1,56 @@
+{
+  "id": "08-bando-gara-comune-ragusa",
+  "url": "https://ance.it/wp-content/uploads/allegati/BC5181B3AE-Bando_Comune_di_Ragusa.pdf",
+  "fonte": "Comune di Ragusa - Settore XI Appalti Contratti Patrimonio (copia del bando pubblicata da ANCE)",
+  "tipo": "bando",
+  "data_documento": "2026-07-07",
+  "campi": {
+    "oggetto": "Procedura aperta per l'appalto dei lavori di manutenzione straordinaria alla rete stradale e delle opere connesse - 6° intervento",
+    "importo": "700.000,00",
+    "importo_note": "Importo a base di gara IVA esclusa, compresi oneri di sicurezza (41.252,03) e costo della manodopera (142.250,99); valore globale stimato 840.000,00 con il quinto d'obbligo",
+    "cig": "BC5181B3AE",
+    "cup": "F27H26000220004",
+    "scadenze": [
+      "2026-07-23"
+    ],
+    "controparte": null,
+    "rup": "Danilo Portelli"
+  },
+  "domande": [
+    {
+      "domanda": "Qual è la durata dell'appalto?",
+      "risposta": "mesi otto (otto)",
+      "accettabili": [
+        "8 mesi",
+        "otto mesi"
+      ],
+      "pagina": 4
+    },
+    {
+      "domanda": "Entro quale termine devono pervenire le offerte?",
+      "risposta": "ore 09:00 del giorno 23 luglio 2026",
+      "accettabili": [
+        "23 luglio 2026"
+      ],
+      "pagina": 11
+    },
+    {
+      "domanda": "Con quale metodo dell'Allegato II.2 è calcolata la soglia di anomalia per l'esclusione automatica?",
+      "risposta": "Metodo A",
+      "accettabili": [
+        "METODO A",
+        "col metodo A"
+      ],
+      "pagina": 22
+    }
+  ],
+  "riassunto": "Il Comune di Ragusa bandisce una procedura aperta per i lavori di manutenzione straordinaria della rete stradale (6° intervento), con CIG BC5181B3AE e CUP F27H26000220004, decisa con la determina a contrarre n. 3431 del 15/06/2026. La base di gara è di 700.000,00 euro IVA esclusa, compresi 41.252,03 euro di oneri per la sicurezza e 142.250,99 euro di manodopera, con categoria prevalente OG3 classifica III e una durata dei lavori di otto mesi. L'aggiudicazione è al minor prezzo, con inversione procedimentale ed esclusione automatica delle offerte anomale (metodo A) se le offerte ammesse sono almeno cinque. Le offerte vanno caricate sulla piattaforma telematica entro le ore 09:00 del 23 luglio 2026 e la prima seduta è fissata alle 09:05 dello stesso giorno; non servono garanzia provvisoria né sopralluogo. Il RUP è il geom. Danilo Portelli e il responsabile della fase di affidamento è il Dott. Rosario Spata, che firma il bando il 07/07/2026.",
+  "punti_chiave": [
+    "Procedura aperta per manutenzione straordinaria strade a Ragusa (6° intervento)",
+    "Base di gara 700.000,00 euro IVA esclusa, categoria OG3 classifica III, durata 8 mesi",
+    "CIG BC5181B3AE, CUP F27H26000220004",
+    "Minor prezzo, inversione procedimentale, esclusione automatica (metodo A)",
+    "Offerte entro le ore 09:00 del 23 luglio 2026",
+    "RUP geom. Danilo Portelli; fase di affidamento Dott. Rosario Spata"
+  ]
+}

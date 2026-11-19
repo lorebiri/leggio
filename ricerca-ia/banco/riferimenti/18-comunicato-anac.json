@@ -1,0 +1,30 @@
+{
+  "id": "18-comunicato-anac",
+  "url": "https://www.anticorruzione.it/documents/91439/aea5af78-4db1-4b22-e565-955a808d49f9",
+  "fonte": "ANAC - Autorità Nazionale Anticorruzione, Comunicato del Presidente",
+  "tipo": "circolare",
+  "data_documento": "2024-06-05",
+  "campi": {
+    "oggetto": "Indicazioni alle stazioni appaltanti in merito alla disciplina dell'affidamento dei contratti a titolo gratuito",
+    "importo": null,
+    "importo_note": "Nessun importo",
+    "cig": null,
+    "cup": null,
+    "scadenze": [],
+    "controparte": null,
+    "rup": null
+  },
+  "domande": [
+    {"domanda": "Quale articolo del d.lgs. 36/2023 esclude i contratti a titolo gratuito dall'ambito di applicazione del Codice?", "risposta": "Art. 13, comma 2", "accettabili": ["articolo 13, comma 2", "art. 13, comma 2, del d.lgs. n. 36/2023"], "pagina": 1},
+    {"domanda": "In quale data il comunicato è stato depositato presso la Segreteria del Consiglio?", "risposta": "18 giugno 2024", "accettabili": ["il 18 giugno 2024"], "pagina": 3},
+    {"domanda": "In quale sottosezione di Amministrazione trasparente vanno pubblicati gli affidamenti gratuiti?", "risposta": "Bandi di gara e contratti", "accettabili": ["sottosezione Bandi di gara e contratti"], "pagina": 3}
+  ],
+  "riassunto": "Con il comunicato del 5 giugno 2024 il Presidente dell'ANAC, Giuseppe Busìa, dà indicazioni alle stazioni appaltanti sui contratti a titolo gratuito. L'art. 13, comma 2, del d.lgs. 36/2023 li esclude dal Codice dei contratti, ma restano obbligatori i principi del risultato, della fiducia e dell'accesso al mercato e l'obbligo di motivazione. Valgono quindi le cause di esclusione automatiche (art. 94) e non automatiche (art. 95), compresi i conflitti di interesse, e va verificata l'affidabilità dell'operatore. Le ragioni dell'affidamento vanno spiegate negli atti preparatori, come la decisione di contrarre, dimostrando l'interesse pubblico e il vantaggio per l'amministrazione. Anche questi affidamenti vanno pubblicati in Amministrazione trasparente, sottosezione Bandi di gara e contratti, almeno con struttura proponente, oggetto, affidatario ed estremi dell'atto.",
+  "punti_chiave": [
+    "Contratti a titolo gratuito esclusi dal Codice (art. 13, comma 2, d.lgs. 36/2023)",
+    "Restano i principi di risultato, fiducia, accesso al mercato e l'obbligo di motivazione",
+    "Si applicano le cause di esclusione degli artt. 94 e 95, inclusi i conflitti di interesse",
+    "Motivare l'affidamento negli atti propedeutici (decisione di contrarre)",
+    "Pubblicazione in Amministrazione trasparente - Bandi di gara e contratti"
+  ]
+}

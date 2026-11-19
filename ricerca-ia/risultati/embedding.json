@@ -1,0 +1,82 @@
+{
+ "BM25 (parole, nessun modello)": {
+  "recall@1": 81.7,
+  "recall@3": 96.7,
+  "recall@5": 100.0
+ },
+ "multilingual-e5-small-Q8_0.gguf": {
+  "recall@1": 35.0,
+  "recall@3": 58.3,
+  "recall@5": 66.7,
+  "ibrido_recall@1": 33.3,
+  "ibrido_recall@3": 66.7,
+  "ibrido_recall@5": 83.3,
+  "file_mb": 126,
+  "dimensioni": 384,
+  "passaggi_al_s": 25.3,
+  "ms_per_domanda": 16,
+  "ram_picco_mb": 221,
+  "caricamento_s": 0.61
+ },
+ "multilingual-e5-small-q8_0-twinsuns.gguf": {
+  "recall@1": 73.3,
+  "recall@3": 91.7,
+  "recall@5": 93.3,
+  "ibrido_recall@1": 81.7,
+  "ibrido_recall@3": 93.3,
+  "ibrido_recall@5": 98.3,
+  "file_mb": 126,
+  "dimensioni": 384,
+  "passaggi_al_s": 20.6,
+  "ms_per_domanda": 17,
+  "ram_picco_mb": 300,
+  "caricamento_s": 1.34
+ },
+ "granite-embedding-107m-multilingual-Q8_0.gguf": {
+  "recall@1": 73.3,
+  "recall@3": 90.0,
+  "recall@5": 93.3,
+  "ibrido_recall@1": 76.7,
+  "ibrido_recall@3": 93.3,
+  "ibrido_recall@5": 98.3,
+  "file_mb": 115,
+  "dimensioni": 384,
+  "passaggi_al_s": 39.3,
+  "ms_per_domanda": 14,
+  "ram_picco_mb": 291,
+  "caricamento_s": 1.12
+ },
+ "granite-embedding-278m-multilingual-Q8_0.gguf": {
+  "recall@1": 76.7,
+  "recall@3": 90.0,
+  "recall@5": 93.3,
+  "ibrido_recall@1": 78.3,
+  "ibrido_recall@3": 95.0,
+  "ibrido_recall@5": 98.3,
+  "file_mb": 289,
+  "dimensioni": 768,
+  "passaggi_al_s": 7.4,
+  "ms_per_domanda": 31,
+  "ram_picco_mb": 486,
+  "caricamento_s": 1.23
+ },
+ "Qwen3-Embedding-0.6B-Q8_0.gguf": {
+  "recall@1": 75.0,
+  "recall@3": 93.3,
+  "recall@5": 95.0,
+  "ibrido_recall@1": 75.0,
+  "ibrido_recall@3": 95.0,
+  "ibrido_recall@5": 96.7,
+  "file_mb": 610,
+  "dimensioni": 1024,
+  "passaggi_al_s": 1.2,
+  "ms_per_domanda": 232,
+  "ram_picco_mb": 1638,
+  "caricamento_s": 1.24
+ },
+ "_info": {
+  "domande": 60,
+  "passaggi": 1166,
+  "documenti": 20
+ }
+}

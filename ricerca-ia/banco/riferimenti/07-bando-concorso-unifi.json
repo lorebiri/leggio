@@ -1,0 +1,30 @@
+{
+  "id": "07-bando-concorso-unifi",
+  "url": "https://www.unifi.it/sites/default/files/2025-05/dd_1026_2025_bando_8_funzionari_siaf.pdf",
+  "fonte": "Università degli Studi di Firenze - Area Persone e Organizzazione (D.D. 1026/2025 secondo il nome del file; data non riportata nel testo)",
+  "tipo": "bando",
+  "data_documento": null,
+  "campi": {
+    "oggetto": "Concorso pubblico, per esami, per 8 unità di personale nell'Area dei Funzionari, settore tecnico-informatico, a tempo indeterminato e pieno, per l'Area per l'Innovazione e Gestione dei Sistemi Informativi ed Informatici",
+    "importo": "10,00",
+    "importo_note": "Contributo di partecipazione non rimborsabile, da versare tramite PagoPA",
+    "cig": null,
+    "cup": null,
+    "scadenze": ["2025-06-20", "2025-07-04"],
+    "controparte": null,
+    "rup": "Luca Bardi"
+  },
+  "domande": [
+    {"domanda": "Entro quando deve essere completato l'invio della domanda di partecipazione?", "risposta": "Ore 13:00 del 20 giugno 2025", "accettabili": ["20 giugno 2025", "entro le ore 13:00 del 20 giugno 2025"], "pagina": 11},
+    {"domanda": "Quale punteggio minimo serve per superare ciascuna prova d'esame?", "risposta": "28 punti su 40", "accettabili": ["28 su 40", "28 punti"], "pagina": 16},
+    {"domanda": "Chi è il responsabile del procedimento concorsuale?", "risposta": "Dott. Luca Bardi", "accettabili": ["Luca Bardi"], "pagina": 19}
+  ],
+  "riassunto": "L'Università di Firenze bandisce un concorso pubblico per esami per 8 funzionari del settore tecnico-informatico, a tempo indeterminato e pieno, destinati all'Area per l'Innovazione e Gestione dei Sistemi Informativi ed Informatici. Le assunzioni sono state decise dal CdA il 31 maggio 2024 e i posti saranno coperti solo se non arriva personale in mobilità dalla Funzione Pubblica; sono previste riserve per categorie protette, volontari delle Forze Armate e servizio civile. Le domande si presentano sul Portale InPA con SPID o CIE entro le ore 13:00 del 20 giugno 2025, con un contributo di 10,00 euro, e il calendario delle prove sarà pubblicato entro il 4 luglio 2025. È prevista un'eventuale preselezione (ammessi allo scritto i primi 80), poi una prova scritta e una orale da 40 punti ciascuna, superate con almeno 28 punti. Il responsabile del procedimento è il Dott. Luca Bardi e il bando è firmato dal Direttore Generale Marco Degli Esposti.",
+  "punti_chiave": [
+    "Concorso per 8 funzionari tecnico-informatici a tempo indeterminato (Università di Firenze)",
+    "Domande su InPA entro le ore 13:00 del 20 giugno 2025, contributo di 10,00 euro",
+    "Riserve: categorie protette, volontari FF.AA., servizio civile",
+    "Eventuale preselezione (primi 80), scritto e orale da 40 punti, soglia 28",
+    "Calendario entro il 4 luglio 2025; responsabile del procedimento Luca Bardi"
+  ]
+}

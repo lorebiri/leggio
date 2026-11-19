@@ -1,0 +1,58 @@
+{
+ "Qwen3.5-0.8B-Q4_K_M": {
+  "fedelta": 3.5,
+  "copertura": 2.65,
+  "italiano": 3.3,
+  "invenzioni": 1.35,
+  "con_invenzioni": 0.75,
+  "n": 20
+ },
+ "Qwen3.5-4B-Q4_K_M": {
+  "fedelta": 4.05,
+  "copertura": 3.4,
+  "italiano": 4.6,
+  "invenzioni": 0.85,
+  "con_invenzioni": 0.75,
+  "n": 20
+ },
+ "Velvet-2B-Q4_K_M": {
+  "fedelta": 3.75,
+  "copertura": 2.5,
+  "italiano": 3.4,
+  "invenzioni": 0.9,
+  "con_invenzioni": 0.55,
+  "n": 20
+ },
+ "Qwen3.5-2B-Q4_K_M": {
+  "fedelta": 3.65,
+  "copertura": 3.05,
+  "italiano": 4.1,
+  "invenzioni": 1.1,
+  "con_invenzioni": 0.7,
+  "n": 20
+ },
+ "granite-4.1-3b-Q4_K_M": {
+  "fedelta": 3.45,
+  "copertura": 2.75,
+  "italiano": 3.9,
+  "invenzioni": 1.15,
+  "con_invenzioni": 0.8,
+  "n": 20
+ },
+ "Ministral-3-3B-Instruct-2512-Q4_K_M": {
+  "fedelta": 3.85,
+  "copertura": 3.8,
+  "italiano": 3.75,
+  "invenzioni": 0.85,
+  "con_invenzioni": 0.55,
+  "n": 20
+ },
+ "gemma-4-E2B-it-Q4_K_M": {
+  "fedelta": 4.8,
+  "copertura": 2.8,
+  "italiano": 4.8,
+  "invenzioni": 0.15,
+  "con_invenzioni": 0.1,
+  "n": 20
+ }
+}

@@ -1,0 +1,30 @@
+{
+  "id": "17-circolare-mef-rgs-20",
+  "url": "https://www.rgs.mef.gov.it/_Documenti/VERSIONE-I/CIRCOLARI/2025/20/Circolare-del-29-agosto-2025-n-20.pdf",
+  "fonte": "MEF - Dipartimento della Ragioneria Generale dello Stato",
+  "tipo": "circolare",
+  "data_documento": "2025-08-29",
+  "campi": {
+    "oggetto": "Modalità per l'utilizzo del bonifico bancario o postale per versamenti a favore della Tesoreria",
+    "importo": null,
+    "importo_note": "Nessun importo",
+    "cig": null,
+    "cup": null,
+    "scadenze": [],
+    "controparte": null,
+    "rup": null
+  },
+  "domande": [
+    {"domanda": "Quanti caratteri può avere al massimo la causale della disposizione di bonifico?", "risposta": "49 caratteri", "accettabili": ["49", "un massimo di 49 caratteri"], "pagina": 2},
+    {"domanda": "Quale esempio di sigla viene indicato per la provincia di Roma nella causale?", "risposta": "RM?", "accettabili": ["“RM?”", "RM"], "pagina": 2},
+    {"domanda": "Con quale circolare il Dipartimento aveva annunciato l'avvio del programma Re.Tes.?", "risposta": "Circolare n. 41 del 16 dicembre 2024", "accettabili": ["circolare n. 41", "n. 41 del 16 dicembre 2024"], "pagina": 1}
+  ],
+  "riassunto": "La circolare n. 20 della Ragioneria Generale dello Stato dà istruzioni su come indicare la provincia nei bonifici bancari o postali a favore della Tesoreria statale. Con il programma Re.Tes., avviato dal 1° gennaio 2025, e con il decreto-legge n. 73/2022, la Tesoreria è diventata unitaria e i nuovi codici IBAN non sono più legati alle sezioni provinciali. Per non perdere il riferimento territoriale, chi ordina il bonifico deve scrivere la sigla della provincia nei primi tre caratteri della causale, seguita dal separatore \"?\" (ad esempio \"RM?\"). La causale ha al massimo 49 caratteri, quindi ne restano 46 per la motivazione del versamento, e l'informazione confluisce nel campo \"territorialità\" della quietanza. Le amministrazioni che incassano le entrate devono comunicare ai versanti la sigla da usare; i nuovi IBAN sono pubblicati sul sito della RGS.",
+  "punti_chiave": [
+    "Bonifici a favore della Tesoreria statale: obbligo di indicare la sigla della provincia",
+    "Tesoreria unitaria e nuovi IBAN dal 1° gennaio 2025 (programma Re.Tes.)",
+    "Sigla nei primi tre caratteri della causale seguita da \"?\" (es. RM?)",
+    "Causale fino a 49 caratteri, 46 restano per la motivazione",
+    "Le amministrazioni devono indicare ai versanti la sigla da usare"
+  ]
+}

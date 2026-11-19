@@ -1,0 +1,7 @@
+{
+ "nota": "Gemma 4 E2B Q4_K_M, llama-bench pp2048 / tg128, stessa macchina (Xeon 2,1 GHz, 4 core). La build AVX2 simula un PC d'ufficio; la build 'native' usa AVX-512 come i binari precompilati di node-llama-cpp su questa CPU.",
+ "avx2_2thread": {"lettura_ts": 118.5, "scrittura_ts": 7.7},
+ "avx2_4thread": {"lettura_ts": 221.8, "scrittura_ts": 14.1},
+ "avx512_4thread": {"lettura_ts": 390.3, "scrittura_ts": 14.9},
+ "qwen3.5-2b": {"avx2_4thread": {"lettura_ts_pp512": 108.8, "scrittura_ts": 15.3}, "avx512_4thread": {"lettura_ts_pp512": 196.3, "scrittura_ts": 14.9}}
+}

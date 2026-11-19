@@ -1,0 +1,62 @@
+{
+ "BM25": {
+  "recall@1": 55.0,
+  "recall@3": 80.0,
+  "MRR": 0.695
+ },
+ "multilingual-e5-small-Q8_0.gguf": {
+  "recall@1": 5.0,
+  "recall@3": 15.0,
+  "MRR": 0.166
+ },
+ "multilingual-e5-small-Q8_0.gguf + BM25 (ibrido)": {
+  "recall@1": 25.0,
+  "recall@3": 55.0,
+  "MRR": 0.465
+ },
+ "granite-embedding-278m-multilingual-Q8_0.gguf": {
+  "recall@1": 75.0,
+  "recall@3": 80.0,
+  "MRR": 0.806
+ },
+ "granite-embedding-278m-multilingual-Q8_0.gguf + BM25 (ibrido)": {
+  "recall@1": 65.0,
+  "recall@3": 90.0,
+  "MRR": 0.766
+ },
+ "Qwen3-Embedding-0.6B-Q8_0.gguf": {
+  "recall@1": 85.0,
+  "recall@3": 90.0,
+  "MRR": 0.888
+ },
+ "Qwen3-Embedding-0.6B-Q8_0.gguf + BM25 (ibrido)": {
+  "recall@1": 70.0,
+  "recall@3": 90.0,
+  "MRR": 0.809
+ },
+ "multilingual-e5-small-q8_0-twinsuns.gguf": {
+  "recall@1": 75.0,
+  "recall@3": 85.0,
+  "MRR": 0.819
+ },
+ "multilingual-e5-small-q8_0-twinsuns.gguf + BM25 (ibrido)": {
+  "recall@1": 60.0,
+  "recall@3": 90.0,
+  "MRR": 0.742
+ },
+ "granite-embedding-107m-multilingual-Q8_0.gguf": {
+  "recall@1": 70.0,
+  "recall@3": 85.0,
+  "MRR": 0.786
+ },
+ "granite-embedding-107m-multilingual-Q8_0.gguf + BM25 (ibrido)": {
+  "recall@1": 55.0,
+  "recall@3": 90.0,
+  "MRR": 0.713
+ },
+ "_info": {
+  "richieste": 20,
+  "passaggi": 1166,
+  "documenti": 20
+ }
+}

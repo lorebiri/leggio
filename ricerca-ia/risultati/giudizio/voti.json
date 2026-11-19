@@ -1,0 +1,1262 @@
+[
+ {
+  "doc": "01-determina-comune-firenze",
+  "lettera": "A",
+  "fedelta": 2,
+  "invenzioni": 3,
+  "copertura": 3,
+  "italiano": 3,
+  "nota": "Attribuisce l'approvazione del progetto alla delibera 2025/C/00001 (che approva il DUP), inventa 4.000.000 euro sul capitolo 53607 e assegna la DL impianti meccanici/elettrici (che è di un altro affidamento); troncato e senza il nome dell'affidatario."
+ },
+ {
+  "doc": "01-determina-comune-firenze",
+  "lettera": "B",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 4,
+  "italiano": 5,
+  "nota": "'Pubblicato in Amministrazione Trasparente entro la scadenza del 2025' non è nel documento; mancano CIG/CUP e RUP."
+ },
+ {
+  "doc": "01-determina-comune-firenze",
+  "lettera": "C",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 3,
+  "italiano": 3,
+  "nota": "Fedele (copia del dispositivo) ma è un'unica frase lunga; mancano importi e RUP."
+ },
+ {
+  "doc": "01-determina-comune-firenze",
+  "lettera": "D",
+  "fedelta": 3,
+  "invenzioni": 2,
+  "copertura": 4,
+  "italiano": 4,
+  "nota": "Numero dell'atto sbagliato (DD/2025/07777 invece di 07773) e affidamento 'in base a delega comunale' non supportato."
+ },
+ {
+  "doc": "01-determina-comune-firenze",
+  "lettera": "E",
+  "fedelta": 3,
+  "invenzioni": 2,
+  "copertura": 2,
+  "italiano": 3,
+  "nota": "Inquadra l'incarico 'all'interno del PIAO 2025-2027' (citato solo come premessa) e parla di 'deliberazioni giurisdizionali'; non nomina l'affidatario."
+ },
+ {
+  "doc": "01-determina-comune-firenze",
+  "lettera": "F",
+  "fedelta": 2,
+  "invenzioni": 3,
+  "copertura": 4,
+  "italiano": 3,
+  "nota": "PFTE sciolto come 'Progetto Fase Tecnica Esecutiva', CUP sbagliato (H17B20000130001) e 6 milioni 'assegnati all'Autorità di Gestione' (sono trasferiti dall'AdG)."
+ },
+ {
+  "doc": "01-determina-comune-firenze",
+  "lettera": "G",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 3,
+  "italiano": 5,
+  "nota": "Nessuna invenzione; mancano CIG/CUP, RUP e importo complessivo."
+ },
+ {
+  "doc": "02-determina-comune-verona",
+  "lettera": "A",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 3,
+  "italiano": 5,
+  "nota": "Nessuna invenzione; mancano capitolo, CIG/CUP, Sintel e RUP."
+ },
+ {
+  "doc": "02-determina-comune-verona",
+  "lettera": "B",
+  "fedelta": 3,
+  "invenzioni": 1,
+  "copertura": 2,
+  "italiano": 4,
+  "nota": "Presenta l'affidamento diretto come 'realizzazione di un nuovo edificio' invece che come incarico di coordinamento della sicurezza; molto generico."
+ },
+ {
+  "doc": "02-determina-comune-verona",
+  "lettera": "C",
+  "fedelta": 3,
+  "invenzioni": 2,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "Motivazione inventata (incarico 'per evitare rischi di interferenza e garantire la tracciabilità'); contratto 'stipulato su Sintel' (su Sintel c'è la trattativa, la stipula avviene per lettera)."
+ },
+ {
+  "doc": "02-determina-comune-verona",
+  "lettera": "D",
+  "fedelta": 2,
+  "invenzioni": 2,
+  "copertura": 2,
+  "italiano": 2,
+  "nota": "Ripete quattro volte la stessa frase; presenta 10.024,59 come prenotazione per l'edificio (è il sub-impegno dell'incarico) e inventa 'entro 30 giorni dalla pubblicazione'."
+ },
+ {
+  "doc": "02-determina-comune-verona",
+  "lettera": "E",
+  "fedelta": 3,
+  "invenzioni": 1,
+  "copertura": 4,
+  "italiano": 4,
+  "nota": "Attribuisce ai 250.000 euro la ripartizione 10.000/24,59 che riguarda invece il sub-impegno dell'incarico (quella vera è 10.000/190.000/50.000)."
+ },
+ {
+  "doc": "02-determina-comune-verona",
+  "lettera": "F",
+  "fedelta": 4,
+  "invenzioni": 0,
+  "copertura": 2,
+  "italiano": 5,
+  "nota": "Nessun dato falso, ma la giustificazione dell'affidamento è ridotta alla conformità alle specifiche tecniche; mancano via Belluzzo, CIG, Sintel e RUP."
+ },
+ {
+  "doc": "02-determina-comune-verona",
+  "lettera": "G",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "Contratto 'stipulato tramite Sintel' (stipula prevista per lettera commerciale); la ripartizione 10.000/190.000/50.000 è corretta."
+ },
+ {
+  "doc": "03-determina-comune-pisa",
+  "lettera": "A",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 4,
+  "italiano": 4,
+  "nota": "Masini indicata come 'Dirigente' mentre è Responsabile E.Q.; il resto è corretto."
+ },
+ {
+  "doc": "03-determina-comune-pisa",
+  "lettera": "B",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "'Garantire la continuità del personale interno' non è nel documento; manca la responsabile."
+ },
+ {
+  "doc": "03-determina-comune-pisa",
+  "lettera": "C",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "Nessuna invenzione; mancano le date di rilevazione e la validità triennale."
+ },
+ {
+  "doc": "03-determina-comune-pisa",
+  "lettera": "D",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "Corretto ma molto breve (2 frasi); mancano le date di rilevazione."
+ },
+ {
+  "doc": "03-determina-comune-pisa",
+  "lettera": "E",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 2,
+  "italiano": 5,
+  "nota": "Corretto; mancano i 17 rilevatori, la responsabile e le date di rilevazione."
+ },
+ {
+  "doc": "03-determina-comune-pisa",
+  "lettera": "F",
+  "fedelta": 2,
+  "invenzioni": 2,
+  "copertura": 2,
+  "italiano": 3,
+  "nota": "'20 rilevatori' invece di 17; il 19 maggio è la scadenza delle domande, non la data della selezione."
+ },
+ {
+  "doc": "03-determina-comune-pisa",
+  "lettera": "G",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 5,
+  "italiano": 4,
+  "nota": "Nessuna invenzione; usa il grassetto e ha una frase sgrammaticata ('presentate solo al personale')."
+ },
+ {
+  "doc": "04-determina-unifi",
+  "lettera": "A",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 3,
+  "italiano": 5,
+  "nota": "Cifre corrette (222.698,88, 271.692,63, 222.948,88, COAN 89984/2024); mancano in house, CIG, RUP e Portale trasparenza."
+ },
+ {
+  "doc": "04-determina-unifi",
+  "lettera": "B",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 3,
+  "italiano": 5,
+  "nota": "Nessuna invenzione; mancano CIG, ripartizione del budget, RUP e Portale trasparenza."
+ },
+ {
+  "doc": "04-determina-unifi",
+  "lettera": "C",
+  "fedelta": 3,
+  "invenzioni": 1,
+  "copertura": 4,
+  "italiano": 4,
+  "nota": "I 58.355,00 euro (canoni imputati al budget 2024) sono attribuiti al budget 2025 (dove vanno 50.349,44); usa il grassetto."
+ },
+ {
+  "doc": "04-determina-unifi",
+  "lettera": "D",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "'L'atto di affidamento è stato sottoscritto' non risulta; CINECA chiamata 'società' in house (è un consorzio)."
+ },
+ {
+  "doc": "04-determina-unifi",
+  "lettera": "E",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 2,
+  "italiano": 5,
+  "nota": "Nessuna invenzione; contenuto generico, senza CIG, budget, RUP."
+ },
+ {
+  "doc": "04-determina-unifi",
+  "lettera": "F",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 2,
+  "italiano": 3,
+  "nota": "Corretto ma una sola frase, con la sede legale collocata in modo goffo."
+ },
+ {
+  "doc": "04-determina-unifi",
+  "lettera": "G",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 2,
+  "italiano": 4,
+  "nota": "Corretto ma una sola frase; mancano quasi tutti i punti chiave."
+ },
+ {
+  "doc": "05-delibera-giunta-torino-563",
+  "lettera": "A",
+  "fedelta": 3,
+  "invenzioni": 1,
+  "copertura": 2,
+  "italiano": 5,
+  "nota": "'Investimento totale di 175.000 euro per tre anni' è sbagliato: i 75.000 euro per i progetti creativi sono annui."
+ },
+ {
+  "doc": "05-delibera-giunta-torino-563",
+  "lettera": "B",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 4,
+  "italiano": 5,
+  "nota": "Nessuna invenzione (voto unanime, manutenzione ordinaria e 10% sono nel testo); manca la scadenza al 31/12/2025."
+ },
+ {
+  "doc": "05-delibera-giunta-torino-563",
+  "lettera": "C",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 2,
+  "italiano": 4,
+  "nota": "Corretto ma generico e ripetitivo, nessuna cifra."
+ },
+ {
+  "doc": "05-delibera-giunta-torino-563",
+  "lettera": "D",
+  "fedelta": 3,
+  "invenzioni": 2,
+  "copertura": 3,
+  "italiano": 3,
+  "nota": "Collega le linee guida al 'progetto DesTEENazione' (è una co-programmazione precedente) e travisa la deroga sulle utenze; una sola frase."
+ },
+ {
+  "doc": "05-delibera-giunta-torino-563",
+  "lettera": "E",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 4,
+  "italiano": 4,
+  "nota": "Nessuna invenzione (Vicesindaca Favaro, Via Garibaldi 25, 10%, scadenza 31/12/2025); molto grassetto."
+ },
+ {
+  "doc": "05-delibera-giunta-torino-563",
+  "lettera": "F",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "Nessuna invenzione; manca la dotazione di 100.000 euro per l'InformaGiovani."
+ },
+ {
+  "doc": "05-delibera-giunta-torino-563",
+  "lettera": "G",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 2,
+  "italiano": 3,
+  "nota": "Corretto ma frammentario ('Delibera la Giunta...', 'Approva...'); niente 75.000 euro, cofinanziamento o scadenze."
+ },
+ {
+  "doc": "06-delibera-giunta-torino-748",
+  "lettera": "A",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 3,
+  "italiano": 5,
+  "nota": "Nessuna invenzione; mancano le percentuali 40%/80%, i 45 giorni e la commissione."
+ },
+ {
+  "doc": "06-delibera-giunta-torino-748",
+  "lettera": "B",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 4,
+  "italiano": 4,
+  "nota": "Nessuna invenzione (80%, 40%, 45 giorni, Carnevale sono nel testo); usa il grassetto."
+ },
+ {
+  "doc": "06-delibera-giunta-torino-748",
+  "lettera": "C",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 3,
+  "italiano": 5,
+  "nota": "Nessuna invenzione; mancano Carnevale, 80% e 45 giorni."
+ },
+ {
+  "doc": "06-delibera-giunta-torino-748",
+  "lettera": "D",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 3,
+  "italiano": 3,
+  "nota": "Fedele ma in stile telegrafico, senza frasi compiute; mancano percentuali e termini."
+ },
+ {
+  "doc": "06-delibera-giunta-torino-748",
+  "lettera": "E",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 3,
+  "italiano": 5,
+  "nota": "Nessuna invenzione (Sindaco Lo Russo presiede, voto unanime); mancano beneficiari, tradizioni e 45 giorni."
+ },
+ {
+  "doc": "06-delibera-giunta-torino-748",
+  "lettera": "F",
+  "fedelta": 3,
+  "invenzioni": 1,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "Attribuisce l'approvazione al Consiglio Comunale invece che alla Giunta."
+ },
+ {
+  "doc": "06-delibera-giunta-torino-748",
+  "lettera": "G",
+  "fedelta": 2,
+  "invenzioni": 2,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "Dice che i contributi 'ordinari' non possono superare il 40% (sono gli straordinari) e che il bando sarà pubblicato 'entro 45 giorni' (i 45 giorni sono il termine per le domande); 7 frasi."
+ },
+ {
+  "doc": "07-bando-concorso-unifi",
+  "lettera": "A",
+  "fedelta": 3,
+  "invenzioni": 1,
+  "copertura": 2,
+  "italiano": 4,
+  "nota": "Scadenza indicata alle 23:59 del 20 giugno (nel bando è alle 13:00); 8 frasi, quasi tutte su aspetti secondari."
+ },
+ {
+  "doc": "07-bando-concorso-unifi",
+  "lettera": "B",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 2,
+  "italiano": 5,
+  "nota": "Nessuna invenzione; mancano contributo, riserve, prove e punteggi."
+ },
+ {
+  "doc": "07-bando-concorso-unifi",
+  "lettera": "C",
+  "fedelta": 3,
+  "invenzioni": 2,
+  "copertura": 2,
+  "italiano": 3,
+  "nota": "Travisa la riserva dei posti come 'limite di riservatezza' e dice che il concorso è 'rivolto a funzionari SIAF'; frase incomprensibile sulla 'non distruzione dell'impiego'."
+ },
+ {
+  "doc": "07-bando-concorso-unifi",
+  "lettera": "D",
+  "fedelta": 2,
+  "invenzioni": 3,
+  "copertura": 1,
+  "italiano": 3,
+  "nota": "Parla di 'tecnici-amministrativi', di 'cittadinanza italiana o residenza negli stati di provenienza' e presenta come esclusione l'esonero dalla preselezione per chi ha 12 mesi di servizio."
+ },
+ {
+  "doc": "07-bando-concorso-unifi",
+  "lettera": "E",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 3,
+  "italiano": 5,
+  "nota": "'Cittadini italiani o con titoli specifici' è impreciso (il requisito è la cittadinanza comunitaria); il resto (InPA, 10 euro, esonero 12 mesi, inglese) è corretto."
+ },
+ {
+  "doc": "07-bando-concorso-unifi",
+  "lettera": "F",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "'Assumere 8 tecnici entro 180 giorni dalla prova scritta' travisa il termine di conclusione della procedura; errore 'indetta un concorso'."
+ },
+ {
+  "doc": "07-bando-concorso-unifi",
+  "lettera": "G",
+  "fedelta": 3,
+  "invenzioni": 1,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "Colloca i posti nella 'Area Innovazione della Regione Toscana' (è l'Università di Firenze); le riserve 2+1+1 sono corrette."
+ },
+ {
+  "doc": "08-bando-gara-comune-ragusa",
+  "lettera": "A",
+  "fedelta": 3,
+  "invenzioni": 1,
+  "copertura": 2,
+  "italiano": 5,
+  "nota": "Il 15 giugno 2026 è la data della determina a contrarre, non della pubblicazione del bando; mancano base di gara, CIG, criterio e RUP."
+ },
+ {
+  "doc": "08-bando-gara-comune-ragusa",
+  "lettera": "B",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 2,
+  "italiano": 4,
+  "nota": "Corretto ma di due sole frasi: dice solo oggetto e piattaforma."
+ },
+ {
+  "doc": "08-bando-gara-comune-ragusa",
+  "lettera": "C",
+  "fedelta": 2,
+  "invenzioni": 4,
+  "copertura": 2,
+  "italiano": 2,
+  "nota": "Dice che sono esclusi consorzi stabili e raggruppamenti, che l'avvalimento è obbligatorio, che la gara 'è stata aggiudicata' e presenta l'11/06/2026 (data di validazione del progetto) come decorrenza; lungo, sgrammaticato e troncato."
+ },
+ {
+  "doc": "08-bando-gara-comune-ragusa",
+  "lettera": "D",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 3,
+  "italiano": 5,
+  "nota": "Nessuna invenzione (840.000 e 700.000 euro, 8 mesi, minor prezzo); mancano CIG, scadenza e RUP."
+ },
+ {
+  "doc": "08-bando-gara-comune-ragusa",
+  "lettera": "E",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 2,
+  "italiano": 5,
+  "nota": "'Aggiudicazione entro 60 giorni': i 60 giorni sono il termine per la stipula dopo l'aggiudicazione."
+ },
+ {
+  "doc": "08-bando-gara-comune-ragusa",
+  "lettera": "F",
+  "fedelta": 2,
+  "invenzioni": 2,
+  "copertura": 3,
+  "italiano": 3,
+  "nota": "Partecipazione ammessa 'solo' a raggruppamenti, consorzi e reti (sono ammessi anche i singoli) e 'subappalto minimo del 20% a PMI' (è solo un impegno in caso di subappalto); grassetto e testo troncato."
+ },
+ {
+  "doc": "08-bando-gara-comune-ragusa",
+  "lettera": "G",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 2,
+  "italiano": 4,
+  "nota": "Nessuna invenzione ma generico; mancano scadenza, criterio, CIG e RUP."
+ },
+ {
+  "doc": "09-avviso-carta-spesa-pisa",
+  "lettera": "A",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 4,
+  "italiano": 4,
+  "nota": "Ricorso '120 giorni dal rilascio del bando' (i 120 giorni decorrono dalla pubblicazione della graduatoria); 'dichiarazioni mendace'."
+ },
+ {
+  "doc": "09-avviso-carta-spesa-pisa",
+  "lettera": "B",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 4,
+  "italiano": 4,
+  "nota": "Nessuna invenzione; mancano graduatoria per ISEE, controlli e responsabile; grassetto."
+ },
+ {
+  "doc": "09-avviso-carta-spesa-pisa",
+  "lettera": "C",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 4,
+  "italiano": 5,
+  "nota": "Requisito di cittadinanza ridotto a 'italiana o europea' (sono ammessi anche gli extra-UE con permesso di soggiorno)."
+ },
+ {
+  "doc": "09-avviso-carta-spesa-pisa",
+  "lettera": "D",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 3,
+  "italiano": 5,
+  "nota": "Chiama 'contributo una tantum di 170.000 euro' quello che è il fondo complessivo; mancano gli importi di 200/300 euro."
+ },
+ {
+  "doc": "09-avviso-carta-spesa-pisa",
+  "lettera": "E",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "'Priorità alla residenza' inventata (a parità di ISEE conta solo l'ordine di presentazione); manca il fondo di 170.000 euro."
+ },
+ {
+  "doc": "09-avviso-carta-spesa-pisa",
+  "lettera": "F",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "Cittadinanza ridotta a 'italiana o europea'; mancano il fondo e la graduatoria; 'stanziò' è fuori registro."
+ },
+ {
+  "doc": "09-avviso-carta-spesa-pisa",
+  "lettera": "G",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 4,
+  "italiano": 4,
+  "nota": "Tutto corretto (delibera 131/2025, 170.000 euro, 200/300 euro, 30/07 ore 23:59); 6 frasi e ripetizioni."
+ },
+ {
+  "doc": "10-avviso-tari-pisa",
+  "lettera": "A",
+  "fedelta": 3,
+  "invenzioni": 1,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "'Contributo erogato entro il 30 gennaio 2026' è falso (è la scadenza delle domande); 'stanziò' fuori registro."
+ },
+ {
+  "doc": "10-avviso-tari-pisa",
+  "lettera": "B",
+  "fedelta": 3,
+  "invenzioni": 1,
+  "copertura": 3,
+  "italiano": 5,
+  "nota": "'L'elenco definitivo sarà pubblicato entro il 30/11/2026' è falso (è il termine per riscuotere il contributo)."
+ },
+ {
+  "doc": "10-avviso-tari-pisa",
+  "lettera": "C",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 3,
+  "italiano": 5,
+  "nota": "Pagamento 'tramite bonifico o assegno postale' inventato (sono previsti conto corrente o cassa)."
+ },
+ {
+  "doc": "10-avviso-tari-pisa",
+  "lettera": "D",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 3,
+  "italiano": 3,
+  "nota": "Fonde il 60% e il 30/11/2026 in un 'rimborso fino al 60% residuo entro il 30 novembre' che non c'è; solo due frasi, la seconda confusa."
+ },
+ {
+  "doc": "10-avviso-tari-pisa",
+  "lettera": "E",
+  "fedelta": 3,
+  "invenzioni": 1,
+  "copertura": 3,
+  "italiano": 5,
+  "nota": "Logica invertita: il 60% scatta se avanzano fondi, mentre se le domande superano il budget il contributo si riduce."
+ },
+ {
+  "doc": "10-avviso-tari-pisa",
+  "lettera": "F",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 4,
+  "italiano": 4,
+  "nota": "Nessuna invenzione; mancano S.E.Pi., responsabile e termine di riscossione; grassetto."
+ },
+ {
+  "doc": "10-avviso-tari-pisa",
+  "lettera": "G",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 4,
+  "italiano": 4,
+  "nota": "Nessuna invenzione; ripete la scadenza due volte; mancano S.E.Pi. e responsabile."
+ },
+ {
+  "doc": "11-disciplinare-gara-unipi",
+  "lettera": "A",
+  "fedelta": 3,
+  "invenzioni": 2,
+  "copertura": 2,
+  "italiano": 3,
+  "nota": "Requisito di esecuzione di '20.000 euro' (nel testo sono 200.000) e 'riduzione solo in caso di raggruppamento' non supportata; stile telegrafico."
+ },
+ {
+  "doc": "11-disciplinare-gara-unipi",
+  "lettera": "B",
+  "fedelta": 3,
+  "invenzioni": 2,
+  "copertura": 2,
+  "italiano": 2,
+  "nota": "Oneri per la sicurezza 'inclusi nell'importo' (sono esclusi dalla base d'asta) e offerte tardive recuperabili con una 'conferma di validità' (non previsto); lungo, confuso e troncato."
+ },
+ {
+  "doc": "11-disciplinare-gara-unipi",
+  "lettera": "C",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 2,
+  "italiano": 5,
+  "nota": "Nessuna invenzione (164.000 euro, SISTRI, 31/07/2018); mancano CIG, punteggi, garanzia, sopralluogo e RUP."
+ },
+ {
+  "doc": "11-disciplinare-gara-unipi",
+  "lettera": "D",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "'Aggiudica entro 60 giorni dall'efficacia': i 60 giorni sono il termine per la stipula del contratto."
+ },
+ {
+  "doc": "11-disciplinare-gara-unipi",
+  "lettera": "E",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 2,
+  "italiano": 4,
+  "nota": "'Gara riservata a operatori italiani o stranieri con specifiche autorizzazioni' non supportato; 200.000 euro, 180 giorni e 31/07 ore 12 sono corretti; manca la base d'asta."
+ },
+ {
+  "doc": "11-disciplinare-gara-unipi",
+  "lettera": "F",
+  "fedelta": 2,
+  "invenzioni": 2,
+  "copertura": 3,
+  "italiano": 2,
+  "nota": "Importo di '90.521.000,00 euro' inventato (sembra il codice CPV storpiato) e rimando errato all'art. 45 per i garanti; prolisso e troncato."
+ },
+ {
+  "doc": "11-disciplinare-gara-unipi",
+  "lettera": "G",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 2,
+  "italiano": 5,
+  "nota": "Nessuna invenzione; mancano CIG, punteggi, garanzia, sopralluogo e RUP."
+ },
+ {
+  "doc": "12-contratto-regione-lazio",
+  "lettera": "A",
+  "fedelta": 3,
+  "invenzioni": 1,
+  "copertura": 2,
+  "italiano": 5,
+  "nota": "Dice che la Regione 'ha affidato alla MOF' la direzione lavori: la MOF è il soggetto attuatore, il servizio va all'appaltatore; mancano importi dei servizi, CIG e RUP."
+ },
+ {
+  "doc": "12-contratto-regione-lazio",
+  "lettera": "B",
+  "fedelta": 3,
+  "invenzioni": 2,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "Dice che il contratto affida all'appaltatore la 'realizzazione della piastra' (sono i servizi di DL e sicurezza) e cita 'norme antiriciclaggio' che non ci sono; molto grassetto."
+ },
+ {
+  "doc": "12-contratto-regione-lazio",
+  "lettera": "C",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 2,
+  "italiano": 3,
+  "nota": "Importo 'comprensivo di IVA e oneri' (lo schema dice esclusi); solo due frasi ripetitive con importi in bianco."
+ },
+ {
+  "doc": "12-contratto-regione-lazio",
+  "lettera": "D",
+  "fedelta": 2,
+  "invenzioni": 2,
+  "copertura": 2,
+  "italiano": 4,
+  "nota": "Inventa un 'Piano Regionale per la Sicurezza Energetica' (è il PR FESR) e attribuisce ai 26.072.048,04 euro dei lavori la ripartizione ribassabile/non ribassabile dei servizi."
+ },
+ {
+  "doc": "12-contratto-regione-lazio",
+  "lettera": "E",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 2,
+  "italiano": 2,
+  "nota": "Lo schema è presentato come contratto 'aggiudicato' e l'anticipazione come 'copertura totale delle spese'; riporta segnaposto ('[SCEGLIERE]', '____'), è prolisso e troncato."
+ },
+ {
+  "doc": "12-contratto-regione-lazio",
+  "lettera": "F",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 4,
+  "italiano": 4,
+  "nota": "Garanzia per l'anticipazione descritta come 'pari al tasso di interesse legale' (è pari all'anticipazione maggiorata del tasso); per il resto corretto (Boca, Azioni 2.1.1/2.2.1, Foro di Roma)."
+ },
+ {
+  "doc": "12-contratto-regione-lazio",
+  "lettera": "G",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 3,
+  "italiano": 5,
+  "nota": "Nessuna invenzione (26.072.048,04 e 1.187.721,29 euro); mancano CIG, penali e RUP."
+ },
+ {
+  "doc": "13-capitolato-comune-verona",
+  "lettera": "A",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 3,
+  "italiano": 5,
+  "nota": "Collega la risoluzione anticipata alle 'urgenze' (l'urgenza riguarda l'avvio anticipato del servizio); manca l'importo."
+ },
+ {
+  "doc": "13-capitolato-comune-verona",
+  "lettera": "B",
+  "fedelta": 2,
+  "invenzioni": 3,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "Dice 'periodo di 12 mesi' (sono poco più di 5), inventa un 'massimo di 12 ore al giorno' e applica alla risoluzione per inadempimento i '10 giorni' del recesso per giusta causa."
+ },
+ {
+  "doc": "13-capitolato-comune-verona",
+  "lettera": "C",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 4,
+  "italiano": 4,
+  "nota": "Parla di un appalto 'per costruire' 30 posti (è un servizio di accoglienza); il resto (107.029,20 euro, date, 60 giorni, bonifico) è corretto."
+ },
+ {
+  "doc": "13-capitolato-comune-verona",
+  "lettera": "D",
+  "fedelta": 2,
+  "invenzioni": 4,
+  "copertura": 2,
+  "italiano": 2,
+  "nota": "Durata di '31 giorni', '4 bagni' inventati, 'personale 24 ore su 24' (è solo un referente reperibile) e polizza 'con un massimo' di 5 milioni (è un minimo); prolisso, confuso e troncato."
+ },
+ {
+  "doc": "13-capitolato-comune-verona",
+  "lettera": "E",
+  "fedelta": 3,
+  "invenzioni": 2,
+  "copertura": 2,
+  "italiano": 4,
+  "nota": "'30 posti suddivisi in 13 uomini e 4 donne' (sono 13 + 13 + 4) e 'responsabilità penale' per danni (è civile); mancano date, importo e polizza; grassetto."
+ },
+ {
+  "doc": "13-capitolato-comune-verona",
+  "lettera": "F",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "Nessuna invenzione (orari 20-23 e 20-07, penali da 0,3‰ a 10%); mancano durata, polizza e pagamenti."
+ },
+ {
+  "doc": "13-capitolato-comune-verona",
+  "lettera": "G",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 2,
+  "italiano": 5,
+  "nota": "Nessuna invenzione; mancano importo, polizza, pagamenti e penali."
+ },
+ {
+  "doc": "14-fattura-esempio-unife",
+  "lettera": "A",
+  "fedelta": 3,
+  "invenzioni": 2,
+  "copertura": 2,
+  "italiano": 4,
+  "nota": "Dice che Tizio Caio, 'come cedente, ha ricevuto' la fattura (la emette verso l'Università) e presenta il 6/11/2015 come scadenza di pagamento (è la decorrenza dei termini)."
+ },
+ {
+  "doc": "14-fattura-esempio-unife",
+  "lettera": "B",
+  "fedelta": 3,
+  "invenzioni": 1,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "Parcella 'emessa da SATA a favore di Tizio Caio': SATA è l'intermediario e Tizio Caio il professionista che fattura all'Università; le cifre sono corrette."
+ },
+ {
+  "doc": "14-fattura-esempio-unife",
+  "lettera": "C",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 2,
+  "italiano": 2,
+  "nota": "Nessun dato falso, ma è una scheda telegrafica (Chi/Cosa/Quanto) e non un riassunto."
+ },
+ {
+  "doc": "14-fattura-esempio-unife",
+  "lettera": "D",
+  "fedelta": 2,
+  "invenzioni": 2,
+  "copertura": 2,
+  "italiano": 4,
+  "nota": "Ruoli invertiti: Tizio Caio presentato come 'cliente' e SATA come 'fornitore' (il cliente è l'Università di Ferrara, SATA è l'intermediario)."
+ },
+ {
+  "doc": "14-fattura-esempio-unife",
+  "lettera": "E",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 2,
+  "italiano": 5,
+  "nota": "Dati corretti (trasmittente, partita IVA, totale, data) ma mancano tipo TD06, Università, CIG/CUP, ritenuta e note di controllo."
+ },
+ {
+  "doc": "14-fattura-esempio-unife",
+  "lettera": "F",
+  "fedelta": 2,
+  "invenzioni": 3,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "Tizio Caio presentato come destinatario, contributo cassa 'detratto' (in realtà si aggiunge) e pagamento 'effettuato' (la fattura indica solo le condizioni)."
+ },
+ {
+  "doc": "14-fattura-esempio-unife",
+  "lettera": "G",
+  "fedelta": 2,
+  "invenzioni": 2,
+  "copertura": 2,
+  "italiano": 3,
+  "nota": "'Servizio tecnico avanzato (SARL) a Tizio' confonde intermediario e destinatario; pagamento 'effettuato' non risulta; ripete l'importo netto."
+ },
+ {
+  "doc": "15-rendiconto-spese-firenze",
+  "lettera": "A",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 4,
+  "italiano": 3,
+  "nota": "Nessuna invenzione, ma è un'unica frase lunga e goffa ('spese totalizzanti a')."
+ },
+ {
+  "doc": "15-rendiconto-spese-firenze",
+  "lettera": "B",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 4,
+  "italiano": 4,
+  "nota": "Nessuna invenzione; refusi ('cieri', 'passaparti'); manca la ricorrenza dantesca."
+ },
+ {
+  "doc": "15-rendiconto-spese-firenze",
+  "lettera": "C",
+  "fedelta": 2,
+  "invenzioni": 2,
+  "copertura": 3,
+  "italiano": 2,
+  "nota": "Elenco puntato contro la consegna; attribuisce 3,00 euro a 'stivali con tacco' (è un cero) e 1.982,50 euro a 'medaglie e piatti in ottone' (sono Fiorini d'Oro); voci storpiate."
+ },
+ {
+  "doc": "15-rendiconto-spese-firenze",
+  "lettera": "D",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "Attribuisce tutto il totale di 8.815,55 euro al decoro di Gonfalone e Corteo, mentre la parte maggiore va a premi e onorificenze; una sola frase."
+ },
+ {
+  "doc": "15-rendiconto-spese-firenze",
+  "lettera": "E",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 5,
+  "italiano": 3,
+  "nota": "'38 euro per ogni intervento' sul vestiario del Gonfalone è impreciso (cinture e foderi costano 90 euro); per il resto le cifre sono corrette; grassetto e testo troncato."
+ },
+ {
+  "doc": "15-rendiconto-spese-firenze",
+  "lettera": "F",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 4,
+  "italiano": 5,
+  "nota": "Nessuna invenzione; non nomina il Comune di Firenze né le ricorrenze."
+ },
+ {
+  "doc": "15-rendiconto-spese-firenze",
+  "lettera": "G",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 4,
+  "italiano": 4,
+  "nota": "Nessuna invenzione; generico, senza esempi né importi delle voci principali."
+ },
+ {
+  "doc": "16-circolare-inps-92",
+  "lettera": "A",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "Destinatari confusi ('dirigenti... dell'ammortizzatori sociali': la Direzione Ammortizzatori Sociali è il mittente); manca il +0,8%."
+ },
+ {
+  "doc": "16-circolare-inps-92",
+  "lettera": "B",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 5,
+  "italiano": 3,
+  "nota": "Attribuisce anche al d.lgs. del 2021 la rivalutazione annuale (che deriva dal d.l. 69/1988); refusi e formule improprie ('orfanoli', 'applicazione universale')."
+ },
+ {
+  "doc": "16-circolare-inps-92",
+  "lettera": "C",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 4,
+  "italiano": 5,
+  "nota": "Nessuna invenzione; mancano la percentuale (+0,8%) e la limitazione ai nuclei senza figli."
+ },
+ {
+  "doc": "16-circolare-inps-92",
+  "lettera": "D",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "Nessuna invenzione; solo due frasi, mancano +0,8% e nuclei interessati."
+ },
+ {
+  "doc": "16-circolare-inps-92",
+  "lettera": "E",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 5,
+  "italiano": 4,
+  "nota": "Tutto verificato (d.l. 1988, +0,8%, tabelle 19-21D, d.lgs. 230/2021); grassetto."
+ },
+ {
+  "doc": "16-circolare-inps-92",
+  "lettera": "F",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 5,
+  "italiano": 4,
+  "nota": "Dice che la circolare è emessa 'per correggere i livelli in attuazione del d.lgs. 230/2021': si tratta della rivalutazione annuale ordinaria."
+ },
+ {
+  "doc": "16-circolare-inps-92",
+  "lettera": "G",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 5,
+  "italiano": 4,
+  "nota": "Fa derivare l'obbligo di rivalutazione annuale dal d.lgs. 230/2021 (è il d.l. 69/1988); 'all'0,8%', 'varianti giornalieri... mensili'."
+ },
+ {
+  "doc": "17-circolare-mef-rgs-20",
+  "lettera": "A",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 4,
+  "italiano": 4,
+  "nota": "Tutto verificato (Re.Tes., RM?, 49/46 caratteri); grassetto; manca l'obbligo per le amministrazioni di indicare la sigla."
+ },
+ {
+  "doc": "17-circolare-mef-rgs-20",
+  "lettera": "B",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 3,
+  "italiano": 3,
+  "nota": "Dice che le amministrazioni devono dare indicazioni 'sui codici IBAN' (devono indicare la sigla della provincia); refusi ('riepinvolgere'); manca il formato della causale."
+ },
+ {
+  "doc": "17-circolare-mef-rgs-20",
+  "lettera": "C",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 4,
+  "italiano": 4,
+  "nota": "Nessuna invenzione; manca l'esempio 'RM?' e il dato dei 46 caratteri."
+ },
+ {
+  "doc": "17-circolare-mef-rgs-20",
+  "lettera": "D",
+  "fedelta": 3,
+  "invenzioni": 1,
+  "copertura": 2,
+  "italiano": 4,
+  "nota": "Presenta il documento come 'circolare n. 41 del 16 dicembre 2024' (che è la circolare precedente richiamata; questa è la n. 20); niente formato della causale."
+ },
+ {
+  "doc": "17-circolare-mef-rgs-20",
+  "lettera": "E",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 4,
+  "italiano": 5,
+  "nota": "Data '16 dicembre 2024' attribuita alla circolare n. 20 (è la data della circolare n. 41); il resto è corretto."
+ },
+ {
+  "doc": "17-circolare-mef-rgs-20",
+  "lettera": "F",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 2,
+  "italiano": 5,
+  "nota": "Nessuna invenzione; mancano formato 'RM?', limite di 49 caratteri e ruolo delle amministrazioni."
+ },
+ {
+  "doc": "17-circolare-mef-rgs-20",
+  "lettera": "G",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "Nessuna invenzione; manca il formato con '?' e l'esempio; ripete l'obbligo due volte."
+ },
+ {
+  "doc": "18-comunicato-anac",
+  "lettera": "A",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 5,
+  "italiano": 3,
+  "nota": "Contenuto fedele e completo, ma grassetto ovunque e formule goffe ('sul disciplinare', 'senza ulteriori termini specifici')."
+ },
+ {
+  "doc": "18-comunicato-anac",
+  "lettera": "B",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 4,
+  "italiano": 5,
+  "nota": "Nessuna invenzione (l'art. 222 è il fondamento del comunicato); mancano gli artt. 94/95."
+ },
+ {
+  "doc": "18-comunicato-anac",
+  "lettera": "C",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 4,
+  "italiano": 5,
+  "nota": "Nessuna invenzione; mancano gli artt. 94/95 e il riferimento all'art. 13."
+ },
+ {
+  "doc": "18-comunicato-anac",
+  "lettera": "D",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 4,
+  "italiano": 4,
+  "nota": "Nessuna invenzione; sintetico (3 frasi), senza artt. 94/95."
+ },
+ {
+  "doc": "18-comunicato-anac",
+  "lettera": "E",
+  "fedelta": 3,
+  "invenzioni": 1,
+  "copertura": 4,
+  "italiano": 3,
+  "nota": "'Le indicazioni sono valide fino al 24 maggio 2024 e oltre' è inventato (il 24 maggio è la data di un altro comunicato citato); frase senza senso."
+ },
+ {
+  "doc": "18-comunicato-anac",
+  "lettera": "F",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 3,
+  "italiano": 5,
+  "nota": "Nessuna invenzione (deposito il 18/06/2024 corretto); mancano artt. 94/95 e motivazione negli atti propedeutici."
+ },
+ {
+  "doc": "18-comunicato-anac",
+  "lettera": "G",
+  "fedelta": 3,
+  "invenzioni": 1,
+  "copertura": 2,
+  "italiano": 4,
+  "nota": "Attribuisce il comunicato al 'Presidente del Consiglio' invece che al Presidente dell'ANAC."
+ },
+ {
+  "doc": "19-verbale-seggio-gara-prap",
+  "lettera": "A",
+  "fedelta": 2,
+  "invenzioni": 2,
+  "copertura": 2,
+  "italiano": 4,
+  "nota": "Dice che Scotta è l'aggiudicataria 'definitiva' (alla fine l'aggiudicazione provvisoria va a Intec) e che la soglia del 27,876% esclude Vitale e Intec (esclude solo Vitale)."
+ },
+ {
+  "doc": "19-verbale-seggio-gara-prap",
+  "lettera": "B",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 4,
+  "italiano": 4,
+  "nota": "Ricostruzione corretta (sette offerte, ribassi dal 12,5% al 31,53%, soglia da 26,952% a 27,876%, Intec al 27,309%); grassetto; mancano CIG, soccorso istruttorio e quadro economico."
+ },
+ {
+  "doc": "19-verbale-seggio-gara-prap",
+  "lettera": "C",
+  "fedelta": 3,
+  "invenzioni": 1,
+  "copertura": 3,
+  "italiano": 3,
+  "nota": "Collega l'aggiudicazione a Scotta alla soglia del 27,876% (fu decisa con la soglia errata del 26,952%) e dice che il seggio ha 'confermato' il calcolo, che invece è stato corretto; racconto contraddittorio."
+ },
+ {
+  "doc": "19-verbale-seggio-gara-prap",
+  "lettera": "D",
+  "fedelta": 2,
+  "invenzioni": 3,
+  "copertura": 2,
+  "italiano": 3,
+  "nota": "Parla di 'sei imprese' (erano sette), di un seggio 'preso dal Provveditore' (è presieduto dall'Ing. De Ruvo) e attribuisce a Scotta il ribasso del 27,309%, che è di Intec."
+ },
+ {
+  "doc": "19-verbale-seggio-gara-prap",
+  "lettera": "E",
+  "fedelta": 3,
+  "invenzioni": 1,
+  "copertura": 4,
+  "italiano": 4,
+  "nota": "Inventa l'esclusione di 'una impresa per mancata documentazione' (c'è stato un soccorso istruttorio e tutte sono state ammesse); gli importi, compresi i 980.854,14 euro, sono corretti."
+ },
+ {
+  "doc": "19-verbale-seggio-gara-prap",
+  "lettera": "F",
+  "fedelta": 2,
+  "invenzioni": 2,
+  "copertura": 1,
+  "italiano": 3,
+  "nota": "'8 imprese' (erano 7) e aggiudicazione finale a Scotta (va a Intec Service); testo minimo."
+ },
+ {
+  "doc": "19-verbale-seggio-gara-prap",
+  "lettera": "G",
+  "fedelta": 3,
+  "invenzioni": 2,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "Chiama 'massimo ribasso' la base d'asta di 1.349.347,43 euro e lega alla chiusura delle 11:15 un'aggiudicazione che allora era a favore di Scotta, non di Intec."
+ },
+ {
+  "doc": "20-verbale-conferenza-servizi",
+  "lettera": "A",
+  "fedelta": 2,
+  "invenzioni": 2,
+  "copertura": 3,
+  "italiano": 4,
+  "nota": "'Lavori conclusi entro il 30 ottobre' (era il termine per i pareri) e 'approvazione definitiva entro il 10 novembre 2025' inventata (la legge prevede dieci giorni dalla conclusione; il 10/11 è la data di una nota tardiva)."
+ },
+ {
+  "doc": "20-verbale-conferenza-servizi",
+  "lettera": "B",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 4,
+  "italiano": 5,
+  "nota": "Il 30 ottobre è indicato come termine 'per le istanze' (quello era il 10 ottobre; il 30 ottobre era il termine per i pareri); il resto (Napolitano, ARPAC, ISPRA, inamovibilità) è corretto."
+ },
+ {
+  "doc": "20-verbale-conferenza-servizi",
+  "lettera": "C",
+  "fedelta": 5,
+  "invenzioni": 0,
+  "copertura": 3,
+  "italiano": 5,
+  "nota": "Nessuna invenzione; mancano date, effetti espropriativi e responsabile del procedimento."
+ },
+ {
+  "doc": "20-verbale-conferenza-servizi",
+  "lettera": "D",
+  "fedelta": 2,
+  "invenzioni": 2,
+  "copertura": 4,
+  "italiano": 3,
+  "nota": "Pareri 'da oltre 30 enti' tra cui Terna ed e-distribuzione (sono i proponenti e i pareri sono circa 12) e approvazione 'decisa entro il 30 ottobre con validità 10 giorni' (travisa i termini); grassetto, 'declarato'."
+ },
+ {
+  "doc": "20-verbale-conferenza-servizi",
+  "lettera": "E",
+  "fedelta": 4,
+  "invenzioni": 1,
+  "copertura": 3,
+  "italiano": 5,
+  "nota": "La conferenza non si è conclusa il 30 ottobre 2025 (era il termine per i pareri; il verbale è successivo)."
+ },
+ {
+  "doc": "20-verbale-conferenza-servizi",
+  "lettera": "F",
+  "fedelta": 2,
+  "invenzioni": 2,
+  "copertura": 2,
+  "italiano": 3,
+  "nota": "Approvazione 'entro il 10 ottobre 2025' e 'intesa con la Regione Campania perfezionata' (l'intesa deve ancora perfezionarsi; il verbale propone e non approva); una sola frase lunga."
+ },
+ {
+  "doc": "20-verbale-conferenza-servizi",
+  "lettera": "G",
+  "fedelta": 3,
+  "invenzioni": 1,
+  "copertura": 2,
+  "italiano": 4,
+  "nota": "Dice che il documento 'è stato inviato entro il 30 ottobre' confondendo il termine per i pareri; solo due frasi, senza esito né effetti."
+ }
+]

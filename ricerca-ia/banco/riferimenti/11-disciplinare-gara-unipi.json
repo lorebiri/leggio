@@ -1,0 +1,56 @@
+{
+  "id": "11-disciplinare-gara-unipi",
+  "url": "https://old.unipi.it/ateneo/bandi/gare/servizi/rifiutispe/disciplinaregararifiuti.pdf",
+  "fonte": "Università di Pisa - disciplinare di gara (data non riportata nel testo; determina a contrarre del 25/06/2018)",
+  "tipo": "capitolato",
+  "data_documento": null,
+  "campi": {
+    "oggetto": "Procedura aperta per l'affidamento del servizio biennale di raccolta, trasporto e smaltimento/recupero dei rifiuti speciali, pericolosi e non pericolosi, prodotti dall'Università di Pisa (START)",
+    "importo": "164.000,00",
+    "importo_note": "Importo a base di gara IVA esclusa, al netto degli oneri per la sicurezza da interferenze (300,00); costi della manodopera stimati 26.080,00; opzione di rinnovo di 6 mesi fino a 56.000,00",
+    "cig": "7545280208",
+    "cup": null,
+    "scadenze": [
+      "2018-07-02",
+      "2018-07-09"
+    ],
+    "controparte": null,
+    "rup": "Sabrina Arras"
+  },
+  "domande": [
+    {
+      "domanda": "Qual è la durata dell'appalto?",
+      "risposta": "24 mesi decorrenti dalla data di sottoscrizione del contratto",
+      "accettabili": [
+        "24 mesi"
+      ],
+      "pagina": 5
+    },
+    {
+      "domanda": "A quanto ammonta la garanzia provvisoria richiesta?",
+      "risposta": "€ 3.286,00",
+      "accettabili": [
+        "3.286,00",
+        "2% del prezzo base"
+      ],
+      "pagina": 11
+    },
+    {
+      "domanda": "Quando si terrà la prima seduta pubblica?",
+      "risposta": "29/08/2018 alle ore 10:00",
+      "accettabili": [
+        "29/08/2018",
+        "il giorno 29/08/2018 alle ore 10:00"
+      ],
+      "pagina": 31
+    }
+  ],
+  "riassunto": "Il disciplinare regola la procedura aperta su START con cui l'Università di Pisa affida per due anni la raccolta, il trasporto e lo smaltimento o recupero dei rifiuti speciali, pericolosi e non, prodotti dalle sue strutture (CIG 7545280208). La gara, decisa con la determina a contrarre n. 39326 del 25/06/2018, è un lotto unico con base d'asta di 164.000,00 euro IVA esclusa, più 300,00 euro di oneri per la sicurezza, e una possibile proroga di 6 mesi fino a 56.000,00 euro. L'aggiudicazione segue l'offerta economicamente più vantaggiosa, con 80 punti all'offerta tecnica e 20 all'economica. I concorrenti devono versare una garanzia provvisoria di 3.286,00 euro (2%) e fare un sopralluogo obbligatorio nei giorni 3, 4, 10 o 11 luglio 2018, prenotandolo entro il 2 o il 9 luglio; la prima seduta pubblica è fissata per il 29/08/2018. La responsabile del procedimento è l'Ing. Sabrina Arras.",
+  "punti_chiave": [
+    "Servizio biennale di gestione dei rifiuti speciali dell'Università di Pisa (CIG 7545280208)",
+    "Base d'asta 164.000,00 euro IVA esclusa, rinnovo di 6 mesi fino a 56.000,00",
+    "Offerta economicamente più vantaggiosa: 80 punti tecnica, 20 economica",
+    "Garanzia provvisoria 3.286,00 euro e sopralluogo obbligatorio a luglio 2018",
+    "Prima seduta pubblica il 29/08/2018; RUP Ing. Sabrina Arras"
+  ]
+}

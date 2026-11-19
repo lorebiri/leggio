@@ -1,0 +1,54 @@
+{
+  "id": "05-delibera-giunta-torino-563",
+  "url": "https://bandi.comune.torino.it/sites/default/files/allegati/avvisi/2025/E_XPYH2hZ0jjgF5AutN12MLU1pVFzsQEFL5UjcABQh8/Deliberazione%20di%20Giunta%20n.%20563_2025.pdf",
+  "fonte": "Comune di Torino - Deliberazione della Giunta Comunale",
+  "tipo": "delibera",
+  "data_documento": "2025-09-30",
+  "campi": {
+    "oggetto": "Avvio del percorso di co-progettazione con enti del Terzo settore (artt. 55 e 56 D.Lgs. 117/2017) per il Centro InformaGiovani, messa a disposizione di un locale e co-progettazione per la promozione della creatività giovanile. Approvazione linee guida",
+    "importo": "100.000,00",
+    "importo_note": "Dotazione finanziaria per il Centro InformaGiovani per gli anni 2026, 2027 e 2028; in più 75.000,00 euro annui per i progetti di creatività giovanile (MurArte 35.000,00 e Progetto Musica 40.000,00)",
+    "cig": null,
+    "cup": null,
+    "scadenze": [
+      "2025-12-31"
+    ],
+    "controparte": null,
+    "rup": "Giovanni Mazzolotti"
+  },
+  "domande": [
+    {
+      "domanda": "Qual è il valore d'uso commerciale annuo stimato del locale messo a disposizione per il Centro InformaGiovani?",
+      "risposta": "euro 19.300,00 annui",
+      "accettabili": [
+        "19.300,00"
+      ],
+      "pagina": 2
+    },
+    {
+      "domanda": "Quale percentuale di cofinanziamento devono garantire gli enti candidati per ogni progetto?",
+      "risposta": "10% delle spese complessive",
+      "accettabili": [
+        "10%",
+        "pari al 10%"
+      ],
+      "pagina": 3
+    },
+    {
+      "domanda": "Quanto è destinato ogni anno al Progetto Musica?",
+      "risposta": "Euro 40.000,00 annui",
+      "accettabili": [
+        "40.000,00"
+      ],
+      "pagina": 3
+    }
+  ],
+  "riassunto": "Con la deliberazione n. 563 del 30 settembre 2025 la Giunta del Comune di Torino avvia percorsi di co-progettazione con gli enti del Terzo settore, ai sensi degli artt. 55 e 56 del D.Lgs. 117/2017, per il Centro InformaGiovani e per la creatività giovanile. Le attuali progettualità scadono il 31 dicembre 2025 e la co-progettazione si è dimostrata lo strumento più efficace. Per il Centro InformaGiovani sono previsti 100.000,00 euro per gli anni 2026-2028 e la messa a disposizione del locale di Via Garibaldi 25, con valore d'uso stimato in 19.300,00 euro annui; per MurArte e Progetto Musica 75.000,00 euro annui (35.000 e 40.000). Gli enti ammessi sono soggetti non profit iscritti ai registri, il sostegno dura tre anni (2026-2028) e serve un cofinanziamento del 10%. L'avviso sarà approvato con successivi atti dirigenziali e il responsabile del procedimento è il Dirigente del Servizio Giovani e Diritto allo Studio.",
+  "punti_chiave": [
+    "Co-progettazione con enti del Terzo settore (artt. 55 e 56 D.Lgs. 117/2017)",
+    "Centro InformaGiovani: 100.000,00 euro per 2026-2028 e locale in Via Garibaldi 25 (valore 19.300,00 euro annui)",
+    "Creatività giovanile: 75.000,00 euro annui (MurArte 35.000, Progetto Musica 40.000)",
+    "Durata triennale 2026-2028, cofinanziamento del 10%",
+    "Progetti attuali in scadenza il 31 dicembre 2025; avvisi con successivi atti dirigenziali"
+  ]
+}

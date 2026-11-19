@@ -1,0 +1,58 @@
+{
+  "id": "03-determina-comune-pisa",
+  "url": "https://www.comune.pisa.it/ocmultibinary/download/23212/538241/1/c94451503df847c4ea149233bb4c468e.pdf/file/det_00820_30-04-2025.pdf",
+  "fonte": "Comune di Pisa - provvedimento dirigenziale (DD 08)",
+  "tipo": "determina",
+  "data_documento": "2025-04-30",
+  "campi": {
+    "oggetto": "Selezione interna per la formazione di una graduatoria di rilevatori da impiegare nel Censimento permanente della popolazione 2025. Approvazione avviso e schema di domanda",
+    "importo": null,
+    "importo_note": "Nessun importo indicato nell'atto",
+    "cig": null,
+    "cup": null,
+    "scadenze": [
+      "2025-05-19"
+    ],
+    "controparte": null,
+    "rup": "Elena Masini"
+  },
+  "domande": [
+    {
+      "domanda": "Entro quale termine vanno presentate le domande per la selezione interna?",
+      "risposta": "Ore 10.00 di lunedì 19 maggio 2025",
+      "accettabili": [
+        "19 maggio 2025",
+        "19/05/2025",
+        "2025-05-19"
+      ],
+      "pagina": 2
+    },
+    {
+      "domanda": "Quanti rilevatori complessivi verranno selezionati per le tre rilevazioni?",
+      "risposta": "17",
+      "accettabili": [
+        "n. 17",
+        "17 rilevatori",
+        "diciassette"
+      ],
+      "pagina": 2
+    },
+    {
+      "domanda": "In quali date inizieranno e termineranno le attività di rilevazione del censimento 2025?",
+      "risposta": "inizieranno il 29 settembre e termineranno il 23 dicembre 2025",
+      "accettabili": [
+        "dal 29 settembre al 23 dicembre 2025"
+      ],
+      "pagina": 2
+    }
+  ],
+  "riassunto": "Il Comune di Pisa, con il provvedimento dirigenziale n. 820 del 30 aprile 2025, avvia una selezione interna tra il personale a tempo indeterminato. Lo scopo è formare una graduatoria triennale di rilevatori per il Censimento permanente della popolazione 2025, che sostituisce quella del 2023. Dall'elenco saranno scelti 17 rilevatori per la Rilevazione Areale (componenti A e L2) e la Rilevazione da Lista, con le attività sul campo dal 29 settembre al 23 dicembre 2025. L'atto approva l'avviso di selezione, le circolari Istat 1b e 2b e lo schema di domanda, con scadenza alle ore 10.00 del 19 maggio 2025. Responsabile del procedimento è la Responsabile E.Q. Anagrafe, Stato Civile e Statistica, Dott.ssa Elena Masini.",
+  "punti_chiave": [
+    "Selezione interna tra dipendenti a tempo indeterminato del Comune di Pisa",
+    "Graduatoria triennale di rilevatori per il Censimento permanente 2025",
+    "17 rilevatori per Rilevazione Areale (A e L2) e da Lista",
+    "Rilevazione dal 29 settembre al 23 dicembre 2025",
+    "Domande entro le ore 10.00 del 19 maggio 2025",
+    "Responsabile del procedimento: Elena Masini"
+  ]
+}

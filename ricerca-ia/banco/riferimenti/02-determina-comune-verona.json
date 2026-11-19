@@ -1,0 +1,31 @@
+{
+  "id": "02-determina-comune-verona",
+  "url": "https://www.comune.verona.it/ocmultibinary/download/15943/346350/2/d710f99a343d3ba816902e0ab8864041.pdf/file/det_05284_07-11-2025.stamped.pdf",
+  "fonte": "Comune di Verona - Edilizia Pubblica, determina dirigenziale",
+  "tipo": "determina",
+  "data_documento": "2025-11-07",
+  "campi": {
+    "oggetto": "Impianto sportivo di via Belluzzo - nuova costruzione edificio servizi: prenotazione della spesa, determinazione a contrarre e affidamento diretto del servizio di coordinamento della sicurezza in fase progettuale ed esecutiva all'arch. Gisella Lanciaprima",
+    "importo": "7.900,84",
+    "importo_note": "Importo di affidamento IVA ed oneri esclusi; sub-impegno di 10.024,59 euro con oneri al 4% e IVA al 22%; prenotazione complessiva del progetto 250.000,00 euro IVA inclusa",
+    "cig": "B8A11ABCA1",
+    "cup": "I38E23000180004",
+    "scadenze": [],
+    "controparte": "arch. Gisella Lanciaprima",
+    "rup": "Flavio Tagliapietra"
+  },
+  "domande": [
+    {"domanda": "Per quale importo viene affidato il servizio all'arch. Lanciaprima, IVA e oneri esclusi?", "risposta": "euro 7.900,84", "accettabili": ["7.900,84"], "pagina": 4},
+    {"domanda": "Chi è il responsabile unico del progetto?", "risposta": "Ing. Flavio Tagliapietra", "accettabili": ["Flavio Tagliapietra", "Tagliapietra"], "pagina": 5},
+    {"domanda": "Quanto viene prenotato sul capitolo 30969 del bilancio 2026?", "risposta": "euro 190.000,00", "accettabili": ["190.000,00"], "pagina": 5}
+  ],
+  "riassunto": "Con la determina n. 5284 del 7 novembre 2025 il Comune di Verona (Edilizia Pubblica) interviene sul nuovo edificio servizi dell'impianto sportivo di via Belluzzo. Il progetto, che prevede la demolizione e ricostruzione con bar, deposito e ufficio, vale 250.000,00 euro IVA inclusa, prenotati sul capitolo 30969 dei bilanci 2025-2027. La determina affida direttamente all'arch. Gisella Lanciaprima, tramite trattativa diretta su Sintel, il coordinamento della sicurezza in fase progettuale ed esecutiva per 7.900,84 euro IVA e oneri esclusi (10.024,59 euro inclusi). L'affidamento diretto è ammesso dall'art. 50, comma 1, lett. b) del D.Lgs. 36/2023 perché l'importo è sotto i 140.000 euro e nel Comune mancano professionalità interne. Il responsabile unico del progetto è l'Ing. Flavio Tagliapietra; firma la dirigente Cristina Formaggio.",
+  "punti_chiave": [
+    "Nuovo edificio servizi dell'impianto sportivo di via Belluzzo (Verona)",
+    "Prenotazione di 250.000,00 euro sul capitolo 30969 (2025-2027)",
+    "Affidamento diretto del coordinamento sicurezza all'arch. Gisella Lanciaprima per 7.900,84 euro",
+    "CIG B8A11ABCA1, CUP I38E23000180004",
+    "Affidamento diretto ex art. 50, comma 1, lett. b) D.Lgs. 36/2023 via Sintel",
+    "RUP Ing. Flavio Tagliapietra"
+  ]
+}

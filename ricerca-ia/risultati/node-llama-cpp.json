@@ -1,0 +1,15 @@
+{
+ "versione_node_llama_cpp": "3.22.3",
+ "modello": "gemma-4-E2B-it-Q4_K_M.gguf",
+ "caricamento_s": 2.6,
+ "token_documento": 5404,
+ "lettura_prompt_s": 18,
+ "lettura_ts": 300.6,
+ "generazione_ts": 10.1,
+ "risposta": {
+  "importo": "7.900,84 IVA ed oneri esclusi",
+  "cig": "B8A11ABCA1",
+  "rup": "Ing. Flavio Tagliapietra"
+ },
+ "ram_mb": 4865
+}

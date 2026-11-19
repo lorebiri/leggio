@@ -1,0 +1,30 @@
+{
+  "id": "06-delibera-giunta-torino-748",
+  "url": "https://bandi.comune.torino.it/sites/default/files/allegati/avvisi/2025/rZrRhryUmz08iEyddNnEfZC9GVmN8LCFiaPy0I1DoDM/DEL-748-2025.pdf",
+  "fonte": "Comune di Torino - Deliberazione della Giunta Comunale",
+  "tipo": "delibera",
+  "data_documento": "2025-12-12",
+  "campi": {
+    "oggetto": "Linee guida per l'individuazione dei criteri afferenti all'assegnazione di contributi e di altri benefici economici per le attività legate al tempo libero per il periodo 1/01/2026 - 31/12/2026. Approvazione",
+    "importo": null,
+    "importo_note": "Nessun importo: contributi nei limiti delle disponibilità del Bilancio 2026",
+    "cig": null,
+    "cup": null,
+    "scadenze": [],
+    "controparte": null,
+    "rup": null
+  },
+  "domande": [
+    {"domanda": "Qual è la percentuale massima dello stanziamento 2026 destinabile ai contributi straordinari?", "risposta": "40%", "accettabili": ["il 40%", "40 per cento"], "pagina": 2},
+    {"domanda": "Entro quanti giorni dalla pubblicazione dell'avviso si potrà presentare la richiesta di contributo?", "risposta": "45 giorni", "accettabili": ["entro 45 giorni", "45"], "pagina": 2},
+    {"domanda": "Quale assessore ha proposto la deliberazione?", "risposta": "Domenico Carretta", "accettabili": ["Carretta"], "pagina": 4}
+  ],
+  "riassunto": "Con la deliberazione n. 748 del 12 dicembre 2025 la Giunta del Comune di Torino approva le linee guida per i contributi alle attività del tempo libero per il 2026. Le linee guida attuano il Regolamento n. 373 e sostengono progetti di soggetti privati legati a tradizioni storiche e popolari cittadine, come il Carnevale Torinese. Possono ricevere contributi associazioni iscritte al registro, comitati, altri enti non profit con sede o attività a Torino ed enti non profit di altri comuni che operano per la comunità torinese. I contributi straordinari non possono superare il 40% dello stanziamento 2026 e ogni contributo non può superare l'80% delle spese ammissibili; il bando resterà aperto 45 giorni e le proposte saranno valutate da una commissione della Divisione Eventi e Promozione Turistica. La delibera, proposta dall'assessore Domenico Carretta, è immediatamente eseguibile.",
+  "punti_chiave": [
+    "Linee guida 2026 per contributi alle attività del tempo libero (Regolamento n. 373)",
+    "Iniziative legate a tradizioni cittadine, come il Carnevale Torinese",
+    "Beneficiari: associazioni, comitati ed enti non profit",
+    "Contributi straordinari massimo 40%; singolo contributo massimo 80% delle spese ammissibili",
+    "Domande entro 45 giorni dall'avviso; valutazione di una commissione"
+  ]
+}
