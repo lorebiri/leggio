@@ -4,6 +4,17 @@
 // cosa può fare di nuovo, non come è fatto. Senza voce per la versione, all'utente non viene mostrato nulla.
 export const NOVITA = [
   {
+    versione: '0.2.1',
+    titolo: 'Correzioni importanti per l’oscuramento',
+    punti: [
+      'Oscuramento più sicuro: ora i dati vengono tolti davvero anche nei testi in arabo o ebraico e nelle scansioni con la pagina ruotata.',
+      'Su Windows, Leggio non diventa più il programma predefinito per PDF e .p7m se ne hai già installato un altro.',
+      '«Segnala un problema» non include più i nomi delle tue cartelle.',
+      'La modifica del testo è molto più veloce sulle pagine con disegni tecnici o mappe.',
+      'Copia documento fronte/retro più robusta: angoli spostati male, file non validi e foto molto grandi non bloccano più il lavoro.',
+    ],
+  },
+  {
     versione: '0.2.0',
     titolo: 'Copia dei documenti e tante correzioni',
     punti: [
