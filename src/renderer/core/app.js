@@ -25,6 +25,8 @@ import { icon } from './icons.js';
 export class App {
   constructor(root) {
     this.bus = new Bus();
+    /** Controlli prima di uscire (es. archivio personale non ancora salvato): async () => true per lasciar uscire. */
+    this.quitGuards = [];
     this.settings = new Settings(this.bus);
     this.platform = platform;
     this.ui = ui;
@@ -907,6 +909,11 @@ export class App {
     platform.on('app:open-recovery', () => { this.recovery?.offer(true); });
     platform.on('app:before-close', async () => {
       this.bus.emit('app:quitting', { docs: [...this.docs] });
+      for (const g of [...this.quitGuards]) {
+        let ok = true;
+        try { ok = (await g()) !== false; } catch (err) { console.error(err); }
+        if (!ok) { this.bus.emit('app:quit-cancelled'); return; }
+      }
       for (const d of [...this.docs]) if (!(await this.closeDoc(d))) { this.bus.emit('app:quit-cancelled'); return; }
       await this.recovery?.cleanExit();
       // chiusura regolare confermata: le aree salvano ciò che serve alla prossima apertura (es. la sessione)

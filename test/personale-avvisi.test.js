@@ -5,7 +5,7 @@ import { robustezzaPassword } from '../src/renderer/features/personale/lib/robus
 import { decidiPromemoria, azioni, createStatoPromemoria, CHIAVE_PROMEMORIA, GIORNI_PROMEMORIA } from '../src/renderer/features/personale/lib/promemoria.js';
 import { createArchivio } from '../src/renderer/features/personale/lib/archivio.js';
 import { createMemoryBackend } from '../src/renderer/features/personale/lib/backend.js';
-import { avvisoPortachiavi, promemoriaBackup, ERRORI_RECUPERABILI, CONSIGLIO_PASSWORD, TESTO_PORTACHIAVI } from '../src/renderer/features/personale/ui/avvisi.js';
+import { avvisoPortachiavi, promemoriaBackup, dialogoRecupero, guardiaUscita, ERRORI_RECUPERABILI, CONSIGLIO_PASSWORD, TESTO_PORTACHIAVI } from '../src/renderer/features/personale/ui/avvisi.js';
 
 const GIORNO = 24 * 3600 * 1000;
 const T0 = Date.UTC(2026, 10, 1);
@@ -172,5 +172,90 @@ describe('salvataggio dopo un errore di scrittura', () => {
     a.usaFirma(f.id);
     expect(eventi.map((e) => e.uso)).toEqual([false, true]);
     await a.salvaOra();
+  });
+});
+
+/** backend in memoria che si può «riempire» (disco pieno). */
+function backendPieno() {
+  const backend = createMemoryBackend();
+  const stato = { pieno: false };
+  const salva = backend.salva.bind(backend);
+  backend.salva = async (i, o) => { if (stato.pieno) { const e = new Error('Spazio su disco esaurito'); e.code = 'disco-pieno'; throw e; } return salva(i, o); };
+  return { backend, stato };
+}
+
+describe('chiusura di Leggio con modifiche all\'archivio in attesa', () => {
+  it('salva subito ciò che è in attesa e lascia uscire', async () => {
+    const { backend } = backendPieno();
+    const a = createArchivio({ backend }); await a.apri();
+    a.salvaContatto({ nome: 'Giulia' }); // salvataggio pianificato fra 250 ms: non ancora fatto
+    const app = fakeApp();
+    expect(await guardiaUscita(app, a)).toBe(true);
+    expect(app.dialoghi).toHaveLength(0);
+    expect((await backend.leggi()).indice.contatti[0].nome).toBe('Giulia');
+  });
+  it('se il salvataggio non riesce avvisa e annulla la chiusura; «Esci comunque» lascia uscire', async () => {
+    const { backend, stato } = backendPieno();
+    const a = createArchivio({ backend }); await a.apri();
+    stato.pieno = true;
+    a.salvaContatto({ nome: 'Giulia' });
+    await a.salvaOra().catch(() => {});
+    expect(a.nonSalvato).toBe(true);
+    const resta = fakeApp([null]);
+    expect(await guardiaUscita(resta, a)).toBe(false);
+    expect(resta.dialoghi[0]).toMatchObject({ okLabel: 'Esci comunque', cancelLabel: 'Resta in Leggio' });
+    expect(resta.dialoghi[0].message).toMatch(/Spazio su disco esaurito.*andranno perse/s);
+    expect(await guardiaUscita(fakeApp([{}]), a)).toBe(true);
+    // spazio liberato: la chiusura successiva salva e non chiede nulla
+    stato.pieno = false;
+    const ok = fakeApp();
+    expect(await guardiaUscita(ok, a)).toBe(true);
+    expect(ok.dialoghi).toHaveLength(0);
+    await a.chiudi();
+  });
+  it('l\'app consulta i controlli prima di uscire (quitGuards in core/app.js)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const app = readFileSync(new URL('../src/renderer/core/app.js', import.meta.url), 'utf8');
+    expect(app).toMatch(/for \(const g of \[\.\.\.this\.quitGuards\]\)[\s\S]{0,200}app:quit-cancelled/);
+    const idx = readFileSync(new URL('../src/renderer/features/personale/index.js', import.meta.url), 'utf8');
+    expect(idx).toMatch(/quitGuards\?\.push\(\(\) => guardiaUscita\(app, archivio\)\)/);
+  });
+});
+
+describe('portachiavi momentaneamente non disponibile', () => {
+  const errSistema = () => Object.assign(new Error('Il portachiavi non riesce ad aprire la chiave'), { code: 'sistema' });
+  it('il pulsante principale è «Riprova»; se riesce l\'archivio si apre senza toccare nulla', async () => {
+    const archivio = { apri: vi.fn(async () => true), chiudi: vi.fn(), backend: { azzera: vi.fn() } };
+    const app = fakeApp([{}]);
+    expect(await dialogoRecupero(app, archivio, errSistema())).toBe(true);
+    expect(app.dialoghi[0]).toMatchObject({ okLabel: 'Riprova', cancelLabel: 'Non ora' });
+    expect(app.dialoghi[0].danger).toBeFalsy();
+    expect(archivio.backend.azzera).not.toHaveBeenCalled();
+  });
+  it('se fallisce ancora si richiede; «Non ora» non cambia nulla', async () => {
+    const archivio = { apri: vi.fn(async () => { throw errSistema(); }), backend: { azzera: vi.fn() } };
+    const app = fakeApp([{}, null]);
+    expect(await dialogoRecupero(app, archivio, errSistema())).toBe(false);
+    expect(app.dialoghi).toHaveLength(2);
+    expect(archivio.backend.azzera).not.toHaveBeenCalled();
+  });
+  it('«Metti da parte e ricomincia» è una scelta secondaria, con la sua conferma', async () => {
+    const archivio = { apri: vi.fn(async () => true), chiudi: vi.fn(async () => {}), backend: { azzera: vi.fn(async () => ({ messoDaParte: '/x' })) } };
+    const app = fakeApp();
+    const dialoghi = [];
+    app.ui.dialog = async (o) => {
+      dialoghi.push(o);
+      if (dialoghi.length === 1) {
+        let btn = null; const nonOra = { textContent: 'Non ora', click: vi.fn() };
+        o.onOpen({ querySelector: () => ({ querySelectorAll: () => [nonOra], prepend: (b) => { btn = b; } }) });
+        expect(btn.figli).toContain('Metti da parte e ricomincia…');
+        btn.attrs.onclick();
+        return null;
+      }
+      return dialoghi.length === 2 ? {} : null; // conferma, poi «Non ora» sull'importazione
+    };
+    expect(await dialogoRecupero(app, archivio, errSistema())).toBe(true);
+    expect(dialoghi[1]).toMatchObject({ okLabel: 'Metti da parte e ricomincia', danger: true });
+    expect(archivio.backend.azzera).toHaveBeenCalledTimes(1);
   });
 });

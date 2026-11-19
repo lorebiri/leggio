@@ -10,7 +10,7 @@ processo principale** (`electron/personale/cassaforte.cjs`, canali `feat:persona
 | File | Contenuto |
 |---|---|
 | `chiave.json` | chiave dati (DEK, 256 bit casuali) protetta (vedi sotto) |
-| `chiave.json.bak` | copia di riserva **identica** di `chiave.json` (0.3.1): se `chiave.json` si rovina la chiave si recupera da qui |
+| `chiave.json.bak` | copia di riserva **identica** di `chiave.json` (0.3.1): se `chiave.json` si rovina la chiave si recupera da qui. Non contiene mai una protezione vecchia: prima di riscrivere `chiave.json` la copia viene tolta, e se poi non si riesce a riscriverla resta assente (si ricrea al prossimo sblocco riuscito) |
 | `indice.dat` | indice JSON cifrato: contatti, metadati di firme/timbri/modelli, registro, profilo |
 | `indice.dat.bak` | la versione precedente dell'indice (backup automatico dell'ultima versione) |
 | `blob/<id>.dat` | immagini di firme e timbri, PDF dei modelli: un file cifrato ciascuno |
@@ -47,8 +47,9 @@ aggiuntivi legano il contenuto al nome (`indice`, `blob:<id>`): un file scambiat
      sblocco: non c'è mai un momento in cui la chiave non si apre.
    - **Compatibilità all'indietro**: la 0.3.0 calcola scrypt con un limite di 128 MB e **non apre** una chiave (o un
      backup) con N=131072. Tornare dalla 0.3.1 alla 0.3.0 con un archivio con password non è supportato.
-   - Parametri letti da file (chiave o backup) controllati: N potenza di 2, memoria al massimo 512 MB (un file
-     manomesso non può esaurire la memoria).
+   - Parametri letti da file (chiave o backup) controllati prima di calcolare: N potenza di 2 e minore di 2^(16·r),
+     memoria al massimo **256 MB** (i nostri ne usano ~128): un file manomesso non può far allocare memoria a
+     piacere, e un parametro rifiutato da OpenSSL dà un messaggio chiaro, mai un errore grezzo.
 4. **Consiglio nell'interfaccia**: «Senza password l'archivio è protetto dall'utente del computer: va bene su un PC
    personale. Su un PC condiviso o d'ufficio conviene la password». I dialoghi di password e di backup mostrano un
    **indicatore di robustezza** (`lib/robustezza.js`, senza librerie: lunghezza «utile» per varietà dei caratteri, con
@@ -68,9 +69,9 @@ parte** (mai cancellato: `personale-illeggibile-<data>`) per ricominciare, e poi
 | `chiave.json` danneggiato (illeggibile o con il contenuto rovinato) | — | si usa `chiave.json.bak` e si rimette a posto `chiave.json` (`stato().chiaveRecuperata`) |
 | `chiave.json` e la copia entrambe danneggiate | `chiave-danneggiata` | messaggio + finestra di recupero |
 | `chiave.json` cancellato ma ci sono dati cifrati | `chiave-mancante` | **non** si crea una chiave nuova sopra i dati; finestra di recupero |
-| Portachiavi azzerato / utente cambiato | `sistema` | dati intatti; si può riprovare dopo aver sbloccato il portachiavi, oppure finestra di recupero |
+| Portachiavi azzerato / bloccato / utente cambiato | `sistema` | dati intatti; il pulsante principale è **«Riprova»** (spesso il portachiavi è solo bloccato); «Metti da parte e ricomincia…» è una scelta secondaria con la sua conferma |
 | Indice e backup automatico illeggibili | `danneggiato` | finestra di recupero |
-| Disco pieno durante una scrittura | `disco-pieno` | l'originale resta intatto (scrittura atomica); il renderer tiene le modifiche in memoria, avvisa **una volta** e riprova ogni 30 s; a salvataggio riuscito «le modifiche ora sono salvate» |
+| Disco pieno durante una scrittura | `disco-pieno` | l'originale resta intatto (scrittura atomica); il renderer tiene le modifiche in memoria, avvisa **una volta** e riprova ogni 30 s; a salvataggio riuscito «le modifiche ora sono salvate». **Alla chiusura di Leggio** l'archivio salva subito ciò che è in attesa (`app.quitGuards` in `core/app.js`, `guardiaUscita` in `ui/avvisi.js`); se non ci riesce la chiusura si ferma con «Resta in Leggio» / «Esci comunque» |
 | Permessi / disco in sola lettura | `scrittura` | come sopra, con il messaggio sui permessi della cartella |
 | Password sbagliata (anche dopo il rafforzamento) | `password-errata` | «Password errata.», si richiede; nessuna scrittura |
 

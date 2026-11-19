@@ -35,7 +35,9 @@ const MAX_BACKUP = 1024 * 1024 * 1024;
 const ID_RE = /^[a-z0-9][a-z0-9_-]{3,63}$/;
 // scrypt: ~0,3 s su un PC d'ufficio, 128 MB di memoria (0.3.0: N=32768, ~70 ms, 32 MB)
 const KDF = Object.freeze({ N: 131072, r: 8, p: 1 });
-const KDF_MAX_MEM = 512 * 1024 * 1024; // parametri letti da file: oltre questo si rifiuta (niente esaurimento di memoria)
+// parametri letti da file (chiave o backup): oltre questo si rifiuta, così un file manomesso non può far allocare
+// memoria a piacere. I nostri (N=131072, r=8) usano ~128 MB: metà del limite.
+const KDF_MAX_MEM = 256 * 1024 * 1024;
 const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 1024;
 
@@ -66,6 +68,8 @@ const memoriaKdf = (k) => 128 * k.r * (k.N + k.p + 2);
 function paramsKdf(o, cosa = 'Chiave dell\'archivio') {
   const k = { N: num(o?.N, 1024, 1 << 20, cosa), r: num(o?.r, 1, 32, cosa), p: num(o?.p, 1, 16, cosa) };
   if ((k.N & (k.N - 1)) !== 0) throw new ErroreArchivio(`${cosa} non valida.`, 'danneggiato');
+  // regola di scrypt: N < 2^(16·r) (altrimenti OpenSSL rifiuta con un errore poco chiaro)
+  if (Math.log2(k.N) >= 16 * k.r) throw new ErroreArchivio(`${cosa}: protezione non supportata da questa versione di Leggio. Aggiorna Leggio.`, 'formato');
   if (memoriaKdf(k) > KDF_MAX_MEM) throw new ErroreArchivio(`${cosa}: protezione non supportata da questa versione di Leggio. Aggiorna Leggio.`, 'formato');
   return k;
 }
@@ -75,10 +79,13 @@ const kdfDebole = (k) => k.N * k.r * k.p < KDF.N * KDF.r * KDF.p;
 function derivaChiave(password, salt, params = KDF) {
   const k = paramsKdf(params);
   return new Promise((resolve, reject) => {
+    const nonRiuscito = () => new ErroreArchivio('Impossibile verificare la password: memoria del computer insufficiente. Chiudi qualche programma e riprova.', 'memoria');
+    try {
     crypto.scrypt(Buffer.from(String(password).normalize('NFC'), 'utf8'), salt, 32, { ...k, maxmem: memoriaKdf(k) + 32 * 1024 * 1024 }, (err, key) => {
       if (err) reject(new ErroreArchivio('Impossibile verificare la password: memoria del computer insufficiente. Chiudi qualche programma e riprova.', 'memoria'));
       else resolve(key);
     });
+    } catch { reject(nonRiuscito()); } // parametri rifiutati subito da OpenSSL: mai un errore grezzo
   });
 }
 /** Avvolge la DEK con una password (e verifica subito che si svolga). → oggetto JSON */
@@ -231,7 +238,11 @@ function createCassaforte({ dir, safeStorage = null, platform = process.platform
       const m = await leggiSe(P.chiave); const b = await leggiSe(P.chiaveBak);
       if (m && infoValida(m) && !(b && b.equals(m))) await scriviPrivato(P.chiaveBak, m);
       riserva = null;
-    } catch (e) { log('warn', 'copia di riserva della chiave non aggiornata', { error: e.message }); }
+    } catch (e) {
+      log('warn', 'copia di riserva della chiave non aggiornata', { error: e.message });
+      // una copia diversa da chiave.json non deve restare (potrebbe avere una protezione vecchia)
+      await fsp.rm(P.chiaveBak, { force: true }).catch(() => {});
+    }
   }
   /** Protegge una stringa con il sistema (se disponibile). → { metodo, dati } */
   function proteggi(testo) {
@@ -254,13 +265,30 @@ function createCassaforte({ dir, safeStorage = null, platform = process.platform
     if (p.metodo === 'file') return Buffer.from(p.dati, 'base64').toString('utf8');
     throw new ErroreArchivio('Metodo di protezione sconosciuto.', 'danneggiato');
   }
-  /** Scrive chiave.json (atomico) e poi la copia di riserva identica. */
-  async function scriviInfo(nuovo) {
+  /** Toglie la copia di riserva. Se non si riesce a toglierla si lancia l'errore (e nulla viene cambiato). */
+  async function togliRiserva() {
+    try { await fsp.rm(P.chiaveBak, { force: true }); } catch (e) { throw erroreScrittura(e); }
+  }
+  /**
+   * Scrive chiave.json (atomico) e poi la copia di riserva identica. La copia vecchia si toglie PRIMA: così non
+   * può mai restare una copia con una protezione vecchia (una password cambiata, la chiave in chiaro di prima
+   * della password), nemmeno se la scrittura si interrompe o il computer si spegne a metà. Nel frattempo
+   * chiave.json resta valido (la scrittura è atomica): l'archivio si apre sempre.
+   * opzioni.daRiserva: si sta ricopiando proprio la copia di riserva su chiave.json rovinato: la copia NON si
+   * toglie (è l'unica buona).
+   */
+  async function scriviInfo(nuovo, { daRiserva = false } = {}) {
     const buf = Buffer.from(JSON.stringify(nuovo, null, 1), 'utf8');
+    if (!daRiserva) await togliRiserva();
+    riserva = null;
     await scriviPrivato(P.chiave, buf);
     info = nuovo;
-    try { await scriviPrivato(P.chiaveBak, buf); riserva = null; }
-    catch (e) { log('warn', 'copia di riserva della chiave non scritta', { error: e.message }); }
+    if (daRiserva) return; // la copia è già identica
+    try { await scriviPrivato(P.chiaveBak, buf); }
+    catch (e) {
+      log('warn', 'copia di riserva della chiave non scritta', { error: e.message });
+      await fsp.rm(P.chiaveBak, { force: true }).catch(() => {});
+    }
   }
   /** Nuovo contenuto di chiave.json, verificato: deve restituire la stessa chiave dati prima di essere scritto. */
   async function infoDaDek(chiaveDati, password) {
@@ -300,7 +328,7 @@ function createCassaforte({ dir, safeStorage = null, platform = process.platform
         try { dek = dekSenzaPassword(riserva); } catch { throw e; }
         log('warn', 'chiave dell\'archivio personale illeggibile: usata la copia di riserva');
         chiaveRecuperata = true;
-        try { await scriviInfo(riserva); } catch (e2) { log('warn', 'chiave.json non ripristinato', { error: e2.message }); }
+        try { await scriviInfo(riserva, { daRiserva: true }); } catch (e2) { log('warn', 'chiave.json non ripristinato', { error: e2.message }); }
       }
       // il sistema ora offre una protezione migliore del ripiego: si passa a quella, senza chiedere nulla
       if (info.protetta.metodo === 'file' && sistemaDisponibile(safeStorage, platform)) {
@@ -355,7 +383,7 @@ function createCassaforte({ dir, safeStorage = null, platform = process.platform
       const k = await svolgiConPassword(w, password).catch((e2) => { errori++; throw e2; });
       log('warn', 'chiave dell\'archivio personale illeggibile: usata la copia di riserva');
       chiaveRecuperata = true;
-      try { await scriviInfo(riserva); } catch (e2) { log('warn', 'chiave.json non ripristinato', { error: e2.message }); }
+      try { await scriviInfo(riserva, { daRiserva: true }); } catch (e2) { log('warn', 'chiave.json non ripristinato', { error: e2.message }); }
       dek = k;
     }
     if (!dek) {

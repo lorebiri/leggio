@@ -81,6 +81,34 @@ export async function promemoriaBackup(app, tipo) {
  * → true se l'archivio è di nuovo utilizzabile.
  */
 export async function dialogoRecupero(app, archivio, err, { importaBackup } = {}) {
+  // portachiavi: spesso è un problema temporaneo (portachiavi bloccato, sessione appena aperta). Prima si riprova;
+  // ricominciare è la seconda scelta, dietro un pulsante secondario.
+  if (err.code === 'sistema') {
+    for (;;) {
+      let ricomincia = false;
+      const v = await app.ui.dialog({
+        title: 'Il portachiavi non apre l\'archivio personale',
+        message: err.message,
+        fields: [{ name: 'info', type: 'info', text: 'Se il portachiavi del computer è bloccato, sbloccalo e premi «Riprova». I tuoi dati non sono stati toccati.' }],
+        okLabel: 'Riprova', cancelLabel: 'Non ora',
+        onOpen: (form) => {
+          const foot = form.querySelector('.dlg-foot');
+          const nonOra = [...foot.querySelectorAll('button')].find((b) => b.textContent === 'Non ora');
+          foot.prepend(app.ui.h('button', { type: 'button', class: 'btn ghost pers-ricomincia', onclick: () => { ricomincia = true; nonOra?.click(); } }, 'Metti da parte e ricomincia…'));
+        },
+      });
+      if (v) {
+        try { return await archivio.apri(); }
+        catch (e2) {
+          if (e2?.code === 'sistema') { err = e2; continue; }
+          if (ERRORI_RECUPERABILI.has(e2?.code)) return dialogoRecupero(app, archivio, e2, { importaBackup });
+          app.reportError(e2, 'Archivio personale'); return false;
+        }
+      }
+      if (!ricomincia) return false;
+      break; // sotto: la conferma per mettere da parte
+    }
+  }
   const titolo = { sistema: 'Il portachiavi non apre l\'archivio personale', 'chiave-danneggiata': 'La chiave dell\'archivio personale è danneggiata', 'chiave-mancante': 'Manca la chiave dell\'archivio personale', danneggiato: 'L\'archivio personale è danneggiato' }[err.code] || 'Archivio personale non disponibile';
   const v = await app.ui.dialog({
     title: titolo,
@@ -97,4 +125,22 @@ export async function dialogoRecupero(app, archivio, err, { importaBackup } = {}
   if (!(await archivio.apri().catch((e) => { app.reportError(e, 'Archivio personale'); return false; }))) return false;
   if (importaBackup && await app.ui.dialog({ title: 'Ripristina un backup', message: 'L\'archivio personale ora è vuoto. Vuoi importare un file di backup?', okLabel: 'Importa un backup…', cancelLabel: 'Non ora' })) await importaBackup();
   return true;
+}
+
+/**
+ * Prima di chiudere Leggio: l'archivio personale salva subito ciò che è in attesa. Se non ci riesce (disco pieno,
+ * permessi) l'utente viene avvisato e la chiusura si annulla, a meno che scelga «Esci comunque».
+ * → true per lasciar uscire.
+ */
+export async function guardiaUscita(app, archivio) {
+  if (!archivio?.aperto) return true;
+  let errore = null;
+  try { await archivio.salvaOra(); } catch (e) { errore = e; }
+  if (!archivio.nonSalvato) return true;
+  const v = await app.ui.dialog({
+    title: 'Ci sono modifiche all\'archivio personale non salvate',
+    message: `Leggio non è riuscito a salvare le ultime modifiche a firme, timbri o rubrica${errore?.message ? ': ' + errore.message : '.'} Se esci adesso andranno perse. Ti consigliamo di restare, liberare spazio sul disco (o risolvere il problema) e lasciare che Leggio riprovi da solo.`,
+    okLabel: 'Esci comunque', cancelLabel: 'Resta in Leggio', danger: true,
+  });
+  return v !== null;
 }

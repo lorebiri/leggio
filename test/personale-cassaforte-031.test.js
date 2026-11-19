@@ -63,6 +63,20 @@ describe('scrypt più forte', () => {
     expect(tick).toBeGreaterThan(Math.min(5, Math.floor(ms / 20)));
   });
 
+  it('limite di memoria di scrypt a 256 MB: i nostri parametri ci stanno con margine, quelli più grandi no', async () => {
+    const mem = 128 * KDF.r * (KDF.N + KDF.p + 2);
+    expect(mem).toBeLessThanOrEqual(256 * 1024 * 1024 / 2 + 1024 * 1024);
+    const c = createCassaforte({ dir, safeStorage: fakeSafe(), platform: 'linux' });
+    await c.inizializza();
+    for (const [N, r] of [[1 << 18, 8], [1 << 17, 16], [1 << 20, 1]]) {
+      const head = { formato: 'leggio-backup', versione: 1, kdf: 'scrypt', N, r, p: 1, salt: 'AAAA' };
+      const finto = Buffer.from('LEGGIO-BACKUP-1\n' + JSON.stringify(head) + '\n' + 'x'.repeat(64));
+      const t = performance.now();
+      await expect(c.importaBackup(finto, 'qualunque-password'), `N=${N} r=${r}`).rejects.toMatchObject({ code: 'formato' });
+      expect(performance.now() - t).toBeLessThan(200); // rifiutato prima di calcolare
+    }
+  });
+
   it('rifiuta parametri esagerati letti da un file (niente esaurimento della memoria)', async () => {
     const c = createCassaforte({ dir, safeStorage: fakeSafe(), platform: 'linux' });
     await c.inizializza();
@@ -161,7 +175,7 @@ describe('rafforzamento sicuro: la chiave si apre sempre', () => {
     expect(kdfDi(dir).N).toBe(131072);
   });
 
-  it('se si interrompe fra chiave.json e la sua copia, si apre con entrambe (stessa password)', async () => {
+  it('se la copia di riserva non si scrive, la vecchia (più debole) viene tolta; si ricrea al prossimo sblocco', async () => {
     copiaFixture('sistema-password');
     // copia di riserva della chiave della 0.3.0 già presente; la scrittura della nuova copia non riesce
     cpSync(join(dir, 'chiave.json'), join(dir, 'chiave.json.bak'));
@@ -169,16 +183,62 @@ describe('rafforzamento sicuro: la chiave si apre sempre', () => {
     await c.inizializza();
     await c.sblocca('password-030');
     expect(kdfDi(dir).N).toBe(131072);
-    // la copia di riserva è rimasta quella della 0.3.0 (N=32768); chiave.json si rovina: si recupera dalla copia
-    writeFileSync(join(dir, 'chiave.json'), '{ rotto');
+    expect(existsSync(join(dir, 'chiave.json.bak'))).toBe(false); // mai una copia con la protezione vecchia
     const c2 = createCassaforte({ dir, safeStorage: fakeSafe(), platform: 'linux' });
     await c2.inizializza();
     await c2.sblocca('password-030');
-    expect(c2.stato()).toMatchObject({ bloccato: false, chiaveRecuperata: true });
-    expect((await c2.leggiIndice()).profilo.cognome).toBe('Rossi');
-    // e a questo punto è di nuovo rafforzata, con la copia allineata
+    expect(readFileSync(join(dir, 'chiave.json.bak')).equals(readFileSync(join(dir, 'chiave.json')))).toBe(true);
+    // ora chiave.json si rovina: si recupera dalla copia (rafforzata), con la stessa password
+    writeFileSync(join(dir, 'chiave.json'), '{ rotto');
+    const c3 = createCassaforte({ dir, safeStorage: fakeSafe(), platform: 'linux' });
+    await c3.inizializza();
+    await c3.sblocca('password-030');
+    expect(c3.stato()).toMatchObject({ bloccato: false, chiaveRecuperata: true });
+    expect((await c3.leggiIndice()).profilo.cognome).toBe('Rossi');
     expect(kdfDi(dir).N).toBe(131072);
     expect(readFileSync(join(dir, 'chiave.json.bak')).equals(readFileSync(join(dir, 'chiave.json')))).toBe(true);
+  });
+
+  it('Linux senza portachiavi: dopo aver messo la password la chiave dati in chiaro non resta in nessun file', async () => {
+    const safe = fakeSafe({ backend: 'basic_text' });
+    const c0 = createCassaforte({ dir, safeStorage: safe, platform: 'linux' });
+    await c0.inizializza(); await c0.salvaIndice({ v: 1 });
+    const inChiaro = JSON.parse(readFileSync(join(dir, 'chiave.json.bak'), 'utf8')).protetta.dati; // base64 della chiave dati
+    // 1. la copia non si riesce a scrivere
+    const c = createCassaforte({ dir, safeStorage: safe, platform: 'linux', scrivi: async (p, b) => { if (basename(p) === 'chiave.json.bak') throw enospc(); return safeWrite(p, b); } });
+    await c.inizializza();
+    await c.impostaPassword('', 'password-nuova');
+    for (const f of readdirSync(dir)) if (f.startsWith('chiave')) expect(readFileSync(join(dir, f), 'utf8')).not.toContain(inChiaro);
+    expect(existsSync(join(dir, 'chiave.json.bak'))).toBe(false);
+    // 2. «spegnimento» fra le due scritture: al momento di scrivere chiave.json la copia vecchia è già sparita
+    rmSync(dir, { recursive: true, force: true });
+    const d0 = createCassaforte({ dir, safeStorage: safe, platform: 'linux' });
+    await d0.inizializza(); await d0.salvaIndice({ v: 1 });
+    const segreto = JSON.parse(readFileSync(join(dir, 'chiave.json'), 'utf8')).protetta.dati;
+    const d = createCassaforte({ dir, safeStorage: safe, platform: 'linux', scrivi: async (p, b) => {
+      if (basename(p) === 'chiave.json' && b.toString().includes('"password": true')) { expect(existsSync(join(dir, 'chiave.json.bak'))).toBe(false); await safeWrite(p, b); throw new Error('spento'); }
+      return safeWrite(p, b);
+    } });
+    await d.inizializza();
+    await d.impostaPassword('', 'password-nuova').catch(() => {});
+    for (const f of readdirSync(dir)) if (f.startsWith('chiave')) expect(readFileSync(join(dir, f), 'utf8')).not.toContain(segreto);
+    const d2 = createCassaforte({ dir, safeStorage: safe, platform: 'linux' });
+    await d2.inizializza();
+    await d2.sblocca('password-nuova');
+    expect(await d2.leggiIndice()).toEqual({ v: 1 });
+  });
+
+  it('il cambio di password non lascia la password vecchia nella copia di riserva', async () => {
+    const c = createCassaforte({ dir, safeStorage: fakeSafe(), platform: 'linux' });
+    await c.inizializza(); await c.salvaIndice({ v: 1 });
+    await c.impostaPassword('', 'password-vecchia');
+    const c2 = createCassaforte({ dir, safeStorage: fakeSafe(), platform: 'linux', scrivi: async (p, b) => { if (basename(p) === 'chiave.json.bak') throw enospc(); return safeWrite(p, b); } });
+    await c2.inizializza(); await c2.sblocca('password-vecchia');
+    await c2.impostaPassword('password-vecchia', 'password-nuova');
+    expect(existsSync(join(dir, 'chiave.json.bak'))).toBe(false);
+    writeFileSync(join(dir, 'chiave.json'), 'rotto');
+    const c3 = createCassaforte({ dir, safeStorage: fakeSafe(), platform: 'linux' });
+    await expect(c3.inizializza()).rejects.toMatchObject({ code: 'chiave-danneggiata' }); // niente da recuperare con la vecchia
   });
 });
 

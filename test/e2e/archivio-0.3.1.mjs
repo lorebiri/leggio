@@ -85,6 +85,27 @@ try {
   const parte = readdirSync(c3.dati).find((f) => f.startsWith('personale-illeggibile-'));
   ok(!!parte && existsSync(join(c3.dati, parte, 'indice.dat')), 'archivio vecchio messo da parte, non cancellato');
   await chiudi(s).catch(() => {});
+  console.log('5. chiusura con modifiche non salvabili (disco pieno simulato)');
+  const c5 = preparaCartella();
+  s = await avvia(c5.dati, [], { attesa: 1000 });
+  await aspettaDialogo(s); await nonOra(s);
+  await s.page.evaluate(async () => {
+    const a = window.__leggioPersonale.archivio;
+    a.backend.salva = async () => { const e = new Error('Spazio su disco esaurito: l\'ultima modifica non è stata salvata.'); e.code = 'disco-pieno'; throw e; };
+    a.salvaContatto({ nome: 'Giulia' });
+  });
+  await s.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.close());
+  await s.page.waitForFunction(() => /non salvate/.test(document.querySelector('.backdrop:not(.closing) .dlg h2')?.textContent || ''), null, { timeout: 15000 });
+  ok(true, 'avviso prima di uscire: modifiche non salvate');
+  await nonOra(s); // «Resta in Leggio»
+  await s.page.waitForTimeout(800);
+  ok(await s.page.evaluate(() => window.__leggioPersonale.archivio.nonSalvato), 'la chiusura è annullata e le modifiche sono ancora in memoria');
+  const chiusa = new Promise((r) => s.app.once('close', r));
+  await s.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.close());
+  await s.page.waitForFunction(() => /non salvate/.test(document.querySelector('.backdrop:not(.closing) .dlg h2')?.textContent || ''), null, { timeout: 15000 });
+  await ok2(s); // «Esci comunque»
+  await Promise.race([chiusa, new Promise((_, rej) => setTimeout(() => rej(new Error('Leggio non si è chiuso')), 20000))]);
+  ok(true, '«Esci comunque» chiude Leggio');
 } catch (e) { console.error(e); falliti++; }
 
 console.log(falliti ? `\n${falliti} controlli NON superati` : '\nTutti i controlli superati');

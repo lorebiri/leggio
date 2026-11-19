@@ -6,7 +6,7 @@ import { createArchivio } from './lib/archivio.js';
 import { createIpcBackend, createMemoryBackend, isDesktop } from './lib/backend.js';
 import { impostaArchivio } from './lib/condiviso.js';
 import { registerImpostazioni, chiediPassword, impostaPassword, esportaBackup, importaBackup } from './ui/impostazioni.js';
-import { avvisoPortachiavi, promemoriaBackup, dialogoRecupero, ERRORI_RECUPERABILI } from './ui/avvisi.js';
+import { avvisoPortachiavi, promemoriaBackup, dialogoRecupero, guardiaUscita, ERRORI_RECUPERABILI } from './ui/avvisi.js';
 import { createStatoPromemoria } from './lib/promemoria.js';
 import { registerRubrica } from './ui/rubrica.js';
 import { registerSerie } from './ui/serie.js';
@@ -22,6 +22,8 @@ export default function register(app) {
   });
   impostaArchivio(archivio);
   archivio.on('errore', (e) => app.ui.toast('Archivio personale: ' + (e?.message || e), { kind: 'error', timeout: 15000 }));
+  // alla chiusura: si salva subito ciò che è in attesa; se non si può, l'utente decide (mai dati persi in silenzio)
+  app.quitGuards?.push(() => guardiaUscita(app, archivio));
   archivio.on('recuperato', () => app.ui.toast('Archivio personale: le modifiche ora sono salvate.', { kind: 'success' }));
   archivio.on('ripristinato', () => app.ui.toast('L\'archivio personale era danneggiato: è stata ripristinata l\'ultima versione salvata.', { kind: 'warning', timeout: 10000 }));
 
