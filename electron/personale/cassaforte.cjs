@@ -148,6 +148,7 @@ function createCassaforte({ dir, safeStorage = null, platform = process.platform
   let info = null;           // contenuto di chiave.json
   let ripristinato = false;  // l'indice era danneggiato ed è stato letto dal backup
   let errori = 0;            // password sbagliate di fila (rallentamento)
+  let pulizia = false;       // pulizia degli orfani già programmata in questa sessione
   let coda = Promise.resolve();
   const inCoda = (fn) => { const r = coda.then(fn, fn); coda = r.catch(() => {}); return r; };
 
@@ -201,7 +202,15 @@ function createCassaforte({ dir, safeStorage = null, platform = process.platform
         await scriviInfo(infoDaDek(dek, null));
         log('info', 'chiave dell\'archivio personale ora protetta dal sistema');
       }
+      programmaPulizia();
     }
+  }
+
+  /** Pulizia degli orfani una volta per sessione, poco dopo l'apertura (in coda, non blocca nulla). */
+  function programmaPulizia() {
+    if (pulizia) return; pulizia = true;
+    const t = setTimeout(() => { inCoda(() => pulisciBlob()).catch(() => {}); }, 8000);
+    t.unref?.();
   }
 
   function stato() {
@@ -230,7 +239,7 @@ function createCassaforte({ dir, safeStorage = null, platform = process.platform
     try { dek = svolgiConPassword(w, password); errori = 0; }
     catch (e) { errori++; throw e; }
     if (info.protetta.metodo === 'file' && sistemaDisponibile(safeStorage, platform)) await scriviInfo(infoDaDek(dek, password));
-    await pulisciBlob().catch(() => {});
+    programmaPulizia();
     return stato();
   }
   function blocca() { if (info?.password) { dek?.fill(0); dek = null; } return stato(); }

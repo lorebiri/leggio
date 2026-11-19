@@ -130,6 +130,31 @@ try {
     return { contatti: a.contatti().length, firmeAltrui: a.firme({ proprietario: 'altri' }).length };
   });
   ok(imp.contatti === 1 && imp.firmeAltrui === 1, 'reimportato: contatto e sua firma tornano');
+
+  console.log('5. firma da una foto su carta colorata');
+  const fotoB64 = await s.page.evaluate(() => {
+    const c = document.createElement('canvas'); c.width = 900; c.height = 400; const x = c.getContext('2d');
+    const g = x.createLinearGradient(0, 0, 900, 0); g.addColorStop(0, '#f4ecc8'); g.addColorStop(1, '#a89f82'); x.fillStyle = g; x.fillRect(0, 0, 900, 400);
+    x.strokeStyle = '#1b2a6b'; x.lineWidth = 7; x.beginPath(); x.moveTo(150, 250); for (let i = 0; i < 60; i++) x.lineTo(150 + i * 10, 220 - Math.sin(i / 4) * 70); x.stroke();
+    return c.toDataURL('image/jpeg', 0.9).split(',')[1];
+  });
+  const fotoPath = join(dir, 'firma-foto.jpg');
+  (await import('node:fs')).writeFileSync(fotoPath, Buffer.from(fotoB64, 'base64'));
+  await s.app.evaluate(({ dialog }, p) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] }); }, fotoPath);
+  const prima = await s.page.evaluate(() => window.__leggioPersonale.archivio.firme({ proprietario: 'io' }).length);
+  await s.page.evaluate(() => window.__leggio.tools.run('signatures-library'));
+  await s.page.click('button:has-text("Nuova firma o sigla")');
+  await s.page.waitForSelector('#overlay-root .dlg .sig-tab[data-tab=image]');
+  await s.page.click('#overlay-root .dlg .sig-tab[data-tab=image]');
+  await s.page.click('#overlay-root .dlg button:has-text("Scegli foto o scansione")');
+  await s.page.waitForSelector('#overlay-root .dlg .foto-wrap:not([hidden])', { timeout: 15000 });
+  await s.page.waitForTimeout(500);
+  await s.page.screenshot({ path: join(dir, 'firma-da-foto.png') });
+  await s.page.click('#overlay-root .dlg button[type=submit]');
+  await s.page.waitForFunction((n) => window.__leggioPersonale.archivio.firme({ proprietario: 'io' }).length > n, prima, { timeout: 10000 });
+  const nuova = await s.page.evaluate(async () => { const a = window.__leggioPersonale.archivio; const f = a.firme({ proprietario: 'io' }).find((x) => x.origine === 'foto'); const u = await a.immagine(f.blob); const img = new Image(); img.src = u; await img.decode(); const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const x = c.getContext('2d'); x.drawImage(img, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data; let trasp = 0; for (let i = 3; i < d.length; i += 4) if (d[i] === 0) trasp++; return { w: img.width, h: img.height, trasparente: trasp / (d.length / 4) }; });
+  ok(nuova.w > 400 && nuova.w < 700 && nuova.trasparente > 0.5, `firma da foto: ritagliata (${nuova.w}×${nuova.h}) con sfondo trasparente (${Math.round(nuova.trasparente * 100)}%)`);
+  console.log('     schermata:', join(dir, 'firma-da-foto.png'));
   await chiudi(s);
 } catch (e) {
   console.error(e); fallite++;
