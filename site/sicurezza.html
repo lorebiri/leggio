@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'none'; img-src 'self' data:; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Leggio — perché compare un avviso di sicurezza e cosa fare</title>
+<meta name="description" content="Perché Windows, macOS e il browser avvisano quando scarichi e apri Leggio, e come procedere passo per passo su Windows 10 e 11, macOS e Linux. Come controllare il file con l'impronta SHA-256.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="icona.svg" type="image/svg+xml">
+<link rel="stylesheet" href="stile.css">
+<script type="module" src="sicurezza.js"></script>
+</head>
+<body class="pagina-sicurezza">
+<a class="salta" href="#contenuto">Vai al contenuto</a>
+
+<header class="testata">
+  <div class="wrap testata-riga">
+    <a class="marchio" href="index.html"><img src="icona.svg" alt="" width="36" height="36"> Leggio</a>
+    <nav aria-label="Sezioni della pagina">
+      <ul>
+        <li class="nav-ampia"><a href="#perche">Perché l'avviso</a></li>
+        <li><a href="#guide">Cosa fare</a></li>
+        <li class="nav-ampia"><a href="#verifica">Controlla il file</a></li>
+        <li><a class="nav-scarica" href="index.html#altri-sistemi">Scarica</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main id="contenuto" tabindex="-1">
+
+  <section class="hero hero-sicurezza" aria-labelledby="titolo">
+    <div class="wrap">
+      <p class="occhiello">Avvisi di sicurezza</p>
+      <h1 id="titolo">Windows o macOS dicono che Leggio «potrebbe non essere sicuro»? <span class="h1-accento">Ecco perché, e cosa fare.</span></h1>
+      <p class="lead">In breve: <strong>Leggio non ha ancora una firma digitale a pagamento</strong> ed è un programma nuovo, quindi i sistemi avvisano per prudenza. <strong>Non vuol dire che contenga un virus.</strong> Qui sotto trovi il perché, la guida passo per passo per il tuo computer e il modo per controllare tu stesso che il file sia quello giusto.</p>
+      <nav class="salti-sistema" aria-label="Vai alla guida per il tuo sistema">
+        <a class="btn" href="#windows" data-apri="windows">Windows 10 e 11</a>
+        <a class="btn" href="#mac" data-apri="mac">macOS</a>
+        <a class="btn" href="#linux" data-apri="linux">Linux</a>
+      </nav>
+      <p class="nota" id="sistema-rilevato" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <!-- 1. Il perché -->
+  <section id="perche" aria-labelledby="t-perche">
+    <div class="wrap">
+      <h2 id="t-perche">Perché compare l'avviso</h2>
+      <div class="griglia">
+        <div class="carta">
+          <h3>Leggio non è (ancora) firmato</h3>
+          <p>Windows e macOS si fidano di più dei programmi con una <strong>firma digitale</strong>: un certificato a pagamento, da rinnovare ogni anno, che dice chi ha pubblicato il programma. Leggio è gratuito e fatto da una persona sola: per ora questa firma non c'è. È prevista, e quando ci sarà la maggior parte di questi avvisi sparirà.</p>
+        </div>
+        <div class="carta">
+          <h3>È un programma nuovo, senza «reputazione»</h3>
+          <p>Microsoft e Apple tengono conto anche di <strong>quante persone hanno già scaricato e usato</strong> un programma. Un programma nuovo, scaricato da poche persone, non ha ancora questa reputazione: per prudenza il sistema avvisa, anche se il file è innocuo.</p>
+        </div>
+        <div class="carta">
+          <h3>L'avviso non è una diagnosi</h3>
+          <p>L'avviso significa «non so chi l'ha fatto», non «ho trovato un virus». Se un antivirus trova davvero qualcosa di dannoso, il messaggio è diverso e parla di una minaccia rilevata: in quel caso <a href="#antivirus">leggi qui</a>.</p>
+        </div>
+      </div>
+
+      <h3 class="titolo-gruppi" id="t-controlla">Non devi fidarti sulla parola: puoi controllare</h3>
+      <ul class="punti punti-larghi">
+        <li><strong>Il codice è aperto</strong>: chiunque può leggerlo sul <a href="https://github.com/lorebiri/leggio">repository di Leggio su GitHub</a>.</li>
+        <li><strong>I file da installare li costruisce GitHub</strong>, in automatico, a partire da quel codice: i passaggi sono pubblici nel file <a href="https://github.com/lorebiri/leggio/blob/main/.github/workflows/release.yml">release.yml</a>.</li>
+        <li><strong>Ogni file ha la sua impronta SHA-256</strong>, pubblicata accanto al pulsante di download e nel file <code>SHA256SUMS.txt</code>: se l'impronta del file che hai scaricato è identica, il file è proprio quello pubblicato. <a href="#verifica">Ecco come si controlla</a>.</li>
+        <li><strong>Leggio non chiede la password di amministratore su Windows</strong>: si installa solo per il tuo utente.</li>
+      </ul>
+      <p class="avviso"><strong>La regola d'oro:</strong> scarica Leggio <strong>solo dalla pagina ufficiale</strong> (<a href="index.html">lorebiri.github.io/leggio</a>) <strong>o da <a href="https://github.com/lorebiri/leggio/releases">GitHub Releases</a></strong>. Se trovi Leggio su altri siti, anche se sembra uguale, non usarlo: i passi di questa pagina valgono solo per il file ufficiale.</p>
+    </div>
+  </section>
+
+  <!-- 2. Le guide passo per passo -->
+  <section id="guide" aria-labelledby="t-guide">
+    <div class="wrap">
+      <h2 id="t-guide">Cosa fare, passo per passo</h2>
+      <p class="intro">Apri la guida del tuo computer: se la pagina ha riconosciuto il sistema, l'ha già aperta per te. Le figure sono <strong>riproduzioni semplificate</strong>: i colori e la disposizione delle finestre vere cambiano da una versione all'altra, ma i nomi dei pulsanti evidenziati sono quelli da cercare. Il numero sul pulsante corrisponde al passo.</p>
+
+      <div class="guide-sistemi">
+
+        <!-- ================= WINDOWS ================= -->
+        <details class="guida-sistema" id="windows" data-sistema="windows" open>
+          <summary><h3>Windows 10 e 11</h3> <span class="riconosciuto" hidden>il tuo sistema</span></summary>
+          <div class="guida-corpo">
+
+            <article class="passo" aria-labelledby="t-w-browser">
+              <h4 id="t-w-browser"><span class="passo-tag">A</span> Al download: l'avviso del browser</h4>
+              <p>Alcuni browser fermano i file poco scaricati e li mettono in attesa nell'elenco dei download. Il file non è stato eliminato: devi solo dire che vuoi tenerlo.</p>
+
+              <div class="due-colonne">
+                <div>
+                  <h5>Microsoft Edge</h5>
+                  <p class="sotto">Messaggio: «Leggio-…-installer.exe <strong>non viene scaricato comunemente</strong>…»</p>
+                  <ol class="passi">
+                    <li>Nel pannello dei download, accanto al file, premi <em>…</em> (Altre azioni).</li>
+                    <li>Scegli <em>Mantieni</em>.</li>
+                    <li>Nella finestra che si apre premi <em>Mostra altro</em>.</li>
+                    <li>Premi <em>Mantieni comunque</em>.</li>
+                  </ol>
+                  <p class="nota">Non vedi il pannello? Premi <kbd>Ctrl</kbd> + <kbd>J</kbd>.</p>
+                </div>
+                <figure class="figura">
+                  <div class="finestra" aria-hidden="true">
+                    <div class="fin-barra"><span class="fin-titolo">Download</span></div>
+                    <div class="fin-corpo">
+                      <div class="dl-riga">
+                        <span class="dl-icona"></span>
+                        <span class="dl-testo"><b>Leggio-…-installer.exe</b><span>non viene scaricato comunemente…</span></span>
+                        <span class="fin-btn quadrato evidenziato">…<span class="num">1</span></span>
+                      </div>
+                      <div class="menu-finto">
+                        <span class="voce evidenziata">Mantieni<span class="num">2</span></span>
+                        <span class="voce"><span class="barra"></span></span>
+                        <span class="voce"><span class="barra corta"></span></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="finestra finestra-dialogo" aria-hidden="true">
+                    <div class="fin-corpo">
+                      <span class="barra lunga"></span><span class="barra"></span>
+                      <span class="fin-link evidenziato">Mostra altro ⌄<span class="num">3</span></span>
+                      <span class="fin-link evidenziato">Mantieni comunque<span class="num">4</span></span>
+                    </div>
+                  </div>
+                  <figcaption>Edge: «…» (1) → <em>Mantieni</em> (2) → <em>Mostra altro</em> (3) → <em>Mantieni comunque</em> (4).</figcaption>
+                </figure>
+              </div>
+
+              <div class="due-colonne">
+                <div>
+                  <h5>Chrome</h5>
+                  <p class="sotto">Chrome può segnalare il file come <strong>«file sospetto»</strong>, cioè insolito o poco conosciuto.</p>
+                  <ol class="passi">
+                    <li>Apri l'elenco dei download (<kbd>Ctrl</kbd> + <kbd>J</kbd>).</li>
+                    <li>Accanto al file scegli <em>Scarica file sospetto</em> (nelle versioni meno recenti il pulsante si chiama <em>Mantieni</em>).</li>
+                  </ol>
+                  <p class="nota">Se invece Chrome scrive che il file è <strong>pericoloso</strong> o che è stato trovato un virus, fermati: scarica di nuovo da questa pagina e <a href="#verifica">controlla l'impronta</a>.</p>
+                </div>
+                <div class="carta carta-tenue">
+                  <h5>Altri browser</h5>
+                  <p>I passi sono simili: cerca il file nell'elenco dei download e la voce per tenerlo («Mantieni», «Consenti il download» o simili). Se non c'è nessuna voce per proseguire, prova a scaricare dalla <a href="https://github.com/lorebiri/leggio/releases">pagina ufficiale su GitHub</a>.</p>
+                </div>
+              </div>
+            </article>
+
+            <article class="passo" aria-labelledby="t-w-smartscreen">
+              <h4 id="t-w-smartscreen"><span class="passo-tag">B</span> All'avvio: «Windows ha protetto il PC»</h4>
+              <div class="due-colonne">
+                <div>
+                  <p>Quando apri il file scaricato, Windows può mostrare una finestra blu con il titolo <strong>«Windows ha protetto il PC»</strong>: è il filtro SmartScreen di Microsoft Defender, che avvisa per i programmi senza firma o con poca reputazione.</p>
+                  <ol class="passi">
+                    <li>Premi il link <em>Ulteriori informazioni</em> (in alcune versioni: <em>Maggiori informazioni</em>), sotto il testo.</li>
+                    <li>Controlla che il nome dell'app sia <strong>Leggio-…</strong> e premi <em>Esegui comunque</em>.</li>
+                  </ol>
+                  <p class="nota">Serve una volta sola per ogni file scaricato. Non serve la password di amministratore. Se il pulsante <em>Esegui comunque</em> non compare, il computer è probabilmente gestito da un ufficio informatico che non permette programmi non firmati: chiedi a loro.</p>
+                </div>
+                <figure class="figura">
+                  <div class="finestra finestra-blu" aria-hidden="true">
+                    <div class="fin-corpo">
+                      <span class="fin-titolo-grande">Windows ha protetto il PC</span>
+                      <span class="barra lunga chiara"></span><span class="barra chiara"></span>
+                      <span class="fin-link evidenziato">Ulteriori informazioni<span class="num">1</span></span>
+                      <span class="fin-app">App: Leggio-…-installer.exe</span>
+                      <span class="fin-pulsanti">
+                        <span class="fin-btn evidenziato">Esegui comunque<span class="num">2</span></span>
+                        <span class="fin-btn spento"><span class="barra corta chiara"></span></span>
+                      </span>
+                    </div>
+                  </div>
+                  <figcaption><em>Ulteriori informazioni</em> (1) fa comparire il nome dell'app e il pulsante <em>Esegui comunque</em> (2).</figcaption>
+                </figure>
+              </div>
+            </article>
+
+            <article class="passo" id="smart-app-control" aria-labelledby="t-w-sac">
+              <h4 id="t-w-sac"><span class="passo-tag">C</span> Se Leggio viene bloccato da «Controllo intelligente delle app»</h4>
+              <p>Solo su <strong>Windows 11</strong>, e solo se è attivo. Il Controllo intelligente delle app (in inglese Smart App Control; in alcune schermate «Controllo app intelligente») <strong>blocca i programmi senza firma</strong> e, a differenza della finestra blu, <strong>non ha un pulsante per proseguire</strong>: Microsoft stessa spiega che oggi non si può fare un'eccezione per una singola app.</p>
+              <div class="due-colonne">
+                <div class="carta">
+                  <h5>Cosa puoi fare</h5>
+                  <ul class="punti">
+                    <li><strong>Sul computer dell'ufficio</strong>: non cambiare nulla e chiedi all'ufficio informatico.</li>
+                    <li><strong>Aspettare la versione firmata</strong> di Leggio: con la firma il blocco non ci sarà più.</li>
+                    <li><strong>Sul tuo computer, se decidi tu</strong>, puoi spegnerlo: <em>Sicurezza di Windows</em> → <em>Controllo app e browser</em> → <em>Impostazioni di Controllo intelligente delle app</em> → <em>Disattivato</em>.</li>
+                  </ul>
+                </div>
+                <div class="carta">
+                  <h5>Prima di spegnerlo, sappi che…</h5>
+                  <ul class="punti punti-attenzione">
+                    <li>Vale per <strong>tutti i programmi</strong>, non solo per Leggio: togli una protezione in più al computer. L'antivirus e la finestra blu restano attivi.</li>
+                    <li>Nelle versioni recenti di Windows 11 si può <strong>riattivare</strong> dalla stessa pagina; nelle versioni meno aggiornate, una volta spento, per riaccenderlo bisognava reimpostare o reinstallare Windows. Se non sei sicuro, non spegnerlo.</li>
+                    <li><strong>Non</strong> scaricare versioni «sbloccate» di Leggio da altri siti e <strong>non</strong> usare programmi che promettono di aggirare le protezioni di Windows.</li>
+                  </ul>
+                </div>
+              </div>
+            </article>
+
+            <article class="passo" id="antivirus" aria-labelledby="t-w-av">
+              <h4 id="t-w-av"><span class="passo-tag">D</span> Se l'antivirus mette il file in quarantena</h4>
+              <p>Alcuni antivirus, anche i più diffusi tra quelli gratuiti, trattano con sospetto tutti i programmi nuovi e senza firma: possono bloccarli, spostarli in «quarantena» o cancellarli. A volte si tratta di un <strong>falso positivo</strong>, ma va controllato.</p>
+              <ol class="passi passi-larghi">
+                <li><strong>Non spegnere l'antivirus</strong> e non aprire il file finché non hai controllato.</li>
+                <li><strong>Scarica di nuovo Leggio</strong> da <a href="index.html#altri-sistemi">questa pagina</a> o da <a href="https://github.com/lorebiri/leggio/releases">GitHub Releases</a> e <a href="#verifica">controlla l'impronta SHA-256</a>.</li>
+                <li><strong>Se l'impronta è identica</strong>, il file è quello pubblicato: puoi ripristinarlo dalla quarantena del tuo antivirus o aggiungere un'eccezione <em>solo per quel file</em>. Con l'antivirus di Windows: <em>Sicurezza di Windows</em> → <em>Protezione da virus e minacce</em> → <em>Cronologia protezione</em>, apri la voce di Leggio e scegli di ripristinarlo o consentirlo. Con gli altri antivirus la voce si chiama di solito «Quarantena»; i nomi dei pulsanti cambiano da un prodotto all'altro.</li>
+                <li><strong>Segnala il falso positivo</strong> al produttore dell'antivirus (quasi tutti hanno un modulo apposta) e, se ti va, <a href="https://github.com/lorebiri/leggio/issues/new/choose">scrivici su GitHub</a>: ci aiuta a farlo correggere per tutti.</li>
+                <li><strong>Se l'impronta è diversa</strong>: cancella il file, non aprirlo e <a href="https://github.com/lorebiri/leggio/issues/new/choose">avvisaci</a>.</li>
+              </ol>
+            </article>
+
+          </div>
+        </details>
+
+        <!-- ================= MACOS ================= -->
+        <details class="guida-sistema" id="mac" data-sistema="mac" open>
+          <summary><h3>macOS (Sonoma, Sequoia e successivi)</h3> <span class="riconosciuto" hidden>il tuo sistema</span></summary>
+          <div class="guida-corpo">
+
+            <article class="passo" aria-labelledby="t-m-file">
+              <h4 id="t-m-file"><span class="passo-tag">0</span> Prima: scegli il file giusto per il tuo Mac</h4>
+              <div class="due-colonne">
+                <div class="carta">
+                  <h5>Mac con chip Apple (M1, M2, M3, M4…)</h5>
+                  <p>Scarica <code>Leggio-…-mac-arm64.dmg</code>.</p>
+                </div>
+                <div class="carta">
+                  <h5>Mac con processore Intel</h5>
+                  <p>Scarica <code>Leggio-…-mac-x64.dmg</code>.</p>
+                </div>
+              </div>
+              <p class="nota">Non sai quale hai? Menu Apple (la mela in alto a sinistra) → <em>Informazioni su questo Mac</em>: se leggi «Chip» seguito da Apple M… è un Mac con chip Apple; se leggi «Processore» seguito da Intel è un Mac Intel. La versione Intel funziona anche sui Mac con chip Apple, ma più lenta; la versione per chip Apple non funziona sui Mac Intel.</p>
+            </article>
+
+            <article class="passo" aria-labelledby="t-m-avviso">
+              <h4 id="t-m-avviso"><span class="passo-tag">1</span> Il primo avviso: «Apple non può verificare…»</h4>
+              <div class="due-colonne">
+                <div>
+                  <ul class="punti">
+                    <li>Apri il file <code>.dmg</code> e trascina Leggio nella cartella <em>Applicazioni</em>.</li>
+                    <li>Apri Leggio dalla cartella <em>Applicazioni</em>.</li>
+                  </ul>
+                  <ol class="passi">
+                    <li>Compare un avviso: Apple non può verificare che Leggio sia privo di malware (nelle versioni meno recenti: «non può essere aperto perché lo sviluppatore non può essere verificato»). Premi <em>Fine</em>, <strong>non</strong> <em>Sposta nel Cestino</em>.</li>
+                  </ol>
+                  <p class="nota">Se il messaggio dice invece che Leggio «è danneggiato», il file probabilmente non è stato scaricato bene: cancellalo, scaricalo di nuovo e <a href="#verifica">controlla l'impronta</a>.</p>
+                </div>
+                <figure class="figura">
+                  <div class="finestra finestra-mac" aria-hidden="true">
+                    <div class="fin-corpo centrato">
+                      <span class="mac-icona"></span>
+                      <span class="fin-titolo-mac">«Leggio»</span>
+                      <span class="fin-testo-piccolo">Apple non può verificare che l'app sia priva di malware…</span>
+                      <span class="fin-pulsanti colonna">
+                        <span class="fin-btn evidenziato">Fine<span class="num">1</span></span>
+                        <span class="fin-btn spento">Sposta nel Cestino</span>
+                      </span>
+                    </div>
+                  </div>
+                  <figcaption>Premi <em>Fine</em> (1): l'app resta dov'è e puoi autorizzarla al passo successivo.</figcaption>
+                </figure>
+              </div>
+            </article>
+
+            <article class="passo" aria-labelledby="t-m-impostazioni">
+              <h4 id="t-m-impostazioni"><span class="passo-tag">2</span> Autorizza Leggio in «Privacy e sicurezza»</h4>
+              <div class="due-colonne">
+                <div>
+                  <ol class="passi" start="2">
+                    <li>Menu Apple → <em>Impostazioni di Sistema</em> → nella barra laterale <em>Privacy e sicurezza</em> (forse devi scorrere la barra).</li>
+                    <li>Scorri <strong>fino in fondo</strong>, alla sezione <em>Sicurezza</em>: c'è una riga che parla di Leggio bloccato. Premi <em>Apri comunque</em>.</li>
+                    <li>Compare di nuovo l'avviso: questa volta scegli <em>Apri</em> (in alcune versioni il pulsante si chiama <em>Apri comunque</em>).</li>
+                    <li>Conferma con la <strong>password del Mac</strong> (quella con cui accedi) o con il <strong>Touch ID</strong>, poi <em>OK</em>.</li>
+                  </ol>
+                  <p class="nota">Il pulsante <em>Apri comunque</em> resta disponibile per circa un'ora dopo il tentativo di apertura: se non lo vedi, apri di nuovo Leggio e ripeti. Fatto una volta, Leggio si apre con il doppio clic come le altre app. Dopo ogni aggiornamento di Leggio potrebbe servire ripeterlo.</p>
+                </div>
+                <figure class="figura">
+                  <div class="finestra finestra-impostazioni" aria-hidden="true">
+                    <div class="imp-laterale">
+                      <span class="barra"></span><span class="barra corta"></span><span class="barra"></span>
+                      <span class="voce evidenziata">Privacy e sicurezza<span class="num">2</span></span>
+                      <span class="barra corta"></span><span class="barra"></span>
+                    </div>
+                    <div class="imp-pannello">
+                      <span class="imp-titolo">Sicurezza</span>
+                      <span class="barra lunga"></span>
+                      <span class="fin-testo-piccolo">«Leggio» è stato bloccato…</span>
+                      <span class="fin-btn evidenziato">Apri comunque<span class="num">3</span></span>
+                    </div>
+                  </div>
+                  <div class="finestra finestra-dialogo finestra-mac" aria-hidden="true">
+                    <div class="fin-corpo centrato">
+                      <span class="fin-pulsanti">
+                        <span class="fin-btn evidenziato">Apri<span class="num">4</span></span>
+                      </span>
+                      <span class="campo-password">••••••••</span>
+                      <span class="fin-btn evidenziato">OK<span class="num">5</span></span>
+                    </div>
+                  </div>
+                  <figcaption><em>Privacy e sicurezza</em> (2) → in fondo <em>Apri comunque</em> (3) → <em>Apri</em> (4) → password o Touch ID e <em>OK</em> (5).</figcaption>
+                </figure>
+              </div>
+            </article>
+
+            <div class="carta carta-tenue">
+              <h5>E il vecchio «clic destro → Apri»?</h5>
+              <p>Fino a macOS 14 Sonoma bastava fare clic destro (o Ctrl + clic) sull'app e scegliere <em>Apri</em>, poi ancora <em>Apri</em>. <strong>Da macOS 15 Sequoia questo trucco non basta più</strong>: Apple ha deciso che si passa sempre da <em>Impostazioni di Sistema → Privacy e sicurezza</em>. La strada qui sopra funziona su tutte le versioni recenti.</p>
+            </div>
+
+            <details class="esperti">
+              <summary><h5>Per esperti: togliere la «quarantena» dal Terminale</h5></summary>
+              <div class="risposta">
+                <p>In alternativa ai passi 2–5, dopo aver copiato Leggio in <em>Applicazioni</em> puoi togliere l'attributo di quarantena che macOS mette sui file scaricati:</p>
+                <div class="comando"><pre><code data-copia>xattr -dr com.apple.quarantine /Applications/Leggio.app</code></pre></div>
+                <p class="avviso"><strong>Attenzione:</strong> così salti del tutto il controllo di macOS per quell'app. Fallo solo con il file ufficiale e <a href="#verifica">dopo aver controllato l'impronta</a>. Non incollare mai nel Terminale comandi trovati su siti che non conosci.</p>
+              </div>
+            </details>
+
+          </div>
+        </details>
+
+        <!-- ================= LINUX ================= -->
+        <details class="guida-sistema" id="linux" data-sistema="linux" open>
+          <summary><h3>Linux (AppImage)</h3> <span class="riconosciuto" hidden>il tuo sistema</span></summary>
+          <div class="guida-corpo">
+            <p>Su Linux non ci sono avvisi come su Windows e macOS, ma il file <code>.AppImage</code> appena scaricato non è ancora «eseguibile»: va reso tale una volta. Se l'AppImage non è ancora pubblicata, la <a href="index.html#altri-sistemi">pagina di download</a> lo dice.</p>
+            <article class="passo" aria-labelledby="t-l-esegui">
+              <h4 id="t-l-esegui"><span class="passo-tag">1</span> Rendi eseguibile l'AppImage</h4>
+              <div class="due-colonne">
+                <div>
+                  <h5>Con il gestore dei file</h5>
+                  <ol class="passi">
+                    <li>Clic destro sul file <code>Leggio-…-linux-x86_64.AppImage</code> → <em>Proprietà</em>.</li>
+                    <li>Nella scheda <em>Permessi</em> attiva <em>Consenti di eseguire il file come programma</em>. Il nome cambia secondo il desktop e la versione: per esempio «Eseguibile come programma».</li>
+                    <li>Chiudi e apri il file con un doppio clic.</li>
+                  </ol>
+                  <h5>Oppure dal terminale</h5>
+                  <div class="comando"><pre><code data-copia>chmod +x ~/Scaricati/Leggio-*-linux-x86_64.AppImage
+~/Scaricati/Leggio-*-linux-x86_64.AppImage</code></pre></div>
+                  <p class="nota">Se il sistema è in inglese la cartella è <code>~/Downloads</code>.</p>
+                </div>
+                <figure class="figura">
+                  <div class="finestra" aria-hidden="true">
+                    <div class="fin-barra"><span class="fin-titolo">Proprietà</span></div>
+                    <div class="fin-corpo">
+                      <span class="schede-finte"><span class="barra corta"></span><span class="scheda-attiva">Permessi</span></span>
+                      <span class="barra"></span>
+                      <span class="spunta evidenziato"><span class="casella">✓</span>Consenti di eseguire il file come programma<span class="num">2</span></span>
+                    </div>
+                  </div>
+                  <figcaption>Scheda <em>Permessi</em>: attiva l'esecuzione come programma (2).</figcaption>
+                </figure>
+              </div>
+            </article>
+            <article class="passo" aria-labelledby="t-l-fuse">
+              <h4 id="t-l-fuse"><span class="passo-tag">2</span> Se non si apre: manca libfuse2</h4>
+              <p>Le AppImage hanno bisogno della libreria FUSE 2. Se non parte, o dal terminale vedi un errore che cita <code>libfuse.so.2</code>, installala:</p>
+              <div class="griglia">
+                <div class="carta"><h5>Ubuntu 24.04 e successivi</h5><div class="comando"><pre><code data-copia>sudo apt install libfuse2t64</code></pre></div></div>
+                <div class="carta"><h5>Ubuntu 22.04, Debian, Mint</h5><div class="comando"><pre><code data-copia>sudo apt install libfuse2</code></pre></div></div>
+                <div class="carta"><h5>Fedora</h5><div class="comando"><pre><code data-copia>sudo dnf install fuse-libs</code></pre></div></div>
+              </div>
+              <p class="nota">Su Ubuntu <strong>non</strong> installare il pacchetto chiamato solo <code>fuse</code>: può togliere componenti di sistema.</p>
+            </article>
+          </div>
+        </details>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Verifica SHA-256 -->
+  <section id="verifica" aria-labelledby="t-verifica">
+    <div class="wrap">
+      <h2 id="t-verifica">Controlla che il file sia quello giusto (SHA-256)</h2>
+      <p class="intro">L'impronta SHA-256 è una sequenza di 64 caratteri calcolata dal contenuto del file: se cambia anche un solo byte, cambia tutta. Calcola l'impronta del file che hai scaricato e confrontala con quella pubblicata <a href="index.html#altri-sistemi">accanto al pulsante di download</a> o nel file <code>SHA256SUMS.txt</code> della <a href="https://github.com/lorebiri/leggio/releases/latest">versione su GitHub</a>. <strong>Devono essere identiche</strong> (maiuscole e minuscole non contano).</p>
+      <div class="griglia">
+        <div class="carta">
+          <h3>Windows</h3>
+          <ol>
+            <li>Apri il menu Start, scrivi <em>PowerShell</em> e premi Invio.</li>
+            <li>Copia questo comando, incollalo con il tasto destro del mouse e premi Invio:</li>
+          </ol>
+          <div class="comando"><pre><code data-copia>Get-FileHash "$env:USERPROFILE\Downloads\Leggio-*.exe" -Algorithm SHA256</code></pre></div>
+          <p class="nota">L'impronta è nella colonna <em>Hash</em>. Se hai salvato il file altrove, cambia il percorso. Dal Prompt dei comandi va bene anche <code>certutil -hashfile "percorso\del\file.exe" SHA256</code>.</p>
+        </div>
+        <div class="carta">
+          <h3>macOS</h3>
+          <ol>
+            <li>Apri il Terminale (Launchpad → Altro → Terminale, oppure cercalo con Spotlight).</li>
+            <li>Copia il comando, incollalo e premi Invio:</li>
+          </ol>
+          <div class="comando"><pre><code data-copia>shasum -a 256 ~/Downloads/Leggio-*.dmg</code></pre></div>
+          <p class="nota">Se nella stessa cartella c'è anche <code>SHA256SUMS.txt</code>: <code>cd ~/Downloads && shasum -a 256 -c SHA256SUMS.txt --ignore-missing</code> scrive «OK» accanto ai file giusti.</p>
+        </div>
+        <div class="carta">
+          <h3>Linux</h3>
+          <ol>
+            <li>Apri il terminale.</li>
+            <li>Copia il comando, incollalo e premi Invio:</li>
+          </ol>
+          <div class="comando"><pre><code data-copia>sha256sum ~/Scaricati/Leggio-*.AppImage</code></pre></div>
+          <p class="nota">Con <code>SHA256SUMS.txt</code> nella stessa cartella: <code>sha256sum -c SHA256SUMS.txt --ignore-missing</code>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="piede">
+  <div class="wrap piede-griglia">
+    <div>
+      <p class="piede-marchio"><img src="icona.svg" alt="" width="28" height="28"> Leggio</p>
+      <p>Il programma per i PDF libero e gratuito. Software libero con licenza <a href="https://github.com/lorebiri/leggio/blob/main/LICENSE">GPL-3.0-or-later</a> © Lorenzo Birindelli.</p>
+    </div>
+    <nav aria-label="Collegamenti utili">
+      <h2 class="piede-titolo">Contatti e progetto</h2>
+      <ul>
+        <li><a href="index.html">Torna alla pagina di Leggio</a></li>
+        <li><a href="https://github.com/lorebiri/leggio/issues/new/choose">Segnala un problema o proponi un'idea</a> (GitHub Issues)</li>
+        <li><a href="https://github.com/lorebiri/leggio">Codice sorgente</a></li>
+        <li><a href="https://github.com/lorebiri/leggio/releases">Tutte le versioni</a></li>
+      </ul>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>

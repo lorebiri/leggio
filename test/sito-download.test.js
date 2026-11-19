@@ -215,12 +215,33 @@ describe('index.html', () => {
   const VIETATI = ['Adobe', 'Acrobat', 'Reader', 'Foxit', 'PDF-XChange', 'XChange', 'Tracker Software', 'Nitro', 'Wondershare', 'PDFelement',
     'Smallpdf', 'iLovePDF', 'Edge', 'Chrome', 'Chromium', 'Firefox', 'Safari', 'Microsoft', 'Google', 'SmartScreen', 'OneDrive',
     'Word', 'Excel', 'PowerPoint', 'LibreOffice', 'Office', 'Dike', 'ArubaSign'];
+  // antivirus: non si nominano nemmeno nella guida agli avvisi
+  const ANTIVIRUS = ['Avast', 'AVG', 'Norton', 'McAfee', 'Kaspersky', 'Bitdefender', 'ESET', 'Avira', 'Malwarebytes', 'Trend Micro', 'Sophos', 'Panda'];
   const avvio = readFileSync(join(SITO, 'avvio.js'), 'utf8');
   for (const [nome, testo] of [['index.html', html], ['avvio.js', avvio]]) {
     it(`nessun nome di prodotti o aziende di terzi in ${nome}`, () => {
       for (const v of VIETATI) expect(testo, `${nome}: ${v}`).not.toMatch(new RegExp(`\\b${v.replace('-', '\\-')}\\b`, 'i'));
     });
   }
+  it('nessun nome di terzi nel confronto, solo categorie', () => {
+    const tabella = html.slice(html.indexOf('id="confronto"'), html.indexOf('</section>', html.indexOf('id="confronto"')));
+    expect(tabella).toContain('<table class="confronto"');
+    for (const v of [...VIETATI, ...ANTIVIRUS]) expect(tabella, `confronto: ${v}`).not.toMatch(new RegExp(`\\b${v.replace('-', '\\-')}\\b`, 'i'));
+    for (const v of ['Windows', 'macOS', 'Apple', 'Edge', 'Chrome']) expect(tabella, `confronto: ${v}`).not.toMatch(new RegExp(`\\b${v}\\b`));
+  });
+  it('avviso di sicurezza ben visibile vicino al download, con link alla guida', () => {
+    const principale = html.indexOf('id="principale"'); const box = html.indexOf('id="avvisi-sicurezza"'); const confronto = html.indexOf('id="confronto"');
+    expect(box).toBeGreaterThan(principale);
+    expect(box).toBeLessThan(confronto);
+    const testo = html.slice(box, html.indexOf('</aside>', box));
+    expect(testo).toContain('Al primo avvio Windows o macOS potrebbero avvisarti: ecco cosa fare');
+    expect(testo).toContain('href="sicurezza.html"');
+    for (const t of ['Ulteriori informazioni', 'Esegui comunque', 'Privacy e sicurezza', 'Apri comunque', 'chmod +x']) expect(testo, t).toContain(t);
+    const faq = html.slice(html.indexOf('id="d-avvisi"'), html.indexOf('id="d-verifica"'));
+    expect(faq).toContain('href="sicurezza.html"');
+    expect(faq).not.toMatch(/clic destro[^<]*<\/em>[^<]*<em>Apri<\/em>, poi ancora/); // il vecchio trucco non basta più da macOS 15
+    expect(avvio).toContain('sicurezza.html#');
+  });
   it('nessun prezzo altrui e nessun disclaimer sui marchi', () => {
     for (const m of html.matchAll(/([\d.,]+)\s*€/g)) expect(m[1], m[0]).toBe('0');
     expect(html).not.toMatch(/sono marchi|è un marchio|marchio registrato/i);
@@ -250,7 +271,7 @@ describe('index.html', () => {
   it('fiducia: licenza, codice, nessun account, nessuna telemetria', () => {
     const f = html.slice(html.indexOf('id="fiducia"'), html.indexOf('</section>', html.indexOf('id="fiducia"')));
     for (const t of ['Open source', 'GPL', 'https://github.com/lorebiri/leggio"', 'Nessun account', 'Nessuna telemetria', 'File mai inviati']) expect(f, t).toContain(t);
-    expect(html).toMatch(/programma non firmato/);
+    expect(html).toMatch(/non è firmato digitalmente/);
   });
   it('immagini locali, presenti, con testo alternativo e leggere', () => {
     const img = [...html.matchAll(/<img\b[^>]*>/g)].map((m) => m[0]);
@@ -270,5 +291,75 @@ describe('index.html', () => {
     const esterni = [...html.matchAll(/href="(https?:[^"]+)"/g)].map((m) => m[1]);
     for (const u of esterni) expect(u, u).toMatch(/^https:\/\/github\.com\/lorebiri\/leggio(\/|$)/);
     expect(html).not.toMatch(/mailto:/);
+  });
+});
+
+describe('sicurezza.html (avvisi di sicurezza)', () => {
+  const SITO = join(__dirname, '..', 'site');
+  const html = readFileSync(join(SITO, 'sicurezza.html'), 'utf8');
+  const js = readFileSync(join(SITO, 'sicurezza.js'), 'utf8');
+  const testo = html.replace(/<[^>]+>/g, ' ');
+
+  it('spiega il perché in modo onesto e invita a scaricare solo dalle fonti ufficiali', () => {
+    for (const t of ['non ha ancora una firma digitale a pagamento', 'Non vuol dire che contenga un virus', 'reputazione',
+      'Il codice è aperto', 'li costruisce GitHub', 'SHA-256', 'solo dalla pagina ufficiale', 'GitHub Releases']) expect(testo, t).toContain(t);
+    expect(html).toContain('href="https://github.com/lorebiri/leggio/releases"');
+  });
+  it('una guida per sistema, apribile, con le ancore usate dalla pagina principale', () => {
+    for (const id of ['perche', 'guide', 'windows', 'mac', 'linux', 'smart-app-control', 'antivirus', 'verifica']) expect(html, id).toContain(`id="${id}"`);
+    for (const s of ['windows', 'mac', 'linux']) expect(html, s).toMatch(new RegExp(`<details class="guida-sistema" id="${s}" data-sistema="${s}" open>`));
+    expect(js).toMatch(/from '\.\/scarica\.js'/);
+    expect(js).toContain('rilevaSistema');
+  });
+  it('Windows: browser, SmartScreen, Controllo intelligente delle app, antivirus', () => {
+    for (const t of ['non viene scaricato comunemente', 'Mantieni', 'Mostra altro', 'Mantieni comunque', 'Scarica file sospetto',
+      'Windows ha protetto il PC', 'Ulteriori informazioni', 'Esegui comunque',
+      'Controllo intelligente delle app', 'non ha un pulsante per proseguire', 'Controllo app e browser', 'Impostazioni di Controllo intelligente delle app',
+      'quarantena', 'Cronologia protezione', 'falso positivo']) expect(testo, t).toContain(t);
+  });
+  it('macOS: file giusto, «Apri comunque», niente più clic destro, xattr con avvertimento', () => {
+    for (const t of ['mac-arm64.dmg', 'mac-x64.dmg', 'Informazioni su questo Mac', 'Impostazioni di Sistema', 'Privacy e sicurezza', 'Apri comunque',
+      'Touch ID', 'Sposta nel Cestino', 'Da macOS 15 Sequoia questo trucco non basta più', 'circa un\'ora']) expect(testo, t).toContain(t);
+    const xattr = html.slice(html.indexOf('class="esperti"'), html.indexOf('</details>', html.indexOf('class="esperti"')));
+    expect(xattr).toContain('xattr -dr com.apple.quarantine /Applications/Leggio.app');
+    expect(xattr).toMatch(/Attenzione/);
+  });
+  it('Linux: permesso di esecuzione, chmod +x, libfuse2', () => {
+    for (const t of ['Consenti di eseguire il file come programma', 'chmod +x', 'libfuse2', 'libfuse2t64']) expect(testo, t).toContain(t);
+  });
+  it('verifica SHA-256 con i comandi da copiare per Windows, macOS e Linux', () => {
+    const v = html.slice(html.indexOf('id="verifica"'));
+    for (const t of ['Get-FileHash', '-Algorithm SHA256', 'shasum -a 256', 'sha256sum', 'SHA256SUMS.txt']) expect(v, t).toContain(t);
+    expect((html.match(/<code data-copia>/g) || []).length).toBeGreaterThanOrEqual(6);
+  });
+  it('figure fatte in HTML e CSS: pulsanti evidenziati e numerati, nascoste ai lettori di schermo con didascalia', () => {
+    const figure = [...html.matchAll(/<figure class="figura">([\s\S]*?)<\/figure>/g)].map((m) => m[1]);
+    expect(figure.length).toBeGreaterThanOrEqual(4);
+    for (const f of figure) {
+      expect(f).toMatch(/class="finestra[^"]*" aria-hidden="true"/);
+      expect(f).toMatch(/class="num">\d</);
+      expect(f).toMatch(/evidenziat/);
+      expect(f).toMatch(/<figcaption>/);
+    }
+    expect(html).not.toMatch(/<img\b(?![^>]*icona\.svg)/); // niente schermate: solo l'icona di Leggio
+  });
+  it('nessun nome di prodotti di terzi oltre ai sistemi e alle loro funzioni', () => {
+    // ammessi perché servono a seguire i passi: Windows, macOS, Microsoft, Apple, Edge, Chrome, SmartScreen, GitHub e le distribuzioni Linux
+    const vietati = ['Adobe', 'Acrobat', 'Reader', 'Foxit', 'PDF-XChange', 'Nitro', 'Wondershare', 'PDFelement', 'Smallpdf', 'iLovePDF',
+      'Firefox', 'Safari', 'Opera', 'Brave', 'Google', 'OneDrive', 'Word', 'Excel', 'Office', 'LibreOffice', 'Dike', 'ArubaSign',
+      'Avast', 'AVG', 'Norton', 'McAfee', 'Kaspersky', 'Bitdefender', 'ESET', 'Avira', 'Malwarebytes', 'Trend Micro', 'Sophos'];
+    for (const [nome, t] of [['sicurezza.html', html], ['sicurezza.js', js]]) {
+      for (const v of vietati) expect(t, `${nome}: ${v}`).not.toMatch(new RegExp(`\\b${v.replace('-', '\\-')}\\b`, 'i'));
+    }
+  });
+  it('stesse regole della pagina principale: CSP, niente risorse esterne, link solo verso il repository', () => {
+    expect(html).toMatch(/http-equiv="Content-Security-Policy"[^>]*script-src 'self'/);
+    expect(html).not.toMatch(/<(script|link)\b[^>]*(src|href)="(https?:)?\/\//);
+    expect(html).not.toMatch(/\bstyle="|<style\b|\bon[a-z]+="/);
+    for (const m of html.matchAll(/href="(https?:[^"]+)"/g)) expect(m[1], m[1]).toMatch(/^https:\/\/github\.com\/lorebiri\/leggio(\/|$)/);
+    expect(html.match(/<h1\b/g)).toHaveLength(1);
+    expect(html).toContain('lang="it"');
+    expect(html).toContain('name="viewport"');
+    for (const id of [...html.matchAll(/href="#([^"]+)"/g)].map((m) => m[1])) expect(html, `#${id}`).toContain(`id="${id}"`);
   });
 });

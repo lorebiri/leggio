@@ -235,6 +235,8 @@ async function avvia() {
   });
   document.documentElement.dataset.sistema = sistema;
   document.querySelector(`.carta[data-sistema="${sistema}"]`)?.classList.add('evidenza');
+  const guida = $('#link-guida');
+  if (guida && ['windows', 'mac', 'linux'].includes(sistema)) guida.href = `sicurezza.html#${sistema}`;
   const arch = sistema === 'mac' ? await architettura() : '';
   $('#principale').setAttribute('aria-busy', 'true');
 

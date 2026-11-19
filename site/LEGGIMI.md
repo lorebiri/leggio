@@ -6,12 +6,23 @@ di chi la visita · confronto **per categorie** (Leggio, lettori PDF gratuiti, e
 forza di Leggio evidenziati · «Quanto risparmi» (0 € per ogni postazione e conto fatto con i numeri di chi visita) ·
 «Pensato per i documenti italiani» con schermate vere (.p7m, fatture XML, Titulus e U-GOV, copia fronte/retro,
 oscuramento con filigrana) · fascia di fiducia · tutte le altre funzioni · tutti i file con le impronte SHA-256 ·
-domande frequenti · contatti.
+domande frequenti · contatti. Vicino al pulsante di download c'è il riquadro «Al primo avvio Windows o macOS
+potrebbero avvisarti: ecco cosa fare» (`#avvisi-sicurezza`), che porta a `sicurezza.html`.
+
+**Pagina `sicurezza.html`.** Spiega perché compaiono gli avvisi (nessuna firma a pagamento, programma nuovo senza
+reputazione) e come procedere: Windows (avviso del browser, finestra «Windows ha protetto il PC», Controllo
+intelligente delle app, antivirus e quarantena), macOS (file giusto per il chip, «Apri comunque» in Privacy e sicurezza,
+`xattr` per esperti), Linux (permesso di esecuzione, `libfuse2`) e la verifica SHA-256. La guida del sistema
+riconosciuto si apre da sola (`sicurezza.js`). Le figure sono finestre semplificate fatte in HTML e CSS, senza
+schermate né loghi. I testi dei pulsanti sono stati controllati sulle pagine di supporto Microsoft e Apple
+(novembre 2026); se cambiano, aggiorna pagina e test.
 
 **Niente nomi di terzi.** Per scelta di Lorenzo la pagina non nomina prodotti o aziende di altri (programmi PDF,
 browser, servizi di archiviazione, programmi per ufficio) e non riporta prezzi altrui: il confronto è solo per
 categorie, con valori prudenti («di solito no», «spesso solo a pagamento», «in genere sì»). Restano solo i nomi che
-servono a scaricare: i sistemi operativi, i chip dei Mac e GitHub, dove sono i file. I test
+servono a scaricare: i sistemi operativi, i chip dei Mac e GitHub, dove sono i file. Solo in `sicurezza.html`, per
+seguire i passi, si nominano anche Microsoft, Apple, i due browser con avvisi specifici (Edge e Chrome) e le funzioni
+dei sistemi (SmartScreen, Controllo intelligente delle app); nessun antivirus per nome. I test
 (`test/sito-download.test.js`) falliscono se un nome vietato ricompare nella pagina o nei testi di `avvio.js`.
 Le schermate usate non devono mostrarli (per questo `img/strumenti.webp` non è più nella pagina).
 
@@ -23,6 +34,7 @@ Le schermate usate non devono mostrarli (per questo `img/strumenti.webp` non è 
 | `stile.css` | aspetto, tema chiaro e scuro, versione per telefono |
 | `scarica.js` | logica pura: riconosce il sistema, abbina i file della release, legge `SHA256SUMS.txt`, scarta gli indirizzi non GitHub (test: `npx vitest run test/sito-download.test.js`) |
 | `avvio.js` | collega la logica alla pagina |
+| `sicurezza.html`, `sicurezza.js` | guida agli avvisi di sicurezza; lo script apre la guida del sistema e aggiunge i pulsanti «Copia» |
 | `icona.svg`, `img/` | icona e schermate (WebP/PNG 1280×800, sotto i 200 kB) |
 | `strumenti/schermate.mjs` | rifà le schermate con Playwright dalla versione web (non viene pubblicato) |
 

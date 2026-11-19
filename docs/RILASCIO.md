@@ -92,14 +92,25 @@ sistemi operativi avvisano al primo avvio. Testo da incollare nelle note di ogni
 ```markdown
 ### Prima apertura
 
-**Mac** — Apri il file `.dmg` e trascina Leggio nella cartella Applicazioni. Al primo avvio macOS dice che non può
-verificare lo sviluppatore: premi **Fine**, poi apri **Impostazioni di Sistema → Privacy e sicurezza**, scorri in basso
-e premi **Apri comunque** accanto a «Leggio», quindi conferma con la password del Mac.
-(Su macOS 14 o precedenti basta fare clic con il tasto destro sull'app → **Apri** → **Apri**.)
-Serve solo la prima volta, e di nuovo dopo ogni aggiornamento.
+Leggio per ora non è firmato digitalmente ed è un programma nuovo: Windows e macOS avvisano per prudenza, non perché
+ci sia un virus. Scaricalo solo da https://lorebiri.github.io/leggio/ o da questa pagina, e controlla l'impronta
+SHA-256 con il file `SHA256SUMS.txt` qui sotto.
+**Guida passo per passo, con le figure:** https://lorebiri.github.io/leggio/sicurezza.html
 
-**Windows** — Avvia il file `installer.exe`. Se compare «Windows ha protetto il PC», premi **Ulteriori informazioni**
-e poi **Esegui comunque**. Leggio si installa solo per il tuo utente e non chiede la password di amministratore.
+**Mac** — Scegli il file giusto: `mac-arm64` per i Mac con chip Apple (M1, M2…), `mac-x64` per i Mac Intel.
+Apri il `.dmg` e trascina Leggio in Applicazioni. Al primo avvio macOS dice che Apple non può verificare l'app:
+premi **Fine**, poi **Impostazioni di Sistema → Privacy e sicurezza**, scorri in fondo e premi **Apri comunque**
+(il pulsante resta per circa un'ora), poi **Apri** e conferma con la password del Mac o il Touch ID.
+Da macOS 15 Sequoia il vecchio «clic destro → Apri» non basta più. Può servire di nuovo dopo ogni aggiornamento.
+
+**Windows** — Se il browser blocca il download, nell'elenco dei download scegli di mantenere il file
+(Edge: **…** → **Mantieni** → **Mostra altro** → **Mantieni comunque**). All'avvio, se compare «Windows ha protetto
+il PC», premi **Ulteriori informazioni** e poi **Esegui comunque**. Leggio si installa solo per il tuo utente e non
+chiede la password di amministratore. Se il blocco viene dal Controllo intelligente delle app di Windows 11 o
+dall'antivirus, leggi la guida.
+
+**Linux** — Rendi eseguibile l'AppImage (`chmod +x Leggio-*.AppImage`); se non parte, installa `libfuse2`
+(su Ubuntu 24.04 `libfuse2t64`).
 ```
 
 Dettagli tecnici:
