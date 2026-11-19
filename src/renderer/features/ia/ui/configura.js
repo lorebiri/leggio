@@ -1,4 +1,5 @@
 // Assistente IA: finestra «Assistente IA» (attivazione, requisiti, download o importazione, rimozione).
+import { metti } from '../lib/dom.js';
 import { chiama, suAvanzamento } from '../servizio.js';
 import { valuta, servono, mancanti, spazioSufficiente, formatoGB, AVVERTENZA_PRIMA_VOLTA, NOMI_COMPONENTI } from '../lib/requisiti.js';
 
@@ -15,7 +16,7 @@ export async function apriConfigura(app, { motivo = '' } = {}) {
   const modelloScelto = () => s.get('ia.modello', '') || valuta(stato).consigliato;
 
   const disegna = () => {
-    if (!stato) { corpo.replaceChildren(h('p', {}, 'Controllo del computer…')); return; }
+    if (!stato) { metti(corpo, h('p', {}, 'Controllo del computer…')); return; }
     const v = valuta(stato);
     const attivo = !!s.get('ia.attivo', false);
     const scelto = modelloScelto();
@@ -70,7 +71,7 @@ export async function apriConfigura(app, { motivo = '' } = {}) {
     const installati = ORDINE.reduce((t, c) => t + ((c === 'motore' ? stato.motore : stato.modelli[c])?.installato ? (c === 'motore' ? stato.motore : stato.modelli[c]).byte : 0), 0);
     const rimuovi = installati && !scaricando ? h('button', { type: 'button', class: 'btn danger small', onclick: rimuoviTutto }, `Rimuovi l'assistente dal PC (libera circa ${formatoGB(installati)})`) : null;
 
-    corpo.replaceChildren(
+    metti(corpo, 
       motivo ? h('p', { class: 'ia-motivo' }, motivo) : null,
       h('p', { class: 'ia-avviso' }, AVVERTENZA_PRIMA_VOLTA),
       h('h3', {}, 'Questo computer'), righePc,

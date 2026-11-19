@@ -14,7 +14,7 @@ const os = require('node:os');
 const { MODELLI, motorePer, TAG_MOTORE } = require('../ia/catalogo.cjs');
 const { scarica, importa, ErroreDownload } = require('../ia/scarica.cjs');
 const { estrai, trova } = require('../ia/archivi.cjs');
-const { Motore } = require('../ia/server.cjs');
+const { Motore, chiudiOrfani } = require('../ia/server.cjs');
 const { Indice } = require('../ia/indice.cjs');
 
 const S = {
@@ -307,6 +307,9 @@ function register({ ipcMain, app, dialog, getWindow, log }) {
   h('indice-cancella', async () => { await (await indice()).cancella(); return true; });
   // all'uscita i processi del motore si chiudono con l'app
   app.on('will-quit', () => { S.motore?.ferma(); S.download?.controller.abort(); });
+  // dopo un'uscita anomala: chiude i motori rimasti accesi (solo se il file esiste: altrimenti nessun lavoro all'avvio)
+  const filePid = path.join(S.dir, 'processi.json');
+  if (fs.existsSync(filePid)) setTimeout(() => { const n = chiudiOrfani(filePid); if (n) log?.('warn', 'ia: chiusi motori rimasti accesi', { n }); }, 3000).unref?.();
 }
 
 module.exports = {

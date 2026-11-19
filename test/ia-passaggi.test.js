@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   passaggi, pagineDaTesto, parole, bm25, ordina, fondi, coseni, scegliContesto, messaggiDomanda,
-  leggiRisposta, daEvidenziare, stimaToken, testoConPagine, haCodici, MAX_TOKEN_INTERO,
+  leggiRisposta, daEvidenziare, stimaToken, testoConPagine, haCodici, MAX_TOKEN_INTERO, verificaPagina,
 } from '../src/renderer/features/ia/lib/passaggi.js';
 
 const lungo = (n) => Array.from({ length: n }, (_, i) => `parola${i}`).join(' ');
@@ -86,5 +86,22 @@ describe('assistente IA: passaggi e ricerca', () => {
     expect(daEvidenziare('7.900,84 euro IVA esclusa', pag)).toBe('7.900,84');
     expect(daEvidenziare('arch. Gisella Lanciaprima (professionista)', pag)).toBe('arch. Gisella Lanciaprima');
     expect(daEvidenziare('qualcosa che non c\'è', pag)).toBe('');
+  });
+});
+
+describe('assistente IA: verifica della pagina citata', () => {
+  const pagine = [{ n: 1, testo: 'Oggetto: affidamento.' }, { n: 5, testo: 'Il responsabile unico del progetto è l\'Ing. Flavio Tagliapietra.' }, { n: 6, testo: 'Firma: la dirigente.' }, { n: 9, testo: 'Copia: Ing. Flavio Tagliapietra' }];
+  it('pagina giusta: confermata con il testo da evidenziare', () => {
+    expect(verificaPagina('Ing. Flavio Tagliapietra', 5, pagine)).toEqual({ pagina: 5, evidenzia: 'Ing. Flavio Tagliapietra', verificata: true, corretta: false });
+  });
+  it('pagina sbagliata: si sceglie la più vicina che contiene davvero la risposta', () => {
+    expect(verificaPagina('Ing. Flavio Tagliapietra', 6, pagine)).toMatchObject({ pagina: 5, verificata: true, corretta: true });
+    expect(verificaPagina('Ing. Flavio Tagliapietra', 8, pagine)).toMatchObject({ pagina: 9, corretta: true });
+    expect(verificaPagina('Ing. Flavio Tagliapietra', null, pagine)).toMatchObject({ pagina: 5, corretta: true });
+    // solo tra le pagine lette dal modello
+    expect(verificaPagina('Ing. Flavio Tagliapietra', 6, pagine, [6, 9])).toMatchObject({ pagina: 9 });
+  });
+  it('risposta che non si ritrova nel testo: pagina da controllare', () => {
+    expect(verificaPagina('Mario Rossi', 6, pagine)).toEqual({ pagina: 6, evidenzia: '', verificata: false, corretta: false });
   });
 });

@@ -12,7 +12,7 @@ const require = createRequire(import.meta.url);
 const { estrai, destinazione, trova } = require('../electron/ia/archivi.cjs');
 const { scarica, importa, hostAmmesso } = require('../electron/ia/scarica.cjs');
 const { Indice } = require('../electron/ia/indice.cjs');
-const { Motore, argomenti, leggiSistema, threadConsigliati } = require('../electron/ia/server.cjs');
+const { Motore, argomenti, leggiSistema, threadConsigliati, chiudiOrfani, leggiPid } = require('../electron/ia/server.cjs');
 const { MOTORE, MODELLI, motorePer } = require('../electron/ia/catalogo.cjs');
 const { _test: ia } = require('../electron/features/ia.cjs');
 
@@ -276,6 +276,7 @@ describe('assistente IA, main: processo del motore', () => {
     await m.ferma();
     expect(m.stato().chat.attivo).toBe(false);
     expect(fs.readFileSync(path.join(radice, 'registro-motore.txt'), 'utf8')).toMatch(/AVX2 = 1/);
+    expect(leggiPid(path.join(radice, 'processi.json'))).toEqual([]); // processi fermati: elenco vuoto
   });
 
   it('si ferma da solo dopo l\'inattività', async () => {
@@ -284,6 +285,22 @@ describe('assistente IA, main: processo del motore', () => {
     expect(m.chatP.attivo()).toBe(true);
     await new Promise((r) => setTimeout(r, 1500));
     expect(m.chatP.attivo()).toBe(false);
+  });
+
+  it.skipIf(process.platform === 'win32')('dopo un\'uscita anomala chiude i llama-server rimasti, mai altri programmi', async () => {
+    const link = path.join(radice, 'llama-server');
+    if (!fs.existsSync(link)) fs.symlinkSync(process.execPath, link);
+    const orfano = spawn(link, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore' });
+    const altro = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore' });
+    await new Promise((r) => setTimeout(r, 300));
+    const file = path.join(radice, 'processi-prova.json');
+    fs.writeFileSync(file, JSON.stringify([{ pid: orfano.pid, padre: 1 }, { pid: altro.pid, padre: 1 }, { pid: 999999, padre: 1 }, { pid: 424242, padre: process.pid }]));
+    const uscito = new Promise((r) => orfano.once('exit', r));
+    expect(chiudiOrfani(file)).toBe(1);
+    await uscito;
+    expect(altro.exitCode).toBe(null); // un altro programma con lo stesso numero non viene toccato
+    altro.kill();
+    expect(leggiPid(file).map((x) => x.pid)).toEqual([424242]); // quelli di questa sessione restano
   });
 
   it('un motore che si chiude all\'avvio dà un errore leggibile', async () => {

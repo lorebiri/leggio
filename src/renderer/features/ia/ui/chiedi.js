@@ -1,7 +1,8 @@
 // Assistente IA: pannello «Chiedi al documento» (domande con la pagina citata).
+import { metti } from '../lib/dom.js';
 import { chiama, nuovoId } from '../servizio.js';
 import { pagineDelDocumento, haTesto } from '../lib/testo-doc.js';
-import { scegliContesto, passaggi, messaggiDomanda, leggiRisposta, daEvidenziare, SCHEMA_RISPOSTA, stimaToken, testoConPagine, MAX_TOKEN_INTERO } from '../lib/passaggi.js';
+import { scegliContesto, passaggi, messaggiDomanda, leggiRisposta, verificaPagina, SCHEMA_RISPOSTA, stimaToken, testoConPagine, MAX_TOKEN_INTERO } from '../lib/passaggi.js';
 import { AVVERTENZA } from '../lib/requisiti.js';
 
 const vettoriDoc = new WeakMap(); // PDFDocumentProxy → Promise<{ pz, vettori }>
@@ -64,13 +65,14 @@ export function apriChiedi(app, apriConfigura) {
       stato.textContent = ctx.modo === 'intero' ? 'L\'assistente legge il documento… (la prima domanda è la più lenta)' : 'L\'assistente legge i passaggi trovati…';
       const r = await chiama(app, 'chiedi', { modello, messaggi: messaggiDomanda(ctx.testo, q), schema: SCHEMA_RISPOSTA, maxToken: 200, id: inCorso.id });
       const ris = leggiRisposta(r.testo, { pagineValide: ctx.pagine });
-      lista.prepend(scheda(app, doc, q, ris, pagine, Math.round((Date.now() - t0) / 1000)));
+      const ver = ris.trovata ? verificaPagina(ris.risposta, ris.pagina, pagine, ctx.pagine) : null;
+      lista.prepend(scheda(app, doc, q, ris, ver, Math.round((Date.now() - t0) / 1000)));
       stato.textContent = '';
       domanda.value = '';
-      app.log?.('info', 'ia: domanda', { modo: ctx.modo, trovata: ris.trovata, paginaVerificata: ris.paginaVerificata, ms: Date.now() - t0, promptN: r.tempi?.promptN, cacheN: r.tempi?.cacheN });
+      app.log?.('info', 'ia: domanda', { modo: ctx.modo, trovata: ris.trovata, paginaCitataEsiste: ris.paginaVerificata, testoInPagina: ver?.verificata, paginaCorretta: ver?.corretta, ms: Date.now() - t0, promptN: r.tempi?.promptN, cacheN: r.tempi?.cacheN });
     } catch (e) {
       const msg = e.message;
-      stato.replaceChildren(h('span', { class: 'ia-blocco' }, msg === 'Interrotto.' ? 'Domanda interrotta.' : msg),
+      metti(stato, h('span', { class: 'ia-blocco' }, msg === 'Interrotto.' ? 'Domanda interrotta.' : msg),
         /installat/i.test(msg) ? h('button', { class: 'btn small', type: 'button', onclick: () => apriConfigura(app) }, 'Apri le impostazioni dell\'assistente') : null);
     } finally {
       inCorso = null; bottone.disabled = false; ferma.hidden = true;
@@ -78,18 +80,19 @@ export function apriChiedi(app, apriConfigura) {
   };
 }
 
-function scheda(app, doc, q, ris, pagine, secondi) {
+function scheda(app, doc, q, ris, ver, secondi) {
   const { h } = app.ui;
   const card = h('div', { class: 'ia-risposta' }, h('div', { class: 'ia-q' }, q));
   if (!ris.trovata) {
     card.append(h('div', { class: 'ia-a ia-vuota' }, 'Non ho trovato la risposta in questo documento.'));
   } else {
     card.append(h('div', { class: 'ia-a' }, ris.risposta));
-    if (ris.pagina) {
-      const testo = daEvidenziare(ris.risposta, pagine[ris.pagina - 1]?.testo || '');
+    if (ver?.pagina) {
+      // la pagina mostrata è quella in cui il testo della risposta compare davvero (se il modello ne ha citata
+      // un'altra, si corregge); se il testo non si ritrova, «pagina da controllare»
       card.append(h('div', { class: 'ia-fonte' },
-        h('button', { class: 'btn small', type: 'button', title: 'Vai alla pagina ed evidenzia il passaggio', onclick: () => vaiAllaPagina(app, doc, ris.pagina, testo) }, `Pagina ${ris.pagina}`),
-        ris.paginaVerificata && testo ? null : h('span', { class: 'ia-attenzione' }, ' pagina da controllare')));
+        h('button', { class: 'btn small', type: 'button', title: 'Vai alla pagina ed evidenzia il passaggio', onclick: () => vaiAllaPagina(app, doc, ver.pagina, ver.evidenzia) }, `Pagina ${ver.pagina}`),
+        ver.verificata ? null : h('span', { class: 'ia-attenzione' }, ' pagina da controllare')));
     }
   }
   card.append(h('div', { class: 'ia-nota' }, `${AVVERTENZA} (${secondi} s)`));

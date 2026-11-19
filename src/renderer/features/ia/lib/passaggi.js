@@ -164,3 +164,23 @@ export function daEvidenziare(risposta, testoPagina) {
   for (const x of num.sort((a, b) => b.length - a.length)) if (x.length >= 3 && t.includes(x.toLowerCase())) return x;
   return '';
 }
+
+/**
+ * Controlla la pagina citata dal modello sul testo vero. Se la risposta non compare nella pagina citata ma in
+ * un'altra (tra quelle lette dal modello), si sceglie quella più vicina alla citata.
+ * pagine: [{n, testo}]; lette: numeri delle pagine mandate al modello.
+ * → { pagina, evidenzia, verificata (il testo della risposta è nella pagina), corretta (pagina cambiata) }
+ */
+export function verificaPagina(risposta, pagina, pagine, lette = null) {
+  const testo = (n) => pagine.find((p) => p.n === n)?.testo || '';
+  if (pagina != null) {
+    const ev = daEvidenziare(risposta, testo(pagina));
+    if (ev) return { pagina, evidenzia: ev, verificata: true, corretta: false };
+  }
+  const candidate = (lette || pagine.map((p) => p.n))
+    .map((n) => ({ n, ev: daEvidenziare(risposta, testo(n)) }))
+    .filter((x) => x.ev)
+    .sort((a, b) => (pagina == null ? a.n - b.n : Math.abs(a.n - pagina) - Math.abs(b.n - pagina) || a.n - b.n));
+  if (candidate.length) return { pagina: candidate[0].n, evidenzia: candidate[0].ev, verificata: true, corretta: candidate[0].n !== pagina };
+  return { pagina, evidenzia: '', verificata: false, corretta: false };
+}

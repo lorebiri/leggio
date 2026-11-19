@@ -50,9 +50,42 @@ function leggiSistema(testo) {
   return out;
 }
 
+// ---------- processi rimasti accesi ----------
+// Se Leggio si chiude in modo anomalo (crash, processo ucciso) i figli llama-server resterebbero accesi
+// occupando GB di RAM. Ogni processo avviato viene scritto in un file; all'avvio successivo quelli rimasti
+// vengono chiusi, ma solo se sono davvero llama-server (controllo del nome del programma).
+function leggiPid(file) { try { return JSON.parse(fs.readFileSync(file, 'utf8')).filter((x) => Number.isInteger(x?.pid)); } catch { return []; } }
+function scriviPid(file, lista) { try { if (lista.length) fs.writeFileSync(file, JSON.stringify(lista)); else fs.rmSync(file, { force: true }); } catch { /* facoltativo */ } }
+function registraPid(file, pid) { if (file && pid) scriviPid(file, [...leggiPid(file).filter((x) => x.pid !== pid), { pid, padre: process.pid, avvio: Date.now() }]); }
+function togliPid(file, pid) { if (file && pid) scriviPid(file, leggiPid(file).filter((x) => x.pid !== pid)); }
+
+function nomeProcesso(pid) {
+  const { execFileSync } = require('node:child_process');
+  try {
+    if (process.platform === 'linux') return fs.readFileSync(`/proc/${pid}/comm`, 'utf8').trim();
+    if (process.platform === 'win32') return execFileSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], { encoding: 'utf8', windowsHide: true, timeout: 10000 }).split(',')[0].replace(/"/g, '').trim();
+    return execFileSync('ps', ['-p', String(pid), '-o', 'comm='], { encoding: 'utf8', timeout: 10000 }).trim();
+  } catch { return ''; }
+}
+
+/** Chiude i llama-server rimasti da una sessione precedente. → quanti ne ha chiusi */
+function chiudiOrfani(file) {
+  let n = 0;
+  const miei = [];
+  for (const x of leggiPid(file)) {
+    const { pid } = x;
+    if (x.padre === process.pid) { miei.push(x); continue; } // avviati da questa sessione: restano
+    try { process.kill(pid, 0); } catch { continue; } // non esiste più
+    if (!/llama-server/i.test(path.basename(nomeProcesso(pid)))) continue; // pid riusato da un altro programma
+    try { process.kill(pid); n++; } catch { /* */ }
+  }
+  scriviPid(file, miei);
+  return n;
+}
+
 class Processo {
-  constructor(tipo, { binario, log, fetchFn, spawnFn, fileRegistro, inattivitaMs }) {
-    Object.assign(this, { tipo, binario, log, fetchFn, spawnFn, fileRegistro, inattivitaMs });
+  constructor(tipo, { binario, log, fetchFn, spawnFn, fileRegistro, inattivitaMs, filePid }) {
+    Object.assign(this, { tipo, binario, log, fetchFn, spawnFn, fileRegistro, inattivitaMs, filePid });
     this.proc = null; this.url = ''; this.chiave = ''; this.modello = ''; this.avvio = null; this.timer = null; this.sistema = {}; this.uscita = '';
   }
 
@@ -82,9 +115,10 @@ class Processo {
     const t0 = Date.now();
     const p = this.spawnFn(this.binario, args, { cwd: path.dirname(this.binario), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     this.proc = p;
+    registraPid(this.filePid, p.pid);
     p.stdout?.on('data', scrivi); p.stderr?.on('data', scrivi);
     let uscito = null;
-    p.on('exit', (code, sig) => { uscito = { code, sig }; this.uscita = `codice ${code ?? sig}`; if (this.proc === p) this.proc = null; });
+    p.on('exit', (code, sig) => { uscito = { code, sig }; this.uscita = `codice ${code ?? sig}`; togliPid(this.filePid, p.pid); if (this.proc === p) this.proc = null; });
     p.on('error', (e) => { uscito = { code: -1, e }; this.uscita = e.message; });
     while (Date.now() - t0 < ATTESA_AVVIO_MS) {
       if (uscito) {
@@ -141,7 +175,7 @@ class Processo {
 class Motore {
   /** opz: { binario, cartellaRegistri, log, fetchFn, spawnFn, inattivitaMs } */
   constructor({ binario, cartellaRegistri, log, fetchFn = globalThis.fetch, spawnFn = spawn, inattivitaMs = INATTIVITA_MS }) {
-    const comune = { binario, log, fetchFn, spawnFn, inattivitaMs };
+    const comune = { binario, log, fetchFn, spawnFn, inattivitaMs, filePid: path.join(cartellaRegistri, 'processi.json') };
     this.chatP = new Processo('chat', { ...comune, fileRegistro: path.join(cartellaRegistri, 'registro-motore.txt') });
     this.embedP = new Processo('embed', { ...comune, fileRegistro: path.join(cartellaRegistri, 'registro-motore-ricerca.txt') });
   }
@@ -184,4 +218,4 @@ class Motore {
   async ferma() { await Promise.all([this.chatP.ferma(), this.embedP.ferma()]); }
 }
 
-module.exports = { Motore, argomenti, leggiSistema, threadConsigliati, portaLibera };
+module.exports = { Motore, argomenti, leggiSistema, threadConsigliati, portaLibera, chiudiOrfani, leggiPid };

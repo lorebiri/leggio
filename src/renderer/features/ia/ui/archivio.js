@@ -1,6 +1,7 @@
 // Assistente IA: «Cerca per significato nell'archivio».
 // L'indice per significato si prepara in sottofondo a partire dal testo già letto dall'archivio d'ufficio
 // (nessun file viene riletto dal disco), solo per i documenti nuovi o cambiati (impronta SHA-256).
+import { metti } from '../lib/dom.js';
 import { chiama } from '../servizio.js';
 import { passaggi, pagineDaTesto } from '../lib/passaggi.js';
 import { daIndicizzare, fondiRisultati } from '../lib/archivio.js';
@@ -65,19 +66,19 @@ export async function apriRicercaArchivio(app, apriConfigura) {
 
   const disegnaIndice = async () => {
     let info = { documenti: 0 };
-    try { info = await chiama(app, 'indice-info'); } catch (e) { infoIndice.replaceChildren(h('span', { class: 'ia-blocco' }, e.message)); return; }
+    try { info = await chiama(app, 'indice-info'); } catch (e) { metti(infoIndice, h('span', { class: 'ia-blocco' }, e.message)); return; }
     if (S.lavoro) {
       const { fatti, totale } = S.avanzamento;
-      infoIndice.replaceChildren(h('div', { class: 'ia-barra' }, h('div', { style: { width: Math.round((fatti / Math.max(1, totale)) * 100) + '%' } })),
+      metti(infoIndice, h('div', { class: 'ia-barra' }, h('div', { style: { width: Math.round((fatti / Math.max(1, totale)) * 100) + '%' } })),
         h('span', {}, `Preparo la ricerca per significato: ${fatti} di ${totale} documenti`), h('button', { class: 'btn small', type: 'button', onclick: interrompiIndice }, 'Interrompi'));
     } else {
-      infoIndice.replaceChildren(h('span', {}, info.documenti ? `Pronti per la ricerca per significato: ${info.documenti} documenti.` : 'La ricerca per significato non è ancora pronta.'),
+      metti(infoIndice, h('span', {}, info.documenti ? `Pronti per la ricerca per significato: ${info.documenti} documenti.` : 'La ricerca per significato non è ancora pronta.'),
         h('button', { class: 'btn small', type: 'button', onclick: avvia }, info.documenti ? 'Aggiorna' : 'Prepara (in sottofondo)'));
     }
   };
   const avvia = () => {
     preparaIndice(app).then((a) => { if (a?.totale) app.ui.toast(`Ricerca per significato pronta (${a.fatti} documenti aggiunti).`, { kind: 'success' }); })
-      .catch((e) => { infoIndice.replaceChildren(h('span', { class: 'ia-blocco' }, e.message), /installat/i.test(e.message) ? h('button', { class: 'btn small', type: 'button', onclick: () => apriConfigura(app) }, 'Impostazioni dell\'assistente') : null); });
+      .catch((e) => { metti(infoIndice, h('span', { class: 'ia-blocco' }, e.message), /installat/i.test(e.message) ? h('button', { class: 'btn small', type: 'button', onclick: () => apriConfigura(app) }, 'Impostazioni dell\'assistente') : null); });
     disegnaIndice();
   };
   S.ascoltatori.add(disegnaIndice);
@@ -86,7 +87,7 @@ export async function apriRicercaArchivio(app, apriConfigura) {
     const testo = q.value.trim();
     if (!testo) return;
     cerca.disabled = true;
-    risultati.replaceChildren(h('p', {}, 'Cerco…'));
+    metti(risultati, h('p', {}, 'Cerco…'));
     try {
       const righe = await righeArchivio(A);
       const perImpronta = new Map(righe.filter((r) => r.impronta).map((r) => [r.impronta, r]));
@@ -95,14 +96,14 @@ export async function apriRicercaArchivio(app, apriConfigura) {
         A.cerca({ q: testo, limite: 40 }).then((x) => x?.righe || []).catch(() => []),
       ]);
       const lista = fondiRisultati(testo, sem, par, perImpronta, { max: 25 });
-      if (!lista.length) { risultati.replaceChildren(h('p', {}, 'Nessun documento trovato. Se la ricerca per significato non è pronta, preparala con il pulsante qui sopra.')); return; }
-      risultati.replaceChildren(...lista.map((x) => h('button', {
+      if (!lista.length) { metti(risultati, h('p', {}, 'Nessun documento trovato. Se la ricerca per significato non è pronta, preparala con il pulsante qui sopra.')); return; }
+      metti(risultati, ...lista.map((x) => h('button', {
         class: 'ia-risultato', type: 'button', title: 'Apri il documento (sola lettura) alla pagina indicata',
         onclick: () => app.services?.apriDocumentoArchivio?.(x.riga.id, { pagina: x.pagina }),
-      }, h('strong', {}, x.riga.nome), h('span', { class: 'ia-meta' }, ` · pagina ${x.pagina}${x.perParole && x.perSignificato ? ' · parole e significato' : x.perParole ? ' · per parole' : ''}`),
+      }, h('strong', {}, x.riga.nome), h('span', { class: 'ia-meta' }, `pagina ${x.pagina}${x.perParole && x.perSignificato ? ' · trovato per parole e per significato' : x.perParole ? ' · trovato per parole' : ''}`),
       x.estratto ? h('span', { class: 'ia-estratto' }, x.estratto.length > 220 ? x.estratto.slice(0, 220) + '…' : x.estratto) : null)));
     } catch (e) {
-      risultati.replaceChildren(h('p', { class: 'ia-blocco' }, e.message), /installat/i.test(e.message) ? h('button', { class: 'btn small', type: 'button', onclick: () => apriConfigura(app) }, 'Impostazioni dell\'assistente') : null);
+      metti(risultati, h('p', { class: 'ia-blocco' }, e.message), /installat/i.test(e.message) ? h('button', { class: 'btn small', type: 'button', onclick: () => apriConfigura(app) }, 'Impostazioni dell\'assistente') : null);
     } finally { cerca.disabled = false; }
   };
   q.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); cerca.click(); } });
