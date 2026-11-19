@@ -1,0 +1,33 @@
+# Assistente IA: il motore del catalogo (llama.cpp, versione fissa) si scarica, si verifica con SHA-256,
+# si estrae e funziona davvero su Windows, macOS (Apple Silicon e Intel) e Linux.
+# Non pubblica nulla. Vedi docs/aree/ia.md.
+name: 'IA: motore sui tre sistemi'
+
+on:
+  push:
+    branches: ['claude/ia-**']
+    paths:
+      - 'electron/ia/**'
+      - 'electron/features/ia.cjs'
+      - 'test/e2e/ia-motore-piattaforme.mjs'
+      - '.github/workflows/ia-motore.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  motore:
+    name: Motore IA (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Scarica, verifica e avvia il motore
+        run: node test/e2e/ia-motore-piattaforme.mjs
