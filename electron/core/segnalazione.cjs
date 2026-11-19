@@ -34,6 +34,12 @@ function pulisci(riga, home = '') {
   }
   // valori JSON fra virgolette che sono percorsi (anche con spazi o di rete \\server\…): solo il nome del file
   s = s.replace(/"((?:[A-Za-z]:|~|\\\\)?[\\/][^"]*)"/g, (_m, p) => `"…/${nomeFile(p)}"`);
+  // percorsi fra apici singoli, come nei messaggi di errore di Node («open 'C:\\…\\Studio Bianchi\\atto.pdf'»)
+  s = s.replace(/'((?:[A-Za-z]:|~|\\\\)?[\\/][^'\n]*)'/g, (_m, p) => `'…/${nomeFile(p)}'`);
+  // percorsi nel testo libero che partono da un'unità, da una cartella di rete, dalla cartella personale o da
+  // cartelle di utenti e dischi: possono contenere spazi (nomi di clienti), quindi si toglie tutto fino
+  // all'ultimo separatore della riga (meglio togliere qualcosa in più che lasciare un nome)
+  s = s.replace(/(?:(?<![A-Za-z])[A-Za-z]:[\\/]|\\\\|~[\\/]|\/(?:Users|home|Volumes|media|mnt|run\/media)\/)[^"'\n]*[\\/]/g, '…/');
   // percorsi nel testo libero (C:\...\nome.pdf, /Users/.../nome.pdf, ~/...): solo l'ultimo elemento
   s = s.replace(/(?:[A-Za-z]:)?(?:[\\/]+[^\\/\s"',:]+)+[\\/]+([^\\/\s"',:]+)/g, '…/$1');
   s = s.replace(/~(?:[\\/]+[^\\/\s"',:]+)+[\\/]+([^\\/\s"',:]+)/g, '…/$1');

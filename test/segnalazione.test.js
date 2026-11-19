@@ -72,6 +72,26 @@ describe('Segnala un problema: privacy e casi limite', () => {
     expect(s).not.toMatch(/mrossi|Pratiche|Bianchi/);
     expect(s).toContain('ricorso finale.pdf');
   });
+  it('percorsi fra apici dei messaggi di Node e percorsi con spazi nel testo libero: niente nomi di cartelle', () => {
+    const err = { err: "ENOENT: no such file or directory, open 'C:\\Users\\Mario\\Documents\\Studio Legale Bianchi\\Causa Rossi contro Verdi\\atto.pdf'" };
+    const a = S.pulisci(`2026-11-19T10:00:00.000Z [WARN] IPC file:write: errore ${JSON.stringify(err)}`, 'C:\\Users\\Mario');
+    expect(a).not.toMatch(/Bianchi|Rossi|Verdi|Studio|Mario/);
+    expect(a).toContain('atto.pdf');
+    const posix = S.pulisci(`[WARN] x ${JSON.stringify({ err: "EACCES: permission denied, open '/Volumes/Dati Studio/Cliente Rossi/atto.pdf'" })}`);
+    expect(posix).not.toMatch(/Studio|Rossi/);
+    for (const riga of [
+      '2026-11-19T10:00:00.000Z [WARN] errore su D:\\Clienti Bianchi\\Pratica Verdi\\contratto.pdf: EPERM',
+      '[WARN] apertura /Volumes/Dati Studio/Rossi Mario/a.pdf fallita',
+      '[WARN] apertura /home/user/Clienti Bianchi/a.pdf fallita',
+      '[WARN] cartella \\\\server\\Ufficio Legale\\Verdi Carlo\\a.pdf non raggiungibile',
+    ]) {
+      const r = S.pulisci(riga, '/Users/x');
+      expect(r).not.toMatch(/Bianchi|Verdi|Studio|Rossi|Ufficio|server|user/);
+      expect(r).toMatch(/(contratto|a)\.pdf/);
+    }
+    // un indirizzo web non viene scambiato per un'unità di Windows
+    expect(S.pulisci('[WARN] controllo aggiornamenti: https://api.github.com non risponde')).toContain('https:');
+  });
   it('un’emoji tagliata a metà non blocca la segnalazione (URIError)', () => {
     const riga = '2026-11-13T09:00:01.456Z [ERROR] (renderer) ' + 'a'.repeat(173) + '😀'.repeat(20);
     const r = S.pulisci(riga);
