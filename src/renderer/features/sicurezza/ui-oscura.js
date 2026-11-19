@@ -7,7 +7,7 @@ import { applyRedaction, hasImages, findSignatures } from './redigi.js';
 import { getPreset, preselect, FIRMA, datiEnte, isDatoEnte, presetConsigliato } from './logica/preset.js';
 import { presetMenu, rigaProfiloEnte } from './ui-conferma.js';
 import { setMeasure } from './logica/testo.js';
-import { MODELLI_DOCUMENTO, CAMPI_DOCUMENTO, ORIENTAMENTI, zoneDocumento, campiDelLato, testoFiligrana, dataItaliana, modelloDocumento } from './logica/documenti-identita.js';
+import { MODELLI_DOCUMENTO, CAMPI_DOCUMENTO, ORIENTAMENTI, zoneDocumento, campiDelLato, testoFiligrana, dataItaliana, modelloDocumento, orientamentoNellaPagina } from './logica/documenti-identita.js';
 setMeasure(measureChars);
 import { esclusioneEnte, st, salvaCopia, copyName, signatureCount, avvisoFirma, boxAvviso } from './comune.js';
 
@@ -212,7 +212,10 @@ async function chooseIdTemplate(app) {
 
 function placeTemplate(app, pageIndex, rect) {
   const tpl = active.pendingTemplate; active.pendingTemplate = null;
-  const zone = zoneDocumento(tpl.modello, tpl.lato, tpl.campi, rect, { orientamento: tpl.orientamento });
+  // «come appare nella scansione» si riferisce allo schermo: con la pagina ruotata (/Rotate o vista ruotata)
+  // la tessera nello spazio della pagina è girata in più di -rotazione (le zone sono calcolate in quello spazio)
+  const orientamento = orientamentoNellaPagina(tpl.orientamento, app.viewer.getViewport(pageIndex)?.rotation || 0);
+  const zone = zoneDocumento(tpl.modello, tpl.lato, tpl.campi, rect, { orientamento });
   for (const z of zone) addMark(app, { page: pageIndex, rect: z.rect, source: 'modello', text: undefined, label: z.label });
   redrawAll(app);
   const assenti = tpl.campi.filter((c) => !campiDelLato(tpl.modello, tpl.lato).some((x) => x.id === c));

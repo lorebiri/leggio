@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 import { PDFDocument, StandardFonts, PDFStream, PDFName, rgb } from '@cantoo/pdf-lib';
 import { fileURLToPath } from 'node:url';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
-import { zoneDocumento, campiDelLato, testoFiligrana, layoutFiligrana, MODELLI_DOCUMENTO, CAMPI_DOCUMENTO, dataItaliana } from '../src/renderer/features/sicurezza/logica/documenti-identita.js';
+import { zoneDocumento, orientamentoNellaPagina, campiDelLato, testoFiligrana, layoutFiligrana, MODELLI_DOCUMENTO, CAMPI_DOCUMENTO, dataItaliana } from '../src/renderer/features/sicurezza/logica/documenti-identita.js';
 import { buildMatchers, findMatches } from '../src/renderer/features/sicurezza/logica/modelli.js';
 import { buildPageText, pageWords, wordsOutside, intersects } from '../src/renderer/features/sicurezza/logica/testo.js';
 import { redactPage, embedTextFont, finalizeRedaction } from '../src/renderer/features/sicurezza/logica/redazione.js';
@@ -149,5 +149,21 @@ describe('oscuramento vero di una CIE scansionata', () => {
     await finalizeRedaction(pdfDoc);
     const out = await pdfDoc.save();
     expect(Buffer.from(out).toString('latin1')).not.toContain('FOTO-ORIGINALE');
+  });
+});
+
+describe('documento d\'identità su pagina ruotata', () => {
+  it('tessera dritta a schermo su pagina /Rotate 90: il codice fiscale è sul lato sinistro dello spazio PDF', () => {
+    // pagina 842 × 595 mostrata in verticale; tessera dritta a schermo = girata di 270° nello spazio PDF
+    expect(orientamentoNellaPagina(0, 90)).toBe(270);
+    expect(orientamentoNellaPagina(90, 90)).toBe(0);
+    expect(orientamentoNellaPagina(0, 0)).toBe(0);
+    expect(orientamentoNellaPagina(180, 270)).toBe(270);
+    // riquadro della tessera nello spazio PDF: x 68…282 (alto della tessera a schermo = x piccole), y 60…400
+    const [z] = zoneDocumento('cie', 'retro', ['cf'], [68, 60, 282, 400], { orientamento: orientamentoNellaPagina(0, 90) });
+    // il CF a schermo è nella fascia alta (30%) della tessera → nello spazio PDF a sinistra (x < 68 + 0,31·214)
+    expect(z.rect[0]).toBeLessThanOrEqual(68 + 1);
+    expect(z.rect[2]).toBeLessThan(68 + 0.32 * 214);
+    expect(z.rect[3] - z.rect[1]).toBeGreaterThan(300); // tutta la lunghezza della tessera
   });
 });

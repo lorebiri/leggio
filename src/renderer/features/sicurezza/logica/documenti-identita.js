@@ -95,6 +95,14 @@ function ruota([x0, y0, x1, y1], gradi) {
 }
 
 /**
+ * Orientamento della tessera nello spazio della pagina PDF, dato come appare sullo schermo (gradi in senso orario)
+ * e la rotazione di visualizzazione della pagina (/Rotate più l'eventuale rotazione della vista, in senso orario).
+ */
+export function orientamentoNellaPagina(orientamentoSchermo, rotazione = 0) {
+  return ((((Number(orientamentoSchermo) || 0) - (Number(rotazione) || 0)) % 360) + 360) % 360;
+}
+
+/**
  * Aree da oscurare in coordinate PDF. riquadro: [x0, y0, x1, y1] della tessera nella pagina (spazio PDF,
  * origine in basso a sinistra). → [{ campo, label, rect }]
  */
