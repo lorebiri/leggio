@@ -17,9 +17,15 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      pubblica:
+        description: 'Avviato su un tag: pubblica la release (non più bozza) alla fine'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   bozza:
@@ -216,3 +222,22 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         working-directory: pacchetti
         run: gh release upload "${GITHUB_REF_NAME}" Leggio-* SHA256SUMS.txt --repo "${GITHUB_REPOSITORY}" --clobber
+
+  pubblica:
+    name: Pubblica la release e aggiorna il sito
+    needs: impronte
+    if: ${{ !failure() && !cancelled() && startsWith(github.ref, 'refs/tags/v') && inputs.pubblica }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Controlla che ci siano tutti i file
+        run: |
+          n=$(gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --json assets --jq '.assets | length')
+          echo "File nella release: $n"
+          if [ "$n" -lt 8 ]; then echo "::error::Mancano file nella release ($n invece di 8)"; exit 1; fi
+      - name: Pubblica come ultima versione
+        run: gh release edit "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --draft=false --latest
+      # Una release pubblicata con GITHUB_TOKEN non avvia altri workflow: il sito va lanciato a mano.
+      - name: Aggiorna il sito
+        run: gh workflow run pages.yml --repo "${GITHUB_REPOSITORY}" --ref main

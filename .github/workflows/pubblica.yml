@@ -1,0 +1,48 @@
+# Pubblica una versione senza bisogno del Mac: crea il tag vX.Y.Z sul commit di main e avvia release.yml
+# su quel tag con pubblica=true (pacchetti, impronte, release pubblicata come ultima, sito aggiornato).
+# Si avvia a mano da Actions → Pubblica una versione → Run workflow, oppure via API.
+# Un tag creato con GITHUB_TOKEN non fa partire release.yml da solo: per questo lo si lancia con workflow_dispatch.
+name: Pubblica una versione
+
+on:
+  workflow_dispatch:
+    inputs:
+      versione:
+        description: 'Versione da pubblicare, senza la v (es. 0.3.0). Deve coincidere con package.json su main.'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: pubblica
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Crea il tag e avvia la release
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      VERSIONE: ${{ inputs.versione }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Controlla versione, novità e test di main
+        run: |
+          v="$(node -p "require('./package.json').version")"
+          if [ "$v" != "$VERSIONE" ]; then echo "::error::package.json su main è $v, non $VERSIONE"; exit 1; fi
+          grep -q "versione: '$VERSIONE'" src/renderer/features/aggiornamenti/novita.js || { echo "::error::Manca la voce $VERSIONE in novita.js"; exit 1; }
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSIONE" >/dev/null; then echo "::error::Il tag v$VERSIONE esiste già"; exit 1; fi
+          stato=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs" --jq '[.check_runs[] | select(.name | startswith("Test e build")) | .conclusion] | if length == 0 then "nessuno" elif all(. == "success") then "verde" else "non verde" end')
+          echo "CI di main: $stato"
+          if [ "$stato" != "verde" ]; then echo "::error::La CI di main non è verde ($stato)"; exit 1; fi
+      - name: Crea il tag
+        run: |
+          git tag "v$VERSIONE" "$GITHUB_SHA"
+          git push origin "v$VERSIONE"
+      - name: Avvia release.yml sul tag
+        run: gh workflow run release.yml --repo "${GITHUB_REPOSITORY}" --ref "v$VERSIONE" -f pubblica=true
