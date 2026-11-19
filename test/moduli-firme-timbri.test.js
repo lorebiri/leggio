@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { pulisciFoto, stimaCarta, hexRgb, ricolora } from '../src/renderer/features/moduli/lib/foto.js';
 import { MODELLI_TIMBRO, normalizzaSpec, righeTimbro, haData, nomeTimbro } from '../src/renderer/features/moduli/lib/timbri.js';
-import { rettangoloInPosizione, posizioneRelativa, dimensioniVisive, visivoToPdf, pdfToVisivo, placement } from '../src/renderer/features/moduli/lib/geom.js';
+import { rettangoloInPosizione, posizioneRelativa, dimensioniVisive, visivoToPdf, pdfToVisivo, placement, rotazionePagina } from '../src/renderer/features/moduli/lib/geom.js';
 import { createStore, memoryStorage } from '../src/renderer/features/moduli/lib/store.js';
 import { createArchivio } from '../src/renderer/features/personale/lib/archivio.js';
 import { createMemoryBackend } from '../src/renderer/features/personale/lib/backend.js';
@@ -107,5 +107,19 @@ describe('profilo: dall\'archivio personale quando è aperto', () => {
     const t = createStore(memoryStorage(), { archivio: b });
     t.setProfile({ nome: 'Ugo' });
     expect(t.getProfile()).toEqual({ nome: 'Ugo' });
+  });
+});
+
+describe('rotazione della sola visualizzazione (Ctrl/Cmd+R)', () => {
+  it('la posizione si calcola con la rotazione propria della pagina, non con quella della vista', () => {
+    // pagina senza /Rotate, vista girata di 90°: pdf.js riporta 90 nel viewport, la pagina è a 0
+    expect(rotazionePagina(90, 90)).toBe(0);
+    expect(rotazionePagina(0, 270)).toBe(90); // pagina /Rotate 90 + vista 270 = 360 → 0 nel viewport
+    expect(rotazionePagina(270, 0)).toBe(270);
+    expect(rotazionePagina(180, undefined)).toBe(180);
+    // la sigla 48×24 resta larga e bassa nel PDF (prima veniva 24×48, schiacciata)
+    const box = [0, 0, 595, 842];
+    const r = rettangoloInPosizione(box, rotazionePagina(90, 90), 'br', 48, 24, 24);
+    expect(r[2] - r[0]).toBeCloseTo(48); expect(r[3] - r[1]).toBeCloseTo(24);
   });
 });

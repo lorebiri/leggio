@@ -2,7 +2,7 @@
 // altre persone, con conferma e registro), «Sigla tutte le pagine», «Luogo, data e firma», timbri, dati della rubrica.
 // Gli elementi restano modificabili finché lo strumento è aperto; alla chiusura (o con «Applica») vengono scritti nella pagina.
 import { Board, rectToCss } from './board.js';
-import { placement, localToPdf, todayIt, winAnsiSafe, dimensioniVisive, rettangoloInPosizione, rettangoloDaVisivo, pdfToVisivo, posizioneRelativa } from './lib/geom.js';
+import { placement, localToPdf, rotazionePagina, todayIt, winAnsiSafe, dimensioniVisive, rettangoloInPosizione, rettangoloDaVisivo, pdfToVisivo, posizioneRelativa } from './lib/geom.js';
 import { textItemsFromPdfjs } from './lib/detect.js';
 import { createSignatureDialog, NOTA_FIRMA_SEMPLICE } from './sigpad.js';
 import { editProfileDialog } from './profile.js';
@@ -234,7 +234,7 @@ export class FillSignSession {
     if (v.quali === 'intervallo') pagine = this.app.parsePages(v.intervallo || '1-' + n);
     return { pos: v.pos, pagine };
   }
-  #rot(pi) { return this.app.viewer.getViewport(pi)?.rotation || 0; }
+  #rot(pi) { const vp = this.app.viewer.getViewport(pi); return vp ? rotazionePagina(vp.rotation, this.app.viewer.pdfViewer?.pagesRotation) : 0; }
   /** Copie di un'immagine su più pagine nella stessa posizione visiva. */
   #suPagine(base, { pos, pagine, w, h, rifRect = null, rifPagina = 0 }) {
     let rel = null;

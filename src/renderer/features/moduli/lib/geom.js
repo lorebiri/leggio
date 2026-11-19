@@ -1,5 +1,13 @@
 // Geometria e utilità pure per «Compila e firma»: posizionamento con rotazione, tratti della firma, immagini.
 
+/**
+ * Rotazione propria della pagina (/Rotate) da quella del viewport di pdf.js, che include anche la rotazione
+ * della sola visualizzazione (Ctrl/Cmd+R). Il PDF va scritto con la prima: è quella che usa pdf-lib.
+ */
+export function rotazionePagina(rotazioneViewport = 0, rotazioneVista = 0) {
+  return ((Math.round(((rotazioneViewport || 0) - (rotazioneVista || 0)) / 90) * 90) % 360 + 360) % 360;
+}
+
 export function normRect([a, b, c, d]) { return [Math.min(a, c), Math.min(b, d), Math.max(a, c), Math.max(b, d)]; }
 
 /**
