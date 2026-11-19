@@ -1,7 +1,7 @@
 {
   "name": "leggio",
   "productName": "Leggio",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Leggio — lettore ed editor PDF libero e gratuito per Windows, macOS e Linux",
   "main": "electron/main.cjs",
   "license": "GPL-3.0-or-later",

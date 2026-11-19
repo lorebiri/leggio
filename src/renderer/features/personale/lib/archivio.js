@@ -15,6 +15,7 @@ const SEZIONI = ['firme', 'timbri', 'contatti', 'registro', 'modelli'];
 const LEGACY = { firme: 'leggio.moduli.firme.v1', profilo: 'leggio.moduli.profilo.v1' };
 const MAX_REGISTRO = 50000;
 const RITARDO_SALVATAGGIO = 250;
+const RIPROVA_SALVATAGGIO = 30000; // dopo un errore (es. disco pieno) si riprova da soli
 
 export function nuovoId(prefisso = 'el') {
   const rnd = Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => b.toString(16).padStart(2, '0')).join('');
@@ -91,16 +92,18 @@ export function createArchivio({ backend, legacyStorage = null, chiediPassword =
   let indice = null;
   let apertura = null;
   let timer = null; let inVolo = null; let sporco = false; let purgaInAttesa = false;
+  let timerRiprova = null; let inErrore = false;
   const immagini = new Map(); // id blob → dataUrl
   const ascoltatori = new Map();
   const emetti = (ev, p) => { for (const fn of ascoltatori.get(ev) || []) { try { fn(p); } catch (e) { console.error(e); } } };
 
   function richiedi() { if (!indice) throw new Error('Archivio personale non ancora aperto.'); return indice; }
-  function cambia(sezione, fn, { purga = false } = {}) {
+  /** uso: true se cambia solo la data d'uso (non sono dati nuovi: non serve un nuovo backup). */
+  function cambia(sezione, fn, { purga = false, uso = false } = {}) {
     const i = richiedi();
     const r = fn(i);
     sporco = true; if (purga) purgaInAttesa = true;
-    emetti('cambiato', { sezione });
+    emetti('cambiato', { sezione, uso });
     pianifica();
     return r;
   }
@@ -112,9 +115,20 @@ export function createArchivio({ backend, legacyStorage = null, chiediPassword =
     sporco = false; const purga = purgaInAttesa; purgaInAttesa = false;
     const copia = JSON.parse(JSON.stringify(indice));
     inVolo = backend.salva(copia, { purga });
-    try { await inVolo; emetti('salvato', {}); }
-    catch (e) { sporco = true; if (purga) purgaInAttesa = true; log('error', 'salvataggio dell\'archivio personale non riuscito', { error: e.message }); emetti('errore', e); throw e; }
-    finally { inVolo = null; }
+    try {
+      await inVolo;
+      clearTimeout(timerRiprova);
+      if (inErrore) { inErrore = false; emetti('recuperato', {}); }
+      emetti('salvato', {});
+    } catch (e) {
+      // le modifiche restano in memoria (sporco) e si riprova da soli; l'utente viene avvisato una volta sola
+      sporco = true; if (purga) purgaInAttesa = true;
+      log('error', 'salvataggio dell\'archivio personale non riuscito', { error: e.message, code: e.code });
+      if (!inErrore) { inErrore = true; emetti('errore', e); }
+      clearTimeout(timerRiprova);
+      timerRiprova = setTimeout(() => { salvaOra().catch(() => {}); }, RIPROVA_SALVATAGGIO);
+      throw e;
+    } finally { inVolo = null; }
   }
 
   async function migra() {
@@ -155,6 +169,8 @@ export function createArchivio({ backend, legacyStorage = null, chiediPassword =
   const api = {
     on(ev, fn) { if (!ascoltatori.has(ev)) ascoltatori.set(ev, new Set()); ascoltatori.get(ev).add(fn); return () => ascoltatori.get(ev)?.delete(fn); },
     get aperto() { return !!indice; },
+    /** Ci sono modifiche non ancora salvate su disco (es. dopo un errore di scrittura)? */
+    get nonSalvato() { return sporco; },
     get backend() { return backend; },
     /** Apre l'archivio (chiede la password se serve). → true se aperto, false se l'utente ha lasciato perdere. */
     apri({ interattivo = true } = {}) {
@@ -183,7 +199,7 @@ export function createArchivio({ backend, legacyStorage = null, chiediPassword =
       return apertura;
     },
     /** Chiude la cache (dopo «Blocca» o un'importazione con sostituzione). */
-    async chiudi() { await salvaOra().catch(() => {}); indice = null; immagini.clear(); emetti('cambiato', { sezione: '*' }); },
+    async chiudi() { await salvaOra().catch(() => {}); clearTimeout(timerRiprova); indice = null; immagini.clear(); emetti('cambiato', { sezione: '*' }); },
     salvaOra,
     stato: () => backend.stato(),
     get indice() { return indice; },
@@ -242,7 +258,7 @@ export function createArchivio({ backend, legacyStorage = null, chiediPassword =
         return f;
       });
     },
-    usaFirma(id) { if (!api.firma(id)) return; cambia('firme', (i) => { const f = i.firme.find((x) => x.id === id); f.usata = ora(); }); },
+    usaFirma(id) { if (!api.firma(id)) return; cambia('firme', (i) => { const f = i.firme.find((x) => x.id === id); f.usata = ora(); }, { uso: true }); },
     async eliminaFirma(id) {
       const f = api.firma(id); if (!f) return false;
       cambia('firme', (i) => { i.firme = i.firme.filter((x) => x.id !== id); });
@@ -274,7 +290,7 @@ export function createArchivio({ backend, legacyStorage = null, chiediPassword =
       cambia('timbri', (i) => { i.timbri.push(t); });
       return t;
     },
-    usaTimbro(id) { if (!api.timbro(id)) return; cambia('timbri', (i) => { i.timbri.find((x) => x.id === id).usato = ora(); }); },
+    usaTimbro(id) { if (!api.timbro(id)) return; cambia('timbri', (i) => { i.timbri.find((x) => x.id === id).usato = ora(); }, { uso: true }); },
     async eliminaTimbro(id) {
       const t = api.timbro(id); if (!t) return false;
       cambia('timbri', (i) => { i.timbri = i.timbri.filter((x) => x.id !== id); });
@@ -383,7 +399,7 @@ export function createArchivio({ backend, legacyStorage = null, chiediPassword =
         return n;
       });
     },
-    usaModello(id) { if (!api.modello(id)) return; cambia('modelli', (i) => { i.modelli.find((x) => x.id === id).usato = ora(); }); },
+    usaModello(id) { if (!api.modello(id)) return; cambia('modelli', (i) => { i.modelli.find((x) => x.id === id).usato = ora(); }, { uso: true }); },
     async pdfModello(id) { const m = api.modello(id); if (!m?.blob) return null; return backend.leggiBlob(m.blob); },
     async eliminaModello(id) {
       const m = api.modello(id); if (!m) return false;

@@ -24,3 +24,18 @@
 .pers-sig-act { display: flex; gap: 6px; flex-wrap: wrap; }
 @media (max-width: 860px) { .pers-layout { grid-template-columns: 1fr; } .pers-nav { grid-auto-flow: column; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); } .pers-sig { grid-template-columns: 1fr; } }
 .pers-actions select { min-height: 34px; padding: 4px 8px; border: 1px solid var(--control-border); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; }
+/* 0.3.1: avviso del portachiavi, consiglio sulla password, robustezza della password */
+.pers-avviso { margin: 4px 0 12px; max-width: 72ch; }
+.pers-avviso .pers-actions { margin-bottom: 0; }
+.pers-consiglio { color: var(--muted); }
+.pers-forza { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 4px 10px; margin: -4px 0 10px; font-size: var(--fs-xs); }
+.pers-forza[hidden] { display: none; }
+.pers-forza-barra { display: inline-flex; gap: 3px; }
+.pers-forza-tacca { width: 26px; height: 6px; border-radius: var(--radius-pill); background: var(--border); }
+.pers-forza[data-livello="1"] .pers-forza-tacca.on { background: var(--danger); }
+.pers-forza[data-livello="2"] .pers-forza-tacca.on { background: var(--warning); }
+.pers-forza[data-livello="3"] .pers-forza-tacca.on,
+.pers-forza[data-livello="4"] .pers-forza-tacca.on { background: var(--success); }
+.pers-forza-testo { font-weight: 600; }
+.pers-forza-consiglio { grid-column: 1 / -1; color: var(--muted); }
+.pers-forza-consiglio:empty { display: none; }

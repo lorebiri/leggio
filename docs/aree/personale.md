@@ -10,6 +10,7 @@ processo principale** (`electron/personale/cassaforte.cjs`, canali `feat:persona
 | File | Contenuto |
 |---|---|
 | `chiave.json` | chiave dati (DEK, 256 bit casuali) protetta (vedi sotto) |
+| `chiave.json.bak` | copia di riserva **identica** di `chiave.json` (0.3.1): se `chiave.json` si rovina la chiave si recupera da qui |
 | `indice.dat` | indice JSON cifrato: contatti, metadati di firme/timbri/modelli, registro, profilo |
 | `indice.dat.bak` | la versione precedente dell'indice (backup automatico dell'ultima versione) |
 | `blob/<id>.dat` | immagini di firme e timbri, PDF dei modelli: un file cifrato ciascuno |
@@ -22,13 +23,37 @@ aggiuntivi legano il contenuto al nome (`indice`, `blob:<id>`): un file scambiat
    su Linux. La chiave è legata all'utente del computer.
 2. **Ripiego documentato**: su Linux senza portachiavi Electron userebbe `basic_text` (una chiave fissa, nessuna vera
    protezione). In quel caso Leggio NON lo considera sicuro: la chiave dati resta in `chiave.json` protetta **solo dai
-   permessi del file** (0600, leggibile solo dal proprio utente) e la finestra «Archivio personale» lo dice e consiglia
-   una password. Appena il portachiavi diventa disponibile la chiave passa da sola alla protezione del sistema.
-3. **Password facoltativa**: la chiave dati viene avvolta con una chiave derivata dalla password (scrypt N=32768, r=8,
-   p=1; sale casuale), e il risultato è a sua volta protetto dal sistema. All'avvio l'archivio è **bloccato**: la
-   password si chiede la prima volta che serve (non all'avvio dell'app). «Blocca ora» toglie la chiave dalla memoria.
-   Dopo 3 password sbagliate di fila le risposte rallentano. Una password dimenticata non si recupera: lo dice
-   l'interfaccia e suggerisce un backup esportato.
+   permessi del file** (0600, leggibile solo dal proprio utente). Appena il portachiavi diventa disponibile la chiave
+   passa da sola alla protezione del sistema. Lo stesso ripiego si usa se il portachiavi c'è ma non rilegge ciò che ha
+   appena cifrato (una chiave che non si riapre non viene mai scritta).
+   **Avviso (0.3.1)**: `stato().avvisoPortachiavi` è vero con il ripiego e senza password. L'interfaccia
+   (`ui/avvisi.js`) mostra **una volta sola** (alla creazione dell'archivio, o al primo avvio con la 0.3.1 per gli
+   archivi esistenti) una finestra non tecnica: «manca il portachiavi, l'archivio è protetto solo dai permessi del file,
+   conviene impostare una password», con il pulsante «Imposta una password…». Poi resta solo il riquadro in cima a
+   «Archivio personale» → «Protezione e backup», con lo stesso pulsante. La data dell'avviso sta nel localStorage
+   (`leggio.personale.promemoria.v1`, solo date e scelte).
+3. **Password facoltativa**: la chiave dati viene avvolta con una chiave derivata dalla password (**scrypt N=131072,
+   r=8, p=1**, 128 MB di memoria, sale casuale), e il risultato è a sua volta protetto dal sistema. All'avvio l'archivio
+   è **bloccato**: la password si chiede la prima volta che serve (non all'avvio dell'app). «Blocca ora» toglie la
+   chiave dalla memoria. Dopo 3 password sbagliate di fila le risposte rallentano. Una password dimenticata non si
+   recupera: lo dice l'interfaccia e suggerisce un backup esportato.
+   - **scrypt asincrono**: `crypto.scrypt` gira nel pool di libuv, il processo principale (e quindi l'interfaccia)
+     non si blocca. Tempi misurati: ~0,32–0,36 s per derivazione su una macchina Linux a 4 core (contro ~70 ms con
+     N=32768); il test `personale-cassaforte-031` verifica che il ciclo degli eventi continui a girare.
+   - **Rafforzamento delle chiavi della 0.3.0** (N=32768): al primo sblocco riuscito la chiave dati viene riavvolta
+     con i nuovi parametri (stessa password). La nuova chiave è verificata in memoria (si svolge e si rilegge dal
+     sistema) prima di essere scritta, la scrittura è atomica e poi si aggiorna la copia di riserva. Se la scrittura
+     non riesce (disco pieno, permessi) lo sblocco riesce lo stesso, resta la chiave vecchia e si riprova al prossimo
+     sblocco: non c'è mai un momento in cui la chiave non si apre.
+   - **Compatibilità all'indietro**: la 0.3.0 calcola scrypt con un limite di 128 MB e **non apre** una chiave (o un
+     backup) con N=131072. Tornare dalla 0.3.1 alla 0.3.0 con un archivio con password non è supportato.
+   - Parametri letti da file (chiave o backup) controllati: N potenza di 2, memoria al massimo 512 MB (un file
+     manomesso non può esaurire la memoria).
+4. **Consiglio nell'interfaccia**: «Senza password l'archivio è protetto dall'utente del computer: va bene su un PC
+   personale. Su un PC condiviso o d'ufficio conviene la password». I dialoghi di password e di backup mostrano un
+   **indicatore di robustezza** (`lib/robustezza.js`, senza librerie: lunghezza «utile» per varietà dei caratteri, con
+   ripetizioni, sequenze tipo `1234`/`qwerty` e parole comuni che contano come un solo carattere; Troppo corta, Debole,
+   Discreta, Buona, Ottima). È solo un consiglio: il minimo resta 8 caratteri.
 
 **Scritture.** Atomiche e verificate (`electron/core/safe-write.cjs`: temporaneo + fsync + rilettura + rename), in coda
 (una alla volta). Prima di ogni nuovo indice la versione corrente diventa `indice.dat.bak`. Se l'indice è danneggiato si
@@ -36,13 +61,39 @@ legge il backup (e l'utente viene avvisato); il salvataggio successivo non sovra
 Se il sistema non riesce più ad aprire la chiave (utente cambiato, portachiavi azzerato) l'archivio può essere **messo da
 parte** (mai cancellato: `personale-illeggibile-<data>`) per ricominciare, e poi ripristinato da un backup esportato.
 
+**Casi di errore (0.3.1)** — ognuno con un messaggio chiaro, un codice e una via d'uscita; nessun dato perso in silenzio:
+
+| Caso | Codice | Cosa succede |
+|---|---|---|
+| `chiave.json` danneggiato (illeggibile o con il contenuto rovinato) | — | si usa `chiave.json.bak` e si rimette a posto `chiave.json` (`stato().chiaveRecuperata`) |
+| `chiave.json` e la copia entrambe danneggiate | `chiave-danneggiata` | messaggio + finestra di recupero |
+| `chiave.json` cancellato ma ci sono dati cifrati | `chiave-mancante` | **non** si crea una chiave nuova sopra i dati; finestra di recupero |
+| Portachiavi azzerato / utente cambiato | `sistema` | dati intatti; si può riprovare dopo aver sbloccato il portachiavi, oppure finestra di recupero |
+| Indice e backup automatico illeggibili | `danneggiato` | finestra di recupero |
+| Disco pieno durante una scrittura | `disco-pieno` | l'originale resta intatto (scrittura atomica); il renderer tiene le modifiche in memoria, avvisa **una volta** e riprova ogni 30 s; a salvataggio riuscito «le modifiche ora sono salvate» |
+| Permessi / disco in sola lettura | `scrittura` | come sopra, con il messaggio sui permessi della cartella |
+| Password sbagliata (anche dopo il rafforzamento) | `password-errata` | «Password errata.», si richiede; nessuna scrittura |
+
+La **finestra di recupero** (`dialogoRecupero` in `ui/avvisi.js`) spiega il problema e offre «Metti da parte e ricomincia»
+(la cartella viene solo rinominata) e subito dopo «Importa un backup…».
+
 **Nessun limite pratico di spazio**: indice fino a 64 MB di testo (decine di migliaia di contatti), ogni immagine o PDF
 fino a 64 MB, numero di file illimitato. Provato con 5000 contatti e 500 firme (`test/personale-cassaforte.test.js`).
 
-**Backup esportato** (`.leggio-backup`): tutto l'archivio (indice + immagini + PDF dei modelli) compresso e cifrato con
-una password scelta all'esportazione (scrypt + AES-256-GCM), perché le chiavi del sistema non si spostano su un altro
-computer. All'importazione: «Unisci» (per id vince la versione modificata più di recente; il profilo attuale ha la
-precedenza) o «Sostituisci» (con conferma).
+**Backup esportato** (`.leggio-backup`): tutto l'archivio (indice + immagini di firme e timbri + PDF dei modelli: ogni
+`blob` citato in qualunque punto dell'indice) compresso e cifrato con una password scelta all'esportazione (scrypt
+N=131072 + AES-256-GCM), perché le chiavi del sistema non si spostano su un altro computer. **Verifica (0.3.1)**: prima di
+salvarlo il file viene riaperto con la stessa password e confrontato con l'archivio (indice identico, stesse immagini e
+PDF byte per byte); se un elemento citato dall'indice non è leggibile il backup si salva lo stesso ma l'interfaccia dice
+quanti elementi mancano (`mancanti`). Il file viene scritto in modo atomico e riletto. All'importazione: «Unisci» (per id
+vince la versione modificata più di recente; il profilo attuale ha la precedenza) o «Sostituisci» (con conferma). I
+backup della 0.3.0 si importano nella 0.3.1; quelli della 0.3.1 richiedono la 0.3.1 o successive.
+
+**Promemoria del backup (0.3.1)** (`lib/promemoria.js`, finestra in `ui/avvisi.js`): dopo il salvataggio della prima firma
+(se non è mai stato esportato un backup) e poi quando ci sono dati nuovi dall'ultimo backup e sono passati almeno 30
+giorni dall'ultimo backup o dall'ultimo «Non ora». Risposte: «Esporta un backup…», «Non ora», «Non ricordarmelo più».
+Al massimo uno per sessione, mai sopra un'altra finestra, mai con l'archivio vuoto; usare una firma non conta come dato
+nuovo. In «Protezione e backup» si vede la data dell'ultimo backup esportato.
 
 **Segreti e renderer.** Il renderer non vede mai la chiave dati né la password dopo averla inviata: riceve solo i dati
 che deve mostrare (l'indice e, a richiesta, le singole immagini). Canali validati: identificativi `^[a-z0-9][a-z0-9_-]{3,63}$`
@@ -147,6 +198,13 @@ nel riepilogo, esportabile in CSV. Misure: 500 record ≈ 4 s nell'app con scrit
 - `test/personale-cassaforte.test.js` — cifratura, nessun dato in chiaro, protezione del sistema e ripiego, password
   (blocco, errata, cambio, rimozione), backup automatico e recupero da indice danneggiato, purga GDPR, scritture
   concorrenti, 5000 contatti e 500 firme, validazione, blob non scambiabili, pulizia degli orfani, export/import, canali IPC.
+- `test/personale-cassaforte-031.test.js` — 0.3.1: parametri scrypt e tempi (con il ciclo degli eventi libero),
+  **compatibilità con archivi e backup creati dalla 0.3.0** (`test/fixtures/personale-0.3.0`, generati con il codice della
+  0.3.0: `genera.cjs`), rafforzamento della chiave (anche con disco pieno e con interruzione fra chiave e copia), chiave
+  danneggiata o mancante, portachiavi azzerato, disco pieno, password sbagliata dopo il rafforzamento, backup completo e
+  ripristino **end-to-end** su un computer nuovo attraverso i canali IPC veri e il modello dei dati del renderer.
+- `test/personale-avvisi.test.js` — robustezza della password, promemoria del backup, avviso del portachiavi una volta
+  sola, nuovo tentativo di salvataggio dopo un errore di scrittura.
 - `test/personale-archivio.test.js` — migrazione dalla 0.2 (anche con salvataggio fallito), password, firme senza limite,
   firme altrui e registro, timbri, GDPR (esporta/cancella), unione dei backup, campi per «Compila a nome di».
 - `test/moduli-firme-timbri.test.js` — firma da foto (carta colorata, ombra, inchiostro blu, tratto a matita), timbri,
@@ -159,3 +217,6 @@ nel riepilogo, esportabile in CSV. Misure: 500 record ≈ 4 s nell'app con scrit
   e `npx vite build && node test/e2e/archivio-personale.mjs` (migrazione reale dal localStorage,
   file cifrati su disco, conferma e registro di una firma altrui, password al riavvio con dialogo vero, backup esportato e
   reimportato con i dialoghi di sistema).
+- Collaudo 0.3.1 nell'app vera, su un Linux senza portachiavi: `npx vite build && xvfb-run -a node test/e2e/archivio-0.3.1.mjs`
+  (avviso del portachiavi una volta sola, indicatore di robustezza, sblocco e rafforzamento di un archivio della 0.3.0,
+  promemoria del backup, finestra di recupero con la chiave rovinata).

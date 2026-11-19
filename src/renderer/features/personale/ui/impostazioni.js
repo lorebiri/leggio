@@ -4,6 +4,7 @@ import '../archivio.css';
 import { openPane } from '../../avanzati/pane.js';
 import { csvDaTabella } from '../lib/tabelle.js';
 import { nomeContatto } from '../lib/campi.js';
+import { aggiungiIndicatore, riquadroPortachiavi, CONSIGLIO_PASSWORD } from './avvisi.js';
 
 /** Chiede la password dell'archivio. → password | null */
 export async function chiediPassword(app, { errore = '' } = {}) {
@@ -81,25 +82,35 @@ export async function apriArchivioPersonale(app, ctx, sezione = 'protezione') {
 async function sezProtezione(app, ctx, el, mostra, chiudiPane) {
   const { h } = app.ui; const a = ctx.archivio;
   const st = await a.stato();
-  const prot = st.protezione === 'sistema' ? `Chiave protetta dal ${st.sistema}.` : st.protezione === 'file' ? 'Protezione di base: su questo computer il portachiavi del sistema non è disponibile, quindi la chiave è protetta solo dai permessi del tuo utente. Ti consigliamo di impostare una password.' : 'Anteprima: archivio NON cifrato (solo per lo sviluppo).';
+  const prot = st.protezione === 'sistema' ? `La chiave è custodita dal ${st.sistema}.` : st.protezione === 'file' ? (st.password ? 'Su questo computer manca il portachiavi: la chiave è protetta dalla tua password.' : '') : 'Anteprima: archivio NON cifrato (solo per lo sviluppo).';
+  const conPassword = async () => { if (await impostaPassword(app, a, st.password)) mostra('protezione'); };
   el.append(...[
     h('h3', {}, 'Protezione'),
+    st.avvisoPortachiavi ? riquadroPortachiavi(h, conPassword) : null,
     h('p', {}, 'Firme, sigle, timbri, rubrica, modelli e registro sono cifrati (AES-256) in un archivio nella cartella dati di Leggio. ' + prot),
-    h('p', {}, st.password ? 'Password: impostata. Leggio la chiede la prima volta che usi l\'archivio dopo l\'avvio.' : 'Password: nessuna. Puoi aggiungerla se il computer è condiviso o vuoi più protezione.'),
+    h('p', {}, st.password ? 'Password: impostata. Leggio la chiede la prima volta che usi l\'archivio dopo l\'avvio.' : 'Password: nessuna.'),
+    h('p', { class: 'pers-consiglio' }, CONSIGLIO_PASSWORD),
     h('div', { class: 'pers-actions' },
-      h('button', { type: 'button', class: 'btn', onclick: async () => { if (await impostaPassword(app, a, st.password)) mostra('protezione'); } }, st.password ? 'Cambia la password…' : 'Imposta una password…'),
+      st.avvisoPortachiavi ? null : h('button', { type: 'button', class: 'btn', onclick: conPassword }, st.password ? 'Cambia la password…' : 'Imposta una password…'),
       st.password ? h('button', { type: 'button', class: 'btn', onclick: async () => { if (await impostaPassword(app, a, true, { togli: true })) mostra('protezione'); } }, 'Togli la password…') : null,
       st.password ? h('button', { type: 'button', class: 'btn', onclick: async () => { await a.salvaOra(); await a.backend.blocca(); await a.chiudi(); app.ui.toast('Archivio personale bloccato: servirà la password per riaprirlo.', { kind: 'success' }); chiudiPane(); } }, 'Blocca ora') : null),
     h('h3', {}, 'Backup'),
     h('p', {}, 'Leggio conserva da solo la versione precedente dell\'archivio. Per spostare i dati su un altro computer, o per sicurezza, esporta un file di backup: è cifrato con una password che scegli tu (senza quella password non si apre).'),
     h('div', { class: 'pers-actions' },
-      h('button', { type: 'button', class: 'btn primary', onclick: () => esportaBackup(app, a) }, 'Esporta un backup…'),
+      h('button', { type: 'button', class: 'btn primary', onclick: async () => { if (await esportaBackup(app, a, ctx)) mostra('protezione'); } }, 'Esporta un backup…'),
       h('button', { type: 'button', class: 'btn', onclick: async () => { if (await importaBackup(app, a)) mostra('contenuto'); } }, 'Importa un backup…')),
+    ultimoBackup(h, ctx),
     st.cartella ? h('p', { class: 'muted pers-small' }, 'Cartella: ' + st.cartella) : null,
   ].filter(Boolean));
 }
 
-async function impostaPassword(app, a, haPassword, { togli = false } = {}) {
+function ultimoBackup(h, ctx) {
+  const s = ctx.promemoria?.leggi();
+  if (!s) return null;
+  return h('p', { class: 'muted pers-small' }, s.ultimoBackup ? `Ultimo backup esportato: ${new Date(s.ultimoBackup).toLocaleDateString('it-IT')}.` : 'Non hai ancora esportato un backup.');
+}
+
+export async function impostaPassword(app, a, haPassword, { togli = false } = {}) {
   const fields = [];
   if (haPassword) fields.push({ name: 'attuale', label: 'Password attuale', type: 'password', required: true });
   if (!togli) fields.push({ name: 'nuova', label: 'Nuova password (almeno 8 caratteri)', type: 'password', required: true }, { name: 'ripeti', label: 'Ripeti la nuova password', type: 'password', required: true });
@@ -107,6 +118,8 @@ async function impostaPassword(app, a, haPassword, { togli = false } = {}) {
   for (;;) {
     const v = await app.ui.dialog({
       title: togli ? 'Togli la password' : haPassword ? 'Cambia la password' : 'Imposta una password', fields, okLabel: togli ? 'Togli la password' : 'Salva la password',
+      message: togli || haPassword ? '' : CONSIGLIO_PASSWORD,
+      onOpen: (form) => { if (!togli) aggiungiIndicatore(app.ui.h, form.querySelectorAll('input[type=password]')[haPassword ? 1 : 0]); },
       validate: (x) => (!togli && x.nuova !== x.ripeti ? 'Le due password non coincidono.' : !togli && x.nuova.length < 8 ? 'La password deve avere almeno 8 caratteri.' : null),
     });
     if (!v) return false;
@@ -119,25 +132,32 @@ async function impostaPassword(app, a, haPassword, { togli = false } = {}) {
   }
 }
 
-async function esportaBackup(app, a) {
+/** Esporta il backup (password scelta ora). → true se il file è stato salvato. */
+export async function esportaBackup(app, a, ctx = {}) {
   const v = await app.ui.dialog({
-    title: 'Esporta un backup', message: 'Il file conterrà tutto l\'archivio personale (firme, timbri, rubrica, modelli, registro), cifrato con questa password.',
+    title: 'Esporta un backup', message: 'Il file conterrà tutto l\'archivio personale (firme, sigle, timbri, rubrica, modelli con i loro PDF, registro), cifrato con questa password. Servirà per aprirlo, anche su un altro computer: senza non si apre.',
     fields: [
       { name: 'pw', label: 'Password del backup (almeno 8 caratteri)', type: 'password', required: true },
       { name: 'pw2', label: 'Ripeti la password', type: 'password', required: true },
     ],
     okLabel: 'Esporta…',
+    onOpen: (form) => aggiungiIndicatore(app.ui.h, form.querySelector('input[type=password]')),
     validate: (x) => (x.pw !== x.pw2 ? 'Le due password non coincidono.' : x.pw.length < 8 ? 'La password deve avere almeno 8 caratteri.' : null),
   });
-  if (!v) return;
+  if (!v) return false;
   try {
     await a.salvaOra();
     const r = await a.backend.esporta(v.pw);
-    if (r) app.ui.toast(`Backup salvato: ${r.nome}`, { kind: 'success' });
-  } catch (e) { app.reportError(e, 'Backup non riuscito'); }
+    if (!r) return false;
+    ctx.promemoria?.applica('backupFatto');
+    if (r.mancanti) {
+      app.ui.dialog({ title: 'Backup salvato, ma incompleto', message: `Il backup «${r.nome}» è stato salvato e verificato, ma ${r.mancanti === 1 ? '1 immagine o documento dell\'archivio non era leggibile' : `${r.mancanti} immagini o documenti dell'archivio non erano leggibili`} e non è nel file (forse il file su disco è stato cancellato o rovinato). Tutto il resto c'è. Controlla in «Firme e sigle», «Timbri» e «Modelli» quali elementi non mostrano l'anteprima.`, cancelLabel: null, okLabel: 'Ho capito' });
+    } else app.ui.toast(`Backup salvato e verificato: ${r.nome}`, { kind: 'success', timeout: 6000 });
+    return true;
+  } catch (e) { app.reportError(e, 'Backup non riuscito'); return false; }
 }
 
-async function importaBackup(app, a) {
+export async function importaBackup(app, a) {
   try {
     const f = await a.backend.importaScegli();
     if (!f) return false;

@@ -44,6 +44,8 @@ try {
     await window.__leggioPersonale.archivio.backend.azzera(); // archivio nuovo e vuoto, come al primo avvio della 0.3
     localStorage.setItem('leggio.moduli.firme.v1', JSON.stringify([{ id: 'x', kind: 'signature', dataUrl: png, w: 30, h: 10, created: 1700000000000 }, { id: 'y', kind: 'initials', dataUrl: png, w: 10, h: 10, created: 1700000000000 }]));
     localStorage.setItem('leggio.moduli.profilo.v1', JSON.stringify({ nome: 'Mariagrazia', cognome: 'Vecchiarelli', codiceFiscale: 'VCCMGR80A41H501X' }));
+    // avvisi della 0.3.1 (portachiavi mancante, promemoria del backup) già visti: hanno il loro collaudo
+    localStorage.setItem('leggio.personale.promemoria.v1', JSON.stringify({ portachiaviAvvisato: Date.now(), maiPiu: true }));
   }, PNG);
   await s.page.reload();
   await s.page.waitForFunction(() => window.__leggioPersonale?.archivio?.aperto, null, { timeout: 20000 });

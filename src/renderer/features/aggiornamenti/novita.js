@@ -4,6 +4,18 @@
 // cosa può fare di nuovo, non come è fatto. Senza voce per la versione, all'utente non viene mostrato nulla.
 export const NOVITA = [
   {
+    versione: '0.3.1',
+    titolo: 'Archivio personale più sicuro',
+    punti: [
+      'La password dell’archivio personale ora è molto più difficile da indovinare per chi provasse a forzarla. Non devi fare nulla: la tua password resta la stessa e la protezione si aggiorna da sola la prima volta che la inserisci.',
+      'Quando scegli una password, Leggio ti dice se è debole o robusta. E nelle impostazioni dell’archivio trovi un consiglio: sul tuo PC personale la password non è indispensabile, su un PC condiviso o d’ufficio conviene metterla.',
+      'Su Linux, se sul computer manca il portachiavi, Leggio ora te lo dice chiaramente e ti propone di impostare una password.',
+      'Leggio ti ricorda con gentilezza di esportare un backup: dopo la prima firma salvata e poi circa una volta al mese, se ci sono dati nuovi. Puoi rispondere «Non ora» o «Non ricordarmelo più».',
+      'Il backup viene controllato subito dopo l’esportazione: contiene davvero tutto, firme, timbri, rubrica e modelli con i loro PDF.',
+      'Se l’archivio non si apre (per esempio dopo un problema al disco o al portachiavi) Leggio spiega cosa è successo e ti aiuta a ripartire da un backup, senza cancellare nulla. Se il disco è pieno, le modifiche restano in memoria e Leggio riprova da solo.',
+    ],
+  },
+  {
     versione: '0.3.0',
     titolo: 'Firme, timbri, rubrica e moduli in serie',
     punti: [

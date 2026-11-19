@@ -58,7 +58,7 @@ export function createMemoryBackend({ storage = null, chiave = 'leggio.personale
   };
   const idOk = (id) => { if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9_-]{3,63}$/.test(id)) throw new Error('Identificativo non valido.'); return id; };
   const sbloccato = () => { if (bloccato) { const e = new Error('L\'archivio personale è bloccato: inserisci la password.'); e.code = 'bloccato'; throw e; } };
-  const stato = () => ({ pronto: true, bloccato, password: !!pw, protezione: 'memoria', sistema: 'nessuna (anteprima)', sistemaDisponibile: false, ripristinato: false, cartella: '' });
+  const stato = () => ({ pronto: true, bloccato, password: !!pw, protezione: 'memoria', sistema: 'nessuna (anteprima)', sistemaDisponibile: false, avvisoPortachiavi: false, creatoOra: false, ripristinato: false, cartella: '' });
   const esportati = new Map();
   return {
     tipo: storage ? 'anteprima' : 'memoria',
@@ -72,7 +72,7 @@ export function createMemoryBackend({ storage = null, chiave = 'leggio.personale
     leggiBlob: async (id) => { sbloccato(); const b = blob.get(idOk(id)); if (!b) throw new Error('Elemento dell\'archivio non trovato (forse è stato eliminato).'); return b.slice(); },
     scriviBlob: async (id, d) => { sbloccato(); blob.set(idOk(id), new Uint8Array(d)); persisti(); return {}; },
     cancellaBlob: async (id) => { blob.delete(idOk(id)); persisti(); },
-    esporta: async (p) => { if (!p || p.length < 8) throw new Error('Scegli una password di almeno 8 caratteri per il file di backup.'); const t = 'exp' + esportati.size; esportati.set(t, { p, indice: structuredClone(indice), blob: new Map(blob) }); return { nome: t + '.leggio-backup', percorso: t }; },
+    esporta: async (p) => { if (!p || p.length < 8) throw new Error('Scegli una password di almeno 8 caratteri per il file di backup.'); const t = 'exp' + esportati.size; esportati.set(t, { p, indice: structuredClone(indice), blob: new Map(blob) }); return { nome: t + '.leggio-backup', percorso: t, elementi: blob.size, mancanti: 0 }; },
     importaScegli: async () => { const t = [...esportati.keys()].pop(); return t ? { token: t, nome: t + '.leggio-backup' } : null; },
     importaApri: async (t, p) => { const e = esportati.get(t); if (!e) throw new Error('Scegli di nuovo il file di backup.'); if (e.p !== p) throw new Error('Password del backup errata, oppure il file è danneggiato.'); for (const [k, v] of e.blob) blob.set(k, v); return { indice: structuredClone(e.indice || {}), elementi: e.blob.size }; },
     azzera: async () => { indice = null; blob.clear(); pw = null; bloccato = false; persisti(); return stato(); },
