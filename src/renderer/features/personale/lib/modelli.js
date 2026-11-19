@@ -8,8 +8,8 @@
 //            firma?: { pagina, rect }, timbro?: { pagina, rect }, nomeFile? }
 // Chiave: una delle chiavi di campi.js, 'oggi', 'fisso:testo', 'colonna:Nome colonna', '' = non compilare.
 import * as PDFLibPredefinita from '@cantoo/pdf-lib';
-import { fieldKind, scriviValori, rigeneraAspetti, moduloSicuro, campiSicuri } from './acroform.js';
-import { placement, localToPdf, todayIt, winAnsiSafe, normRect } from '../../moduli/lib/geom.js';
+import { fieldKind, scriviValori, rigeneraAspetti, moduloSicuro, campiSicuri, testoNonDisegnabile } from './acroform.js';
+import { placement, localToPdf, todayIt, winAnsiSafe, normRect, codificabile } from '../../moduli/lib/geom.js';
 import { chiavePerCampo, CAMPI_MODULO, CAMPI_CONTATTO, etichettaCampo } from './campi.js';
 
 export const ALLINEAMENTI = [
@@ -179,14 +179,7 @@ export function chiaviDisponibili() {
 
 // ------------------------------------------------------------------------------------------- scrittura
 const LINE_H = 1.2;
-function canEncodeCon(font) {
-  const cache = new Map();
-  return (ch) => {
-    if (cache.has(ch)) return cache.get(ch);
-    let ok; try { font.encodeText(ch); ok = true; } catch { ok = false; }
-    cache.set(ch, ok); return ok;
-  };
-}
+const canEncodeCon = (font) => codificabile(font);
 
 /** Scrive un testo in un rettangolo (coordinate PDF) della pagina, diritto anche sulle pagine ruotate. */
 export function scriviInZona(PDFLib, page, { rect, size = 11, allinea = 'sinistra' }, valore, font, { colore } = {}) {
@@ -264,7 +257,11 @@ export async function appiattisciModulo(PDFLib, pdfDoc) {
   for (const f of fields) { try { form.markFieldAsDirty(f.ref); } catch { /* */ } }
   await rigeneraAspetti(PDFLib, pdfDoc, form);
   const bad = [];
+  let ok = () => false;
+  try { ok = codificabile(await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica)); } catch { /* */ }
   for (const f of fields) {
+    // testo con caratteri che Helvetica non ha: resta campo (lo disegna il lettore), non va appiattito con «?»
+    if (testoNonDisegnabile(f, ok)) { bad.push(f); continue; }
     try { for (const w of f.acroField.getWidgets()) if (!w.getNormalAppearance()) throw new Error('senza aspetto'); }
     catch { bad.push(f); }
   }

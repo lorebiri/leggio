@@ -156,6 +156,23 @@ describe('modelli', () => {
     const v = readValues(PDFLib, await PDFLib.PDFDocument.load(await d.save())).values;
     expect(v).toMatchObject({ cognome: 'Rossi', nome: 'Maria', codice_fiscale: CF_OK[0], data: '19/11/2026', accetto: true, ufficio_note: '' });
   });
+  it('caratteri che Helvetica non ha (Ș, cirillico): niente «?» silenziosi', async () => {
+    // zone: la lettera base al posto di «?»
+    const dz = await PDFLib.PDFDocument.load(await pdfNormale(1));
+    await compilaConModello(PDFLib, dz, normalizzaModello({ tipo: 'zone', zone: [{ pagina: 0, rect: [100, 700, 400, 720], chiave: 'cognome' }] }), { cognome: 'Ștefan Țurcanu' });
+    expect((await testoPagine(await dz.save()))[0]).toContain('Stefan Turcanu');
+    // campi AcroForm: il valore resta, l'aspetto lo disegna il lettore (NeedAppearances), mai «?»
+    const bytes = await moduloProva();
+    const m = await modelloDaPdf(PDFLib, bytes);
+    for (const appiattisci of [false, true]) {
+      const d = await PDFLib.PDFDocument.load(bytes);
+      await compilaConModello(PDFLib, d, m, { cognome: 'Иванов', nome: 'Maria' }, { appiattisci });
+      const salvato = await PDFLib.PDFDocument.load(await d.save());
+      expect(readValues(PDFLib, salvato).values.cognome).toBe('Иванов');
+      expect(salvato.getForm().acroForm.dict.get(PDFLib.PDFName.of('NeedAppearances'))).toBe(PDFLib.PDFBool.True);
+      if (appiattisci) expect(Object.keys(readValues(PDFLib, salvato).values)).toEqual(['cognome']); // gli altri appiattiti
+    }
+  });
   it('posizioni predefinite e pagina effettiva', () => {
     expect(posizionePredefinita([595, 842], 'basso-destra', { size: [150, 60] }).rect).toEqual([397, 56, 547, 116]);
     expect(posizionePredefinita([595, 842], 'basso-sinistra').rect[0]).toBe(48);

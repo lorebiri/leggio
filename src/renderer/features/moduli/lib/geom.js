@@ -144,6 +144,17 @@ export function fitRectInPage(cx, cy, w, h, page) {
 }
 
 /** Sostituisce i caratteri non codificabili in un font standard (WinAnsi) con equivalenti o «?». */
+/**
+ * Funzione «il font ha questo carattere?». pdf-lib NON dà errore sui caratteri che un font standard non ha
+ * (li scrive come «?»): si guarda l'insieme dei caratteri del font.
+ */
+export function codificabile(font) {
+  let set = null;
+  try { const cs = font?.getCharacterSet?.(); if (cs && cs.length) set = new Set(cs); } catch { /* sotto */ }
+  if (set) return (ch) => set.has(ch.codePointAt(0));
+  return (ch) => { try { font.encodeText(ch); return true; } catch { return false; } };
+}
+
 export function winAnsiSafe(text, canEncode) {
   const map = { '‘': "'", '’': "'", '“': '"', '”': '"', '–': '-', '—': '-', '…': '...', ' ': ' ', '✓': 'v', '✗': 'x' };
   let out = '';
@@ -151,7 +162,11 @@ export function winAnsiSafe(text, canEncode) {
     if (ch === '\n') { out += ch; continue; }
     if (canEncode(ch)) out += ch;
     else if (map[ch] && canEncode(map[ch][0])) out += map[ch];
-    else out += '?';
+    else {
+      // lettere accentate che il font non ha (Ș, ț, ł, ő…): la lettera base è meglio di «?»
+      const base = ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      out += base && base !== ch && [...base].every((c) => canEncode(c)) ? base : ch === '\r' || ch === '\t' ? ' ' : '?';
+    }
   }
   return out;
 }

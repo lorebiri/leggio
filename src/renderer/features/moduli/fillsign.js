@@ -2,7 +2,7 @@
 // altre persone, con conferma e registro), «Sigla tutte le pagine», «Luogo, data e firma», timbri, dati della rubrica.
 // Gli elementi restano modificabili finché lo strumento è aperto; alla chiusura (o con «Applica») vengono scritti nella pagina.
 import { Board, rectToCss } from './board.js';
-import { placement, localToPdf, rotazionePagina, todayIt, winAnsiSafe, dimensioniVisive, rettangoloInPosizione, rettangoloDaVisivo, pdfToVisivo, posizioneRelativa } from './lib/geom.js';
+import { placement, localToPdf, rotazionePagina, codificabile, todayIt, winAnsiSafe, dimensioniVisive, rettangoloInPosizione, rettangoloDaVisivo, pdfToVisivo, posizioneRelativa } from './lib/geom.js';
 import { textItemsFromPdfjs } from './lib/detect.js';
 import { createSignatureDialog, NOTA_FIRMA_SEMPLICE } from './sigpad.js';
 import { editProfileDialog } from './profile.js';
@@ -525,7 +525,7 @@ export class FillSignSession {
       const font = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
       const pages = pdfDoc.getPages();
       const imgCache = new Map();
-      const canEncode = (ch) => { try { font.encodeText(ch); return true; } catch { return false; } };
+      const canEncode = codificabile(font);
       for (const it of items) {
         const page = pages[it.pageIndex]; if (!page) continue;
         const rot = page.getRotation().angle || 0;

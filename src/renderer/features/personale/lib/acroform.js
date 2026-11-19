@@ -1,6 +1,7 @@
 // Campi AcroForm con pdf-lib, senza dipendenze d'interfaccia: usabile nel Web Worker della serie.
 // Stesso comportamento di fieldKind / writeValues / safeAppearances di moduli/formtools.js (che importa
 // moduli d'interfaccia e quindi non può entrare nel Worker). Logica pura.
+import { codificabile } from '../../moduli/lib/geom.js';
 
 const TRUE_WORDS = /^(true|s[iì]|yes|on|1|x|v|vero|checked)$/i;
 const FALSE_WORDS = /^(false|no|off|0|falso|unchecked)?$/i;
@@ -48,15 +49,25 @@ export function moduloSicuro(PDFLib, pdfDoc) {
 }
 export function campiSicuri(form) { if (!form) return []; try { return form.getFields(); } catch { return []; } }
 
+/** Il testo del campo ha caratteri che il font non ha? (ok: funzione di codificabile) */
+export function testoNonDisegnabile(campo, ok) {
+  let t = '';
+  try { t = typeof campo.getText === 'function' ? campo.getText() || '' : ''; } catch { return false; }
+  return [...t].some((ch) => ch !== '\n' && ch !== '\r' && !ok(ch));
+}
+
 /** Rigenera gli aspetti dei campi modificati; se il font standard non basta lascia che sia il lettore a farlo. */
 export async function rigeneraAspetti(PDFLib, pdfDoc, form, { font = null } = {}) {
   let f = font;
   if (!f) { try { f = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica); } catch { /* */ } }
   let deferred = 0;
+  // pdf-lib non dà errore sui caratteri che il font non ha (li disegna come «?»): quei campi li lascia al lettore
+  const ok = f ? codificabile(f) : () => false;
   for (const c of campiSicuri(form)) {
     try {
       if (!form.fieldIsDirty(c.ref)) continue;
-      try { c.defaultUpdateAppearances(f); } catch { deferred++; }
+      if (testoNonDisegnabile(c, ok)) deferred++;
+      else { try { c.defaultUpdateAppearances(f); } catch { deferred++; } }
       form.markFieldAsClean(c.ref);
     } catch { /* */ }
   }
