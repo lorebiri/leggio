@@ -155,7 +155,7 @@
 .mod-autofill { display: grid; gap: 6px; max-height: calc(60 * var(--vh)); overflow: auto; }
 .mod-autofill-row { display: grid; grid-template-columns: auto minmax(140px, 1fr) 1.4fr; gap: 10px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--border); }
 .mod-af-name { overflow: hidden; text-overflow: ellipsis; display: grid; }
-.mod-af-name small { color: var(--muted); font-size: var(--fs-xs); }
+.mod-af-name small { color: var(--muted); font-size: var(--fs-xs); font-family: var(--font); }
 .mod-af-val { display: grid; gap: 2px; }
 .mod-af-input { min-height: 32px; padding: 4px 8px; border: 1px solid var(--control-border); border-radius: var(--radius-sm); background: var(--surface); }
 .mod-af-warn { color: var(--warning, #b45309); font-size: var(--fs-xs); }

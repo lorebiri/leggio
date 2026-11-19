@@ -46,7 +46,8 @@ export function validaCodiceFiscale(v) {
   const giorno = giornoRaw > 40 ? giornoRaw - 40 : giornoRaw;
   const mese = MESI.indexOf(base[8]) + 1;
   const anno2 = Number(base.slice(6, 8));
-  if (giorno < 1 || giorno > 31) return { valido: false, normalizzato: n, avviso: 'Il giorno di nascita nel codice fiscale non è possibile.' };
+  const giorniMese = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mese - 1] || 31;
+  if (giorno < 1 || giorno > giorniMese) return { valido: false, normalizzato: n, avviso: 'Il giorno di nascita nel codice fiscale non è possibile.' };
   return { valido: true, normalizzato: n, omocodico, sesso, giorno, mese, anno2, comune: base.slice(11, 15) };
 }
 
@@ -106,9 +107,9 @@ export function validaIban(v) {
 export function validaCodiceSdi(v) {
   const n = String(v ?? '').toUpperCase().replace(/\s/g, '');
   if (!n) return vuoto();
+  if (n === 'XXXXXXX') return { valido: true, normalizzato: n, tipo: 'estero', nota: 'Destinatario estero (senza codice SDI).' };
   if (/^[A-Z0-9]{7}$/.test(n)) return { valido: true, normalizzato: n, tipo: n === '0000000' ? 'pec' : 'privato', nota: n === '0000000' ? 'Fattura recapitata via PEC o nell\'area riservata dell\'Agenzia delle Entrate.' : undefined };
   if (/^[A-Z0-9]{6}$/.test(n)) return { valido: true, normalizzato: n, tipo: 'pa', nota: 'Codice univoco ufficio di una pubblica amministrazione (6 caratteri).' };
-  if (n === 'XXXXXXX') return { valido: true, normalizzato: n, tipo: 'estero' };
   return { valido: false, normalizzato: n, avviso: 'Il codice destinatario ha 7 caratteri (6 per le pubbliche amministrazioni), solo lettere e cifre.' };
 }
 
@@ -122,7 +123,8 @@ export function validaEmail(v) {
 export function validaPec(v) {
   const r = validaEmail(v);
   if (!r.valido || r.vuoto) return r.vuoto ? r : { ...r, avviso: 'L\'indirizzo PEC non sembra valido.' };
-  if (!/(pec|legalmail|cert|postacert|arubapec|sicurezzapostale|gigapec|mypec|ticertifica|casellapec)/i.test(r.normalizzato)) return { ...r, avviso: 'Controlla che sia davvero un indirizzo PEC (di solito contiene «pec» o «legalmail»).', dubbio: true };
+  // si guarda il dominio (dopo la @): «speck@gmail.com» non è una PEC
+  if (!/(pec|legalmail|cert|postacert|arubapec|sicurezzapostale|gigapec|mypec|ticertifica|casellapec)/i.test(r.normalizzato.split('@').pop())) return { ...r, avviso: 'Controlla che sia davvero un indirizzo PEC (di solito contiene «pec» o «legalmail»).', dubbio: true };
   return r;
 }
 export function validaCap(v) {

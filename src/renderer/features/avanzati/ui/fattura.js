@@ -6,6 +6,7 @@ import { parseFattura, fatturaDocument, nomeProposto, allegatoBytes, allegatoNom
 import { looksLikeP7m, openP7m } from '../lib/cades.js';
 import { ESITI } from '../lib/report.js';
 import { isDesktop, call } from '../native.js';
+import { propostaRubrica } from '../../personale/ui/fattura-rubrica.js';
 
 const firmaTesto = (firma) => (firma ? `Firmato digitalmente: ${firma.result.levels.flatMap((l) => l.signers.map((s) => s.name)).join(', ')} — esito verifica: ${ESITI[firma.stato].titolo}` : '');
 
@@ -82,6 +83,8 @@ function riepilogo(app, f, firma, deps) {
             h('button', { class: 'btn small', onclick: () => salvaAllegato(app, a) }, 'Salva…')))))));
     }
   });
+  // proposta «Salva in rubrica» per fornitore e cliente (se l'area personale è caricata)
+  try { const rub = propostaRubrica(app, f); if (rub) out.push(rub); } catch (err) { console.error('[avanzati] rubrica', err); }
   if (firma) {
     out.push(h('div', { class: 'av-box' }, h('h3', {}, 'Firma digitale'),
       deps.signatureView(app, firma, { compact: true }),
@@ -110,6 +113,7 @@ export function sezioniFattura(app, doc, deps) {
     } catch (err) { app.reportError(err, 'Impaginazione non riuscita'); }
   };
   const extra = [];
+  try { const rub = propostaRubrica(app, info.f); if (rub) extra.push(rub); } catch (err) { console.error('[avanzati] rubrica', err); }
   info.f.corpi.forEach((c) => {
     if (!c.allegati.length) return;
     extra.push(h('div', { class: 'av-box' }, h('h3', {}, `Allegati nella fattura (${c.allegati.length})`),

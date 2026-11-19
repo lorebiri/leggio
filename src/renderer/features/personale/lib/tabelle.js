@@ -195,8 +195,8 @@ function testoDaByte(bytes) {
   if (bytes[0] === 0xff && bytes[1] === 0xfe) return new TextDecoder('utf-16le').decode(bytes);
   if (bytes[0] === 0xfe && bytes[1] === 0xff) return new TextDecoder('utf-16be').decode(bytes);
   const s = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
-  // file salvati da Excel in Windows-1252: molti caratteri sostitutivi → si rilegge
-  if ((s.match(/�/g) || []).length > 2) { try { return new TextDecoder('windows-1252').decode(bytes); } catch { /* */ } }
+  // file salvati da Excel in Windows-1252: anche un solo carattere sostitutivo (byte non UTF-8) → si rilegge
+  if (s.includes('\uFFFD')) { try { return new TextDecoder('windows-1252').decode(bytes); } catch { /* */ } }
   return s;
 }
 

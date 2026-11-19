@@ -64,6 +64,9 @@ function anagrafica(node) {
     indirizzo: sede ? [[txt(sede, 'Indirizzo'), txt(sede, 'NumeroCivico')].filter(Boolean).join(' '), [txt(sede, 'CAP'), txt(sede, 'Comune'), txt(sede, 'Provincia') && `(${txt(sede, 'Provincia')})`].filter(Boolean).join(' '), txt(sede, 'Nazione') !== 'IT' ? txt(sede, 'Nazione') : ''].filter(Boolean).join(', ') : '',
     rea: rea ? [txt(rea, 'Ufficio'), txt(rea, 'NumeroREA')].filter(Boolean).join(' ') : '',
     telefono: txt(contatti, 'Telefono'), email: txt(contatti, 'Email'), pec: '',
+    // dati separati (per la rubrica): denominazione oppure nome e cognome, sede campo per campo
+    denominazione: txt(an, 'Denominazione'), nomeProprio: txt(an, 'Nome'), cognome: txt(an, 'Cognome'),
+    sede: sede ? { indirizzo: txt(sede, 'Indirizzo'), numeroCivico: txt(sede, 'NumeroCivico'), cap: txt(sede, 'CAP'), comune: txt(sede, 'Comune'), provincia: txt(sede, 'Provincia'), nazione: txt(sede, 'Nazione') } : null,
   };
 }
 
