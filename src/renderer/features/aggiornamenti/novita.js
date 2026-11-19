@@ -4,6 +4,15 @@
 // cosa può fare di nuovo, non come è fatto. Senza voce per la versione, all'utente non viene mostrato nulla.
 export const NOVITA = [
   {
+    versione: '0.2.2',
+    titolo: 'Un avvio più pulito',
+    punti: [
+      'All’avvio Leggio non riapre più da solo i documenti della volta prima: trovi la schermata iniziale con i recenti e il pulsante «Riapri l’ultimo documento».',
+      'Un documento che hai chiuso non ricompare più al riavvio.',
+      'Se preferisci il comportamento di prima, lo trovi nelle Impostazioni: «All’avvio riapri i documenti lasciati aperti».',
+    ],
+  },
+  {
     versione: '0.2.1',
     titolo: 'Correzioni importanti per l’oscuramento',
     punti: [
