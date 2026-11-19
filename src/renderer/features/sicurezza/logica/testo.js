@@ -48,6 +48,15 @@ function estimateWidths(it, g) {
   return w.map((x) => (x / tot) * g.width);
 }
 function charPos(widths, k) { let s = 0; for (let i = 0; i < k; i++) s += widths ? widths[i] : 0; return s; }
+/**
+ * Porzione [x0, x1] (distanza dall'origine sinistra dell'elemento) occupata dai caratteri [k0, k1).
+ * Il testo da destra a sinistra (ebraico, arabo) arriva da pdf.js in ordine logico: il primo carattere è il più
+ * a DESTRA, quindi le posizioni vanno specchiate sulla larghezza dell'elemento (i numeri restano un blocco unico).
+ */
+function charSpan(it, g, widths, k0, k1) {
+  const a = charPos(widths, k0); const b = charPos(widths, k1);
+  return it.dir === 'rtl' ? [g.width - b, g.width - a] : [a, b];
+}
 
 /**
  * Prepara il testo di una pagina. items = textContent.items di pdf.js.
@@ -81,7 +90,8 @@ export function rangeRects(pt, start, end) {
     const p = pt.items[idx]; if (!p) continue;
     // margine orizzontale generoso (0,2 em): meglio coprire un po' di spazio che lasciare scoperto un carattere
     const ext = p.g.size * 0.2;
-    const r = padRect(spanRect(p.g, charPos(p.widths, k0) - ext, charPos(p.widths, k1) + ext), p.g.size * 0.08);
+    const [a, b] = charSpan(p.it, p.g, p.widths, k0, k1);
+    const r = padRect(spanRect(p.g, a - ext, b + ext), p.g.size * 0.08);
     r.stimato = true; // calcolato con le stesse larghezze stimate delle parole (vedi wordsOutside)
     rects.push(r);
   }
@@ -108,7 +118,7 @@ export function pageWords(items, styles) {
     const band = shrinkV(spanRect(g, 0, g.width), g);
     const re = /\S+/g; let m;
     while ((m = re.exec(it.str))) {
-      const x0 = charPos(widths, m.index); const x1 = charPos(widths, m.index + m[0].length);
+      const [x0, x1] = charSpan(it, g, widths, m.index, m.index + m[0].length);
       words.push({
         text: m[0], rect: spanRect(g, x0, x1), size: g.size, width: Math.max(0.01, x1 - x0), dir: g.dir,
         origin: [g.origin[0] + g.dir[0] * x0, g.origin[1] + g.dir[1] * x0],
