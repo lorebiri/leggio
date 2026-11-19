@@ -1,9 +1,12 @@
-// Avvio della pagina di download: legge l'ultima versione da GitHub e aggiorna i pulsanti.
-// Senza JavaScript, o se GitHub non risponde, i link restano sulla pagina ufficiale delle versioni.
+// Avvio della pagina di download: propone il file giusto per il computer di chi visita.
+// 1. Subito, con i dati della versione scritti nella pagina a ogni pubblicazione (scripts/sito-aggiorna.mjs):
+//    numero, data, link diretti, dimensioni e impronte SHA-256. Senza JavaScript si vedono gli stessi dati.
+// 2. Poi chiede a GitHub l'ultima versione pubblicata (cache di 10 minuti): se è più nuova aggiorna pulsanti ed elenco.
+//    Se GitHub non risponde, è lento o ha raggiunto il limite di richieste, restano i dati della pagina.
 import {
   CATALOGO, URL_API, URL_RELEASES, URL_SORGENTE, NOMI_SISTEMA,
-  rilevaSistema, leggiRelease, leggiSomme, scegliPrincipale,
-  urlDownloadSicuro, urlApiFileSicuro, formattaDimensione, formattaData, risparmioAnnuo, formattaEuro,
+  rilevaSistema, leggiRelease, leggiDatiStatici, scegliPrincipale,
+  urlDownloadSicuro, formattaDimensione, formattaData, risparmioAnnuo, formattaEuro,
 } from './scarica.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
@@ -31,37 +34,27 @@ async function conTempo(url, opzioni = {}, ms = 8000) {
   finally { clearTimeout(t); }
 }
 
+const CACHE = 'leggio-release';
+const CACHE_MS = 10 * 60 * 1000;
+
 async function caricaRelease() {
   try {
-    const salvata = JSON.parse(sessionStorage.getItem('leggio-release') || 'null');
-    if (salvata && Date.now() - salvata.quando < 10 * 60 * 1000) return leggiRelease(salvata.json);
+    const salvata = JSON.parse(sessionStorage.getItem(CACHE) || 'null');
+    const r = salvata && Date.now() - salvata.quando < CACHE_MS ? leggiRelease(salvata.json) : null;
+    if (r) return r;
   } catch { /* sessionStorage non disponibile */ }
   const r = await conTempo(URL_API, { headers: { Accept: 'application/vnd.github+json' } });
   if (!r.ok) throw new Error(`GitHub ha risposto ${r.status}`);
   const json = await r.json();
   const release = leggiRelease(json);
   if (!release) throw new Error('Risposta di GitHub non valida');
-  try { sessionStorage.setItem('leggio-release', JSON.stringify({ quando: Date.now(), json })); } catch { /* pazienza */ }
+  try { sessionStorage.setItem(CACHE, JSON.stringify({ quando: Date.now(), json: { tag_name: json.tag_name, published_at: json.published_at, html_url: json.html_url, assets: (json.assets || []).map(({ name, size, url, browser_download_url }) => ({ name, size, url, browser_download_url })) } })); } catch { /* pazienza */ }
   return release;
 }
 
-async function caricaSomme(somme) {
-  if (!somme) return new Map();
-  // l'indirizzo API del file permette la lettura dal browser (CORS); il link diretto è il ripiego
-  const tentativi = [];
-  if (somme.api && urlApiFileSicuro(somme.api)) tentativi.push([somme.api, { headers: { Accept: 'application/octet-stream' } }]);
-  if (urlDownloadSicuro(somme.url)) tentativi.push([somme.url, {}]);
-  for (const [url, opz] of tentativi) {
-    try {
-      const r = await conTempo(url, opz);
-      if (!r.ok) continue;
-      const testo = await r.text();
-      if (testo.length > 100000) continue;
-      const mappa = leggiSomme(testo);
-      if (mappa.size) return mappa;
-    } catch { /* prova il successivo */ }
-  }
-  return new Map();
+// Dati della versione scritti nella pagina (blocco «sync:head»).
+function datiStatici() {
+  try { return leggiDatiStatici(JSON.parse($('#dati-versione')?.textContent || 'null')); } catch { return null; }
 }
 
 function annuncia(testo) {
@@ -145,21 +138,38 @@ function aggiornaElenco(release, somme) {
     const info = $('.file-info', li);
     li.querySelector('.impronta')?.remove();
     if (!f) {
-      if (chiave === 'linux-appimage') li.classList.add('assente');
+      li.classList.add('assente');
       continue;
     }
     li.classList.remove('assente');
     a.href = href(f.url);
-    info.textContent = dettaglio(f);
+    if (info) info.textContent = dettaglio(f);
     const hex = somme.get(f.nome);
     if (hex) li.append(rigaImpronta(f.nome, hex));
   }
   const presto = $('#linux-presto');
   if (presto) presto.hidden = !!release.file['linux-appimage'];
   const nota = $('#somme-nota');
-  if (nota && release.somme) {
-    nota.replaceChildren('Le impronte di tutti i file sono anche nel file ', crea('a', { href: href(release.somme.url) }, crea('code', { text: 'SHA256SUMS.txt' })), ' pubblicato insieme alla versione.');
+  if (nota) {
+    nota.replaceChildren(...(release.somme
+      ? ['Le impronte di tutti i file sono anche nel file ', crea('a', { href: href(release.somme.url) }, crea('code', { text: 'SHA256SUMS.txt' })), ' pubblicato insieme alla versione.']
+      : ['Le impronte di tutti i file sono anche nel file ', crea('code', { text: 'SHA256SUMS.txt' }), ' pubblicato insieme alla versione, sulla ', crea('a', { href: release.pagina || URL_RELEASES, text: 'pagina della versione' }), '.']));
   }
+}
+
+function scriviVersione(release) {
+  const el = $('#versione-testo');
+  if (!el) return;
+  const data = formattaData(release.data);
+  el.textContent = `Versione ${release.versione}${data ? `, pubblicata il ${data}` : ''}.`;
+}
+
+// Mostra una versione (dalla pagina o da GitHub): pulsante principale, numero e data, elenco dei file.
+function mostra(sistema, arch, release, somme) {
+  disegnaPrincipale(sistema, arch, release, false);
+  scriviVersione(release);
+  aggiornaElenco(release, somme);
+  aggiungiImprontePrincipali(release, somme);
 }
 
 function aggiungiImprontePrincipali(release, somme) {
@@ -238,23 +248,28 @@ async function avvia() {
   const guida = $('#link-guida');
   if (guida && ['windows', 'mac', 'linux'].includes(sistema)) guida.href = `sicurezza.html#${sistema}`;
   const arch = sistema === 'mac' ? await architettura() : '';
-  $('#principale').setAttribute('aria-busy', 'true');
 
+  // 1. subito i dati scritti nella pagina
+  const statica = datiStatici();
+  if (statica) mostra(sistema, arch, statica, statica.impronte);
+  else $('#principale').setAttribute('aria-busy', 'true');
+
+  // 2. poi l'ultima versione pubblicata, se GitHub risponde
   let release = null;
   try { release = await caricaRelease(); } catch (err) {
-    console.info('Leggio: elenco dei file non disponibile —', err.message);
+    console.info('Leggio: GitHub non risponde, restano i dati della pagina —', err.message);
   }
-  disegnaPrincipale(sistema, arch, release, !release);
-  if (!release) return;
-
-  const data = formattaData(release.data);
-  $('#versione').textContent = `Versione ${release.versione}${data ? `, pubblicata il ${data}` : ''}.`;
-  aggiornaElenco(release, new Map());
-  const somme = await caricaSomme(release.somme);
-  if (somme.size) {
-    aggiornaElenco(release, somme);
-    aggiungiImprontePrincipali(release, somme);
+  // una release senza file riconosciuti (per esempio mentre si caricano) non sostituisce i dati della pagina
+  if (!release || (statica && !Object.keys(release.file).length)) {
+    if (!statica) disegnaPrincipale(sistema, arch, null, true);
+    return;
   }
+  // stessa versione della pagina: le impronte scritte nella pagina valgono anche per i file di GitHub
+  const stessa = statica && statica.versione === release.versione;
+  if (stessa && statica.fonte === 'github') return; // niente di nuovo
+  const somme = stessa ? statica.impronte : new Map();
+  if (stessa && !release.somme) release.somme = statica.somme;
+  mostra(sistema, arch, release, somme);
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', avvia);

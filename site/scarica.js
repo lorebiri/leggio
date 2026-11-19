@@ -10,14 +10,14 @@ export const URL_SORGENTE = `https://github.com/${REPO}`;
 // I file pubblicati a ogni versione (nomi da package.json → build.artifactName).
 // `chiave` è usata anche negli attributi data-file della pagina.
 export const CATALOGO = [
-  { chiave: 'win-installer', sistema: 'windows', etichetta: 'Windows — installer', breve: 'Installer per Windows', re: /^Leggio-[\w.+-]+-win-x64-installer\.exe$/i },
-  { chiave: 'win-portatile', sistema: 'windows', etichetta: 'Windows — versione portatile', breve: 'Versione portatile', re: /^Leggio-[\w.+-]+-win-x64-portatile\.exe$/i },
-  { chiave: 'mac-arm64-dmg', sistema: 'mac', etichetta: 'Mac con chip Apple (M1, M2, M3, M4…)', breve: 'Mac con chip Apple', re: /^Leggio-[\w.+-]+-mac-arm64\.dmg$/i },
-  { chiave: 'mac-x64-dmg', sistema: 'mac', etichetta: 'Mac con processore Intel', breve: 'Mac con processore Intel', re: /^Leggio-[\w.+-]+-mac-x64\.dmg$/i },
-  { chiave: 'mac-arm64-zip', sistema: 'mac', etichetta: 'Mac con chip Apple — archivio .zip', breve: 'Chip Apple (.zip)', re: /^Leggio-[\w.+-]+-mac-arm64\.zip$/i },
-  { chiave: 'mac-x64-zip', sistema: 'mac', etichetta: 'Mac Intel — archivio .zip', breve: 'Intel (.zip)', re: /^Leggio-[\w.+-]+-mac-x64\.zip$/i },
-  { chiave: 'linux-appimage', sistema: 'linux', etichetta: 'Linux — AppImage (x86_64)', breve: 'Linux AppImage', re: /^Leggio-[\w.+-]+-linux-x86_64\.AppImage$/i },
-];
+  { chiave: 'win-installer', sistema: 'windows', etichetta: 'Windows — installer', breve: 'Installer per Windows', suffisso: '-win-x64-installer.exe' },
+  { chiave: 'win-portatile', sistema: 'windows', etichetta: 'Windows — versione portatile', breve: 'Versione portatile', suffisso: '-win-x64-portatile.exe' },
+  { chiave: 'mac-arm64-dmg', sistema: 'mac', etichetta: 'Mac con chip Apple (M1, M2, M3, M4…)', breve: 'Mac con chip Apple', suffisso: '-mac-arm64.dmg' },
+  { chiave: 'mac-x64-dmg', sistema: 'mac', etichetta: 'Mac con processore Intel', breve: 'Mac con processore Intel', suffisso: '-mac-x64.dmg' },
+  { chiave: 'mac-arm64-zip', sistema: 'mac', etichetta: 'Mac con chip Apple — archivio .zip', breve: 'Chip Apple (.zip)', suffisso: '-mac-arm64.zip' },
+  { chiave: 'mac-x64-zip', sistema: 'mac', etichetta: 'Mac Intel — archivio .zip', breve: 'Intel (.zip)', suffisso: '-mac-x64.zip' },
+  { chiave: 'linux-appimage', sistema: 'linux', etichetta: 'Linux — AppImage (x86_64)', breve: 'Linux AppImage', suffisso: '-linux-x86_64.AppImage' },
+].map((v) => ({ ...v, re: new RegExp(`^Leggio-[\\w.+-]+${v.suffisso.replace(/[.]/g, '\\.')}$`, 'i') }));
 export const NOME_SOMME = 'SHA256SUMS.txt';
 
 /**
@@ -182,4 +182,61 @@ export function formattaEuro(euro) {
   if (!Number.isFinite(euro)) return '';
   // separatore delle migliaia scritto a mano: alcuni browser non lo mettono sotto 10.000 in it-IT
   return `${String(Math.round(euro)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} €`;
+}
+
+// ---- versione «statica» scritta nella pagina a ogni pubblicazione (scripts/sito-aggiorna.mjs) ----
+
+const RE_VERSIONE = /^(\d+)\.(\d+)\.(\d+)(?:[-+][\w.-]+)?$/;
+
+/** Nome del file pubblicato per una voce del catalogo: ('win-installer', '0.2.2') → «Leggio-0.2.2-win-x64-installer.exe». */
+export function nomeFile(chiave, versione) {
+  const v = CATALOGO.find((x) => x.chiave === chiave);
+  return v && RE_VERSIONE.test(String(versione)) ? `Leggio-${versione}${v.suffisso}` : null;
+}
+
+/** Confronto tra versioni X.Y.Z: negativo se a < b, 0 se uguali, positivo se a > b. Le versioni non valide valgono 0.0.0. */
+export function confrontaVersioni(a, b) {
+  const pa = RE_VERSIONE.exec(String(a)) || [0, 0, 0, 0];
+  const pb = RE_VERSIONE.exec(String(b)) || [0, 0, 0, 0];
+  for (let i = 1; i <= 3; i++) if (Number(pa[i]) !== Number(pb[i])) return Number(pa[i]) - Number(pb[i]);
+  return 0;
+}
+
+/** Le ultime `n` voci di novita.js fino alla versione indicata compresa (le più nuove prima). */
+export function ultimeNovita(novita, versione, n = 3) {
+  return (Array.isArray(novita) ? novita : [])
+    .filter((x) => x && RE_VERSIONE.test(String(x.versione)) && confrontaVersioni(x.versione, versione) <= 0)
+    .sort((a, b) => confrontaVersioni(b.versione, a.versione))
+    .slice(0, n);
+}
+
+const HEX64 = /^[0-9a-f]{64}$/;
+
+/**
+ * Legge i dati della versione scritti nella pagina (<script type="application/json" id="dati-versione">).
+ * Stessa forma di leggiRelease, più `impronte` (Map nome → SHA-256) e `date` (versione → data ISO).
+ * Indirizzi non di GitHub, impronte e date non valide vengono scartati. null se i dati non sono utilizzabili.
+ */
+export function leggiDatiStatici(json) {
+  if (!json || typeof json !== 'object' || !RE_VERSIONE.test(String(json.versione || ''))) return null;
+  const file = {};
+  const impronte = new Map();
+  for (const v of CATALOGO) {
+    const f = json.file?.[v.chiave];
+    if (!f || typeof f !== 'object' || classificaFile(f.nome) !== v.chiave || !urlDownloadSicuro(f.url)) continue;
+    file[v.chiave] = { nome: f.nome, url: f.url, api: null, dimensione: Number.isFinite(f.dimensione) && f.dimensione >= 0 ? f.dimensione : null };
+    if (typeof f.sha256 === 'string' && HEX64.test(f.sha256)) impronte.set(f.nome, f.sha256);
+  }
+  const s = json.somme;
+  const somme = s && typeof s === 'object' && s.nome === NOME_SOMME && urlDownloadSicuro(s.url) ? { nome: s.nome, url: s.url, api: null, dimensione: null } : null;
+  const valida = (d) => typeof d === 'string' && !Number.isNaN(Date.parse(d));
+  const date = {};
+  for (const [ver, d] of Object.entries(json.date && typeof json.date === 'object' ? json.date : {})) if (RE_VERSIONE.test(ver) && valida(d)) date[ver] = d;
+  return {
+    versione: json.versione,
+    data: valida(json.data) ? json.data : null,
+    pagina: urlDownloadSicuro(json.pagina) ? json.pagina : URL_RELEASES,
+    file, somme, impronte, date,
+    fonte: json.fonte === 'github' ? 'github' : 'package.json',
+  };
 }
