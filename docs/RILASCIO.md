@@ -10,7 +10,8 @@ costruire nulla per rilasciare.
 # 1. versione nuova (senza creare commit e tag automatici)
 npm version 0.2.0 --no-git-tag-version
 # 2. aggiungi la voce in src/renderer/features/aggiornamenti/novita.js (vedi sotto)
-# 3. controlla
+# 3. allinea la pagina di download (versione, Novità, JSON-LD, sitemap) e controlla
+npm run sito
 npm test && npx vite build
 # 4. commit su main, poi tag e push del tag
 git commit -am "Leggio 0.2.0"
@@ -42,6 +43,15 @@ correggi, e ripeti. Il workflow si può anche avviare a mano da Actions → Rele
 costruisce i pacchetti senza pubblicarli (si scaricano dagli «Artifacts» del run, conservati 14 giorni).
 
 Una release segnata come **pre-release** non viene proposta agli utenti come aggiornamento.
+
+### La pagina di download si aggiorna da sola
+
+Alla pubblicazione della release (**Publish release**) parte il workflow **Pagina di download (GitHub Pages)**
+(`.github/workflows/pages.yml`): scrive nella pagina l'ultima versione pubblicata (numero, data, link diretti,
+dimensioni, impronte SHA-256, JSON-LD) e la sezione «Novità» con le ultime 3 voci di `novita.js`, poi pubblica.
+Parte anche a ogni push su `main` che tocca `site/` o `novita.js`, e a mano. Non serve fare nulla, purché prima del
+commit di rilascio si sia eseguito `npm run sito` (i test falliscono se la versione nella pagina non è quella di
+`package.json` o se manca la voce delle Novità). Dettagli in `site/LEGGIMI.md`.
 
 ## Avviso dentro l'app e «Novità di questa versione»
 

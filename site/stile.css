@@ -128,7 +128,7 @@ figcaption { color: var(--muted); font-size: 15px; margin-top: 8px; }
 
 /* ---- tutto il resto ---- */
 .titolo-gruppi { font: 600 clamp(24px, 2.8vw, 30px)/1.2 var(--display); margin: 44px 0 20px; }
-.gruppi { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 18px; }
+.gruppi { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 18px; }
 .gruppo { display: flex; flex-direction: column; gap: 6px; }
 .gruppo img { margin-bottom: 10px; box-shadow: none; aspect-ratio: 16 / 10; object-fit: cover; object-position: left top; }
 
@@ -200,6 +200,16 @@ ul.file { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
 ul.file li { display: grid; gap: 4px; justify-items: start; }
 .file-info { color: var(--muted); font-size: 14px; }
 .file-info i { font-style: italic; }
+.file-info:empty { display: none; }
+.file-desc { color: var(--muted); font-size: 14px; }
+ul.file li.assente .file-desc { display: none; }
+
+/* ---- novità ---- */
+ol.novita { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+.voce-novita h3 { display: flex; flex-direction: column; gap: 2px; }
+.novita-versione { font-size: 14px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--accent-text); }
+.voce-novita .novita-data { margin: 0 0 6px; font-size: 14px; }
+.voce-novita:first-child { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 ul.file li.assente .btn, ul.file li.assente .file-info { display: none; }
 
 .impronta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 13px; color: var(--muted); max-width: 100%; }

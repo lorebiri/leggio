@@ -288,9 +288,10 @@ describe('index.html', () => {
   });
   it('nessuna risorsa esterna, link esterni solo verso il repository, nessuna email', () => {
     expect(html).toMatch(/http-equiv="Content-Security-Policy"[^>]*script-src 'self'/);
-    expect(html).not.toMatch(/<(script|link)\b[^>]*(src|href)="(https?:)?\/\//);
+    // (il link «canonical» non carica nulla: è l'indirizzo ufficiale della pagina stessa)
+    expect(html).not.toMatch(/<(script|link)\b(?![^>]*rel="canonical")[^>]*(src|href)="(https?:)?\/\//);
     expect(html).not.toMatch(/\bstyle="|<style\b|\bon[a-z]+="/);
-    const esterni = [...html.matchAll(/href="(https?:[^"]+)"/g)].map((m) => m[1]);
+    const esterni = [...html.matchAll(/<(?!link rel="canonical")[^>]*href="(https?:[^"]+)"/g)].map((m) => m[1]);
     for (const u of esterni) expect(u, u).toMatch(/^https:\/\/github\.com\/lorebiri\/leggio(\/|$)/);
     expect(html).not.toMatch(/mailto:/);
   });
@@ -362,9 +363,9 @@ describe('sicurezza.html (avvisi di sicurezza)', () => {
   });
   it('stesse regole della pagina principale: CSP, niente risorse esterne, link solo verso il repository', () => {
     expect(html).toMatch(/http-equiv="Content-Security-Policy"[^>]*script-src 'self'/);
-    expect(html).not.toMatch(/<(script|link)\b[^>]*(src|href)="(https?:)?\/\//);
+    expect(html).not.toMatch(/<(script|link)\b(?![^>]*rel="canonical")[^>]*(src|href)="(https?:)?\/\//);
     expect(html).not.toMatch(/\bstyle="|<style\b|\bon[a-z]+="/);
-    for (const m of html.matchAll(/href="(https?:[^"]+)"/g)) expect(m[1], m[1]).toMatch(/^https:\/\/github\.com\/lorebiri\/leggio(\/|$)/);
+    for (const m of html.matchAll(/<(?!link rel="canonical")[^>]*href="(https?:[^"]+)"/g)) expect(m[1], m[1]).toMatch(/^https:\/\/github\.com\/lorebiri\/leggio(\/|$)/);
     expect(html.match(/<h1\b/g)).toHaveLength(1);
     expect(html).toContain('lang="it"');
     expect(html).toContain('name="viewport"');

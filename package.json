@@ -29,7 +29,9 @@
     "dist:prova": "vite build && electron-builder --mac dmg --arm64 --publish never",
     "verifica:pacchetto": "node scripts/verifica-pacchetto.mjs",
     "test:stress": "node test/stress/genera.mjs && node test/stress/misura.mjs",
-    "collaudo:avvio": "vite build && node test/e2e/avvio-pulito.mjs"
+    "collaudo:avvio": "vite build && node test/e2e/avvio-pulito.mjs",
+    "sito": "node scripts/sito-aggiorna.mjs",
+    "collaudo:sito": "node test/e2e/sito.mjs"
   },
   "dependencies": {
     "@cantoo/pdf-lib": "^2.11.1",

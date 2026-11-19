@@ -8,7 +8,7 @@
 //   node site/strumenti/schermate.mjs stampa p7m      (solo alcune schermate)
 //
 // Se lo strumento «Copia documento fronte/retro» (id 'copia-documento') non c'è ancora, al posto della
-// schermata disegna un'illustrazione segnaposto con lo stesso nome (img/copia-documento.png).
+// schermata disegna un'illustrazione segnaposto con lo stesso nome (img/copia-documento.webp).
 import { createRequire } from 'node:module';
 import { statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -56,8 +56,8 @@ async function chiudiDialoghi(page) {
   }
 }
 
-// Formato dei file: WebP (più leggero) per tutte, tranne copia-documento che resta PNG (nome già usato nella pagina).
-const FORMATO = { 'copia-documento': 'png' };
+// Formato dei file: WebP (più leggero) per tutte.
+const FORMATO = {};
 
 /** Converte un PNG in WebP con il codificatore di Chromium (nessuna dipendenza in più). */
 async function inWebp(png, qualita = 0.86) {

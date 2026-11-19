@@ -1,16 +1,31 @@
-# Pubblica la pagina di download (cartella site/) su GitHub Pages.
-# Parte SOLO a mano: nessuna pubblicazione automatica.
+# Pubblica la pagina di download (cartella site/) su GitHub Pages, allineata all'ultima versione.
 #
-# Come attivarla (una volta sola, Lorenzo):
-#   1. Su GitHub apri il repository → Settings → Pages.
-#   2. In «Build and deployment» → Source scegli «GitHub Actions».
-# Come pubblicare (ogni volta che cambi site/):
-#   3. Actions → «Pagina di download (GitHub Pages)» → Run workflow → scegli il ramo (di solito main) → Run.
-#   4. A fine run l'indirizzo della pagina compare nel riepilogo (di solito https://lorebiri.github.io/leggio/).
-# La pagina legge da sola l'ultima versione pubblicata su GitHub Releases: non serve ripubblicarla a ogni rilascio.
+# Parte da sola:
+#   - quando esce una release (Publish release su GitHub Releases): la pagina mostra subito la nuova versione
+#     (il job «rilancia» fa ripartire il workflow su main, perché l'ambiente github-pages non accetta i tag);
+#   - a ogni push su main che cambia site/, novita.js o lo script che genera la parte statica;
+#   - a mano: Actions → «Pagina di download (GitHub Pages)» → Run workflow.
+#
+# Prima di pubblicare, scripts/sito-aggiorna.mjs --pubblicata legge da GitHub Releases l'ultima versione PUBBLICATA
+# e la scrive nella pagina (numero, data, link diretti, dimensioni, impronte SHA-256, JSON-LD, sitemap) e nella
+# sezione «Novità» (ultime 3 voci di novita.js fino a quella versione). Così la vedono anche chi ha JavaScript spento
+# e i motori di ricerca; nel browser la pagina controlla comunque l'API di GitHub. Se GitHub non risponde restano i
+# dati già scritti in site/index.html (allineati a package.json dai test).
+#
+# Prima attivazione (una volta sola, Lorenzo): Settings → Pages → «Build and deployment» → Source: «GitHub Actions».
+# L'indirizzo della pagina compare nel riepilogo del run (di solito https://lorebiri.github.io/leggio/).
 name: Pagina di download (GitHub Pages)
 
 on:
+  release:
+    types: [published]
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'src/renderer/features/aggiornamenti/novita.js'
+      - 'scripts/sito-aggiorna.mjs'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -23,21 +38,42 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Alla pubblicazione di una release il run gira sul tag, e l'ambiente github-pages accetta di solito solo il ramo
+  # principale: questo job rilancia lo stesso workflow su main (workflow_dispatch), che pubblica.
+  rilancia:
+    name: Rilancia su main dopo la release
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref "${{ github.event.repository.default_branch }}"
+
   pubblica:
     name: Pubblica site/
+    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - uses: actions/configure-pages@v5
-      - name: Prepara i file (senza LEGGIMI.md e senza lo script delle schermate)
+      - name: Prepara i file (senza LEGGIMI.md e senza gli strumenti)
         run: |
           mkdir -p _pagina
           cp -r site/. _pagina/
           rm -rf _pagina/LEGGIMI.md _pagina/strumenti
           touch _pagina/.nojekyll
+      - name: Scrive nella pagina l'ultima versione pubblicata
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/sito-aggiorna.mjs --pubblicata --dir _pagina
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _pagina

@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://lorebiri.github.io/leggio/sitemap.xml
