@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { createArchivio, unisciIndici, normalizzaIndice, dataUrlToBytes, bytesToDataUrl } from '../src/renderer/features/personale/lib/archivio.js';
 import { createMemoryBackend } from '../src/renderer/features/personale/lib/backend.js';
-import { memoryStorage } from '../src/renderer/features/moduli/lib/store.js';
+import { memoryStorage, createStore, firmaGraficaMia } from '../src/renderer/features/moduli/lib/store.js';
 import { valorePerCampo, chiavePerCampo, datiDaContatto, datiDaProfilo, proponiCompilazione, nomeContatto } from '../src/renderer/features/personale/lib/campi.js';
 
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
@@ -48,6 +48,18 @@ describe('migrazione dalla 0.2', () => {
     await b.apri();
     expect(b.profilo().nome).toBe('Ugo');
     expect(legacy.getItem('leggio.moduli.profilo.v1')).toBe(null);
+  });
+
+  it('dopo la migrazione la firma digitale trova ancora la mia firma grafica (dall\'archivio)', async () => {
+    const legacy = memoryStorage();
+    legacy.setItem('leggio.moduli.firme.v1', JSON.stringify([{ id: 'a', kind: 'signature', dataUrl: PNG, w: 30, h: 10 }]));
+    const store = createStore(legacy, { archivio: null });
+    expect(await firmaGraficaMia(store, null)).toBe(PNG); // 0.2: dal localStorage
+    const a = createArchivio({ backend: createMemoryBackend(), legacyStorage: legacy });
+    await a.apri();
+    expect(store.list('signature')).toHaveLength(0); // migrata: il localStorage è vuoto
+    expect(await firmaGraficaMia(store, a)).toBe(PNG);
+    expect(await firmaGraficaMia(createStore(memoryStorage(), { archivio: null }), createArchivio({ backend: createMemoryBackend() }))).toBe(null);
   });
 
   it('una migrazione interrotta a metà non lascia firme doppie al riavvio', async () => {

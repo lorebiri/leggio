@@ -62,6 +62,24 @@ export function profileValueFor(fieldName, profile, today) {
   return null;
 }
 
+/**
+ * La mia firma grafica per il riquadro della firma digitale: la più recente dell'archivio personale
+ * (dove la 0.3 sposta le firme della 0.2), altrimenti quella rimasta nel localStorage. → dataUrl PNG | null
+ */
+export async function firmaGraficaMia(store, archivio) {
+  if (archivio) {
+    try {
+      if (archivio.aperto || (await archivio.apri({ interattivo: false }))) {
+        const f = archivio.firme({ tipo: 'firma', proprietario: 'io' })[0];
+        const u = f ? await archivio.immagine(f.blob) : null;
+        if (u && u.startsWith('data:image/png')) return u;
+      }
+    } catch { /* archivio non disponibile: si ripiega sotto */ }
+  }
+  const vecchia = store?.list('signature')[0]?.dataUrl;
+  return vecchia && vecchia.startsWith('data:image/png') ? vecchia : null;
+}
+
 export function createStore(storage = defaultStorage(), { archivio } = {}) {
   // senza argomenti (nell'app) il profilo viene dall'archivio personale condiviso, se aperto
   const arch = () => (archivio !== undefined ? archivio : arguments.length === 0 ? archivioPersonale() : null);

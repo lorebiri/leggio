@@ -2,6 +2,8 @@
 // verifica delle firme con verdetto in italiano. Le operazioni crittografiche avvengono nel processo principale.
 import { isDesktop, invoke, onProgress, onEvent } from './bridge.js';
 import { countSignatures } from './formtools.js';
+import { firmaGraficaMia } from './lib/store.js';
+import { archivioPersonale } from '../personale/lib/condiviso.js';
 
 const fmtDate = (iso, time = true) => { if (!iso) return '—'; const d = new Date(iso); return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', ...(time ? { hour: '2-digit', minute: '2-digit' } : {}) }); };
 const P12_FILTERS = [{ name: 'ID digitale (.p12, .pfx)', extensions: ['p12', 'pfx'] }];
@@ -155,11 +157,11 @@ export function registerDigital(app, store) {
     async run() {
       if (!isDesktop()) return desktopOnly(app, 'Usa un certificato');
       const doc = app.activeDoc;
-      const sigs = store.list('signature');
+      const firmaMia = await firmaGraficaMia(store, archivioPersonale());
       const extra = [
         { name: 'kind', label: 'Tipo di firma', type: 'radio', value: store.getPref('dsKind', 'pades'), options: [{ value: 'pades', label: 'Firma nel PDF (PAdES) — si vede e si verifica aprendo il PDF' }, { value: 'cades', label: 'Busta .p7m (CAdES) — crea un file .pdf.p7m separato' }] },
         { name: 'visible', label: 'Mostra un riquadro con la firma sulla pagina', type: 'checkbox', value: store.getPref('dsVisible', true) },
-        ...(sigs.length ? [{ name: 'image', label: 'Includi nel riquadro la mia firma grafica', type: 'checkbox', value: store.getPref('dsImage', true) }] : []),
+        ...(firmaMia ? [{ name: 'image', label: 'Includi nel riquadro la mia firma grafica', type: 'checkbox', value: store.getPref('dsImage', true) }] : []),
         { name: 'reason', label: 'Motivo (facoltativo)', type: 'text', value: store.getPref('dsReason', ''), placeholder: 'es. Approvazione, Per accettazione' },
         { name: 'location', label: 'Luogo (facoltativo)', type: 'text', value: store.getPref('dsLocation', ''), placeholder: 'es. Sesto Fiorentino' },
         { name: 'standard', label: 'Formato della firma nel PDF', type: 'select', value: store.getPref('dsStandard', 'cades'), options: [{ value: 'cades', label: 'PAdES europeo (consigliato)' }, { value: 'pkcs7', label: 'Compatibile con lettori vecchi (adbe.pkcs7)' }] },
@@ -188,7 +190,7 @@ export function registerDigital(app, store) {
       const options = {
         visible: !!place, pageIndex: place?.pageIndex ?? 0, rect: place?.rect, reason: v.reason || '', location: v.location || '',
         subFilter: v.standard === 'pkcs7' ? 'pkcs7' : 'cades', name: v.cert.subject,
-        imagePng: place && v.image && sigs[0] ? dataUrlToBytes(sigs[0].dataUrl) : undefined,
+        imagePng: place && v.image && firmaMia ? dataUrlToBytes(firmaMia) : undefined,
       };
       let result = null;
       const ok = await app.applyEdit('Firma digitale', async (bytes) => {
