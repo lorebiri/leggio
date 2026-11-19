@@ -4,6 +4,8 @@
 // Struttura su disco (cartella dati dell'app, sottocartella «personale»):
 //   chiave.json        chiave dati (DEK, 256 bit) protetta: dal sistema (safeStorage), da una password,
 //                      oppure — ripiego documentato — solo dai permessi del file (vedi docs/aree/personale.md)
+//   chiave.json.bak    copia di riserva identica di chiave.json (0.3.1): se chiave.json si rovina, la chiave
+//                      si recupera da qui. È sempre la versione attuale, mai una password vecchia.
 //   indice.dat         indice JSON cifrato (contatti, metadati delle firme, modelli, registro, profilo)
 //   indice.dat.bak     versione precedente dell'indice (backup automatico dell'ultima versione)
 //   blob/<id>.dat      immagini delle firme e dei timbri, PDF dei modelli: un file cifrato ciascuno
@@ -11,6 +13,11 @@
 // Ogni file cifrato: "LGV1" + IV (12 byte) + tag (16 byte) + dati AES-256-GCM. I dati aggiuntivi
 // autenticati (AAD) legano il contenuto al suo nome (un blob non può essere scambiato con un altro).
 // Le scritture sono atomiche (temporaneo + fsync + verifica + rename: core/safe-write.cjs).
+//
+// Password: scrypt N=131072, r=8, p=1 (128 MB, ~0,3 s), calcolato in modo asincrono (pool di libuv) per non
+// bloccare il processo principale e quindi l'interfaccia. Le chiavi della 0.3.0 (N=32768) vengono rafforzate
+// al primo sblocco riuscito: la nuova chiave si verifica in memoria e si scrive in modo atomico; se la
+// scrittura non riesce resta valida quella vecchia (l'archivio si apre sempre).
 'use strict';
 
 const crypto = require('node:crypto');
@@ -26,10 +33,11 @@ const MAX_INDICE = 64 * 1024 * 1024;
 const MAX_BLOB = 64 * 1024 * 1024;
 const MAX_BACKUP = 1024 * 1024 * 1024;
 const ID_RE = /^[a-z0-9][a-z0-9_-]{3,63}$/;
-// scrypt: ~50-100 ms su un PC d'ufficio, 32 MB di memoria
-const KDF = { N: 32768, r: 8, p: 1 };
-const KDF_MAXMEM = 128 * 1024 * 1024;
+// scrypt: ~0,3 s su un PC d'ufficio, 128 MB di memoria (0.3.0: N=32768, ~70 ms, 32 MB)
+const KDF = Object.freeze({ N: 131072, r: 8, p: 1 });
+const KDF_MAX_MEM = 512 * 1024 * 1024; // parametri letti da file: oltre questo si rifiuta (niente esaurimento di memoria)
 const MIN_PASSWORD = 8;
+const MAX_PASSWORD = 1024;
 
 class ErroreArchivio extends Error {
   constructor(msg, code) { super(msg); this.name = 'ErroreArchivio'; this.code = code || 'archivio'; this.userMessage = msg; }
@@ -52,24 +60,45 @@ function decifra(key, buf, aad) {
   try { return Buffer.concat([d.update(buf.subarray(32)), d.final()]); }
   catch { throw new ErroreArchivio('File dell\'archivio danneggiato o chiave errata.', 'danneggiato'); }
 }
+/** Memoria che scrypt usa davvero (stesso conto di OpenSSL). */
+const memoriaKdf = (k) => 128 * k.r * (k.N + k.p + 2);
+/** Parametri scrypt letti da un file (chiave o backup): controllati, mai fidarsi. */
+function paramsKdf(o, cosa = 'Chiave dell\'archivio') {
+  const k = { N: num(o?.N, 1024, 1 << 20, cosa), r: num(o?.r, 1, 32, cosa), p: num(o?.p, 1, 16, cosa) };
+  if ((k.N & (k.N - 1)) !== 0) throw new ErroreArchivio(`${cosa} non valida.`, 'danneggiato');
+  if (memoriaKdf(k) > KDF_MAX_MEM) throw new ErroreArchivio(`${cosa}: protezione non supportata da questa versione di Leggio. Aggiorna Leggio.`, 'formato');
+  return k;
+}
+/** La chiave è avvolta con parametri più deboli di quelli attuali (es. archivio della 0.3.0)? */
+const kdfDebole = (k) => k.N * k.r * k.p < KDF.N * KDF.r * KDF.p;
+/** scrypt asincrono: gira nel pool di libuv, il processo principale (e l'interfaccia) non si ferma. */
 function derivaChiave(password, salt, params = KDF) {
-  return crypto.scryptSync(Buffer.from(String(password).normalize('NFC'), 'utf8'), salt, 32, { N: params.N, r: params.r, p: params.p, maxmem: KDF_MAXMEM });
+  const k = paramsKdf(params);
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(Buffer.from(String(password).normalize('NFC'), 'utf8'), salt, 32, { ...k, maxmem: memoriaKdf(k) + 32 * 1024 * 1024 }, (err, key) => {
+      if (err) reject(new ErroreArchivio('Impossibile verificare la password: memoria del computer insufficiente. Chiudi qualche programma e riprova.', 'memoria'));
+      else resolve(key);
+    });
+  });
 }
-/** Avvolge la DEK con una password. → oggetto JSON */
-function avvolgiConPassword(dek, password) {
+/** Avvolge la DEK con una password (e verifica subito che si svolga). → oggetto JSON */
+async function avvolgiConPassword(dek, password, params = KDF) {
   const salt = crypto.randomBytes(16);
-  const kek = derivaChiave(password, salt);
+  const kek = await derivaChiave(password, salt, params);
   const box = cifra(kek, dek, 'leggio-dek');
-  return { kdf: 'scrypt', ...KDF, salt: salt.toString('base64'), dati: box.toString('base64') };
+  if (!decifra(kek, box, 'leggio-dek').equals(dek)) throw new ErroreArchivio('Verifica della nuova chiave non riuscita.', 'verifica');
+  return { kdf: 'scrypt', ...params, salt: salt.toString('base64'), dati: box.toString('base64') };
 }
-function svolgiConPassword(w, password) {
-  if (!w || w.kdf !== 'scrypt') throw new ErroreArchivio('Chiave dell\'archivio non riconosciuta.', 'danneggiato');
-  const params = { N: num(w.N, 1024, 1 << 20), r: num(w.r, 1, 32), p: num(w.p, 1, 16) };
-  const kek = derivaChiave(password, Buffer.from(w.salt, 'base64'), params);
-  try { return decifra(kek, Buffer.from(w.dati, 'base64'), 'leggio-dek'); }
+async function svolgiConPassword(w, password) {
+  if (!w || w.kdf !== 'scrypt' || typeof w.salt !== 'string' || typeof w.dati !== 'string') throw new ErroreArchivio('Chiave dell\'archivio non riconosciuta.', 'danneggiato');
+  const kek = await derivaChiave(password, Buffer.from(w.salt, 'base64'), paramsKdf(w));
+  let dek;
+  try { dek = decifra(kek, Buffer.from(w.dati, 'base64'), 'leggio-dek'); }
   catch { throw new ErroreArchivio('Password errata.', 'password-errata'); }
+  if (dek.length !== 32) throw new ErroreArchivio('Chiave dell\'archivio non valida.', 'danneggiato');
+  return dek;
 }
-function num(v, min, max) { const n = Number(v); if (!Number.isInteger(n) || n < min || n > max) throw new ErroreArchivio('Chiave dell\'archivio non valida.', 'danneggiato'); return n; }
+function num(v, min, max, cosa = 'Chiave dell\'archivio') { const n = Number(v); if (!Number.isInteger(n) || n < min || n > max) throw new ErroreArchivio(`${cosa} non valida.`, 'danneggiato'); return n; }
 
 // --------------------------------------------------------------------------------- protezione dal sistema
 /**
@@ -93,10 +122,13 @@ function nomeSistema(platform = process.platform) {
 
 // --------------------------------------------------------------------------------- utilità file
 async function leggiSe(p) { try { return await fsp.readFile(p); } catch (e) { if (e.code === 'ENOENT') return null; throw e; } }
-async function scriviAtomico(p, buf) { await safeWrite(p, buf); }
-async function scriviPrivato(p, buf) {
-  await scriviAtomico(p, buf);
-  try { await fsp.chmod(p, 0o600); } catch { /* FAT, Windows: non essenziale */ }
+/** Errore di scrittura → messaggio per l'utente. L'originale resta sempre intatto (scrittura atomica). */
+function erroreScrittura(err) {
+  if (err instanceof ErroreArchivio) return err;
+  const code = err?.code;
+  if (code === 'ENOSPC' || code === 'EDQUOT') return new ErroreArchivio('Spazio su disco esaurito: l\'ultima modifica all\'archivio personale non è stata salvata. I dati salvati prima sono intatti. Libera spazio sul disco: Leggio riproverà da solo.', 'disco-pieno');
+  if (['EACCES', 'EPERM', 'EROFS', 'EBUSY'].includes(code)) return new ErroreArchivio(`Leggio non riesce a scrivere nella cartella dell'archivio personale (${code}): l'ultima modifica non è stata salvata, i dati salvati prima sono intatti. Controlla che la cartella non sia in sola lettura o bloccata da un altro programma.`, 'scrittura');
+  return new ErroreArchivio(`Salvataggio dell'archivio personale non riuscito (${code || err?.message || err}). I dati salvati prima sono intatti.`, 'scrittura');
 }
 function controllaId(id) { if (typeof id !== 'string' || !ID_RE.test(id)) throw new ErroreArchivio('Identificativo non valido.', 'argomenti'); return id; }
 function comeBuffer(v, max, cosa) {
@@ -137,9 +169,10 @@ function controllaIndice(indice) {
  * createCassaforte({ dir, safeStorage, platform, log })
  * Le operazioni sono messe in coda (una alla volta): niente scritture intrecciate.
  */
-function createCassaforte({ dir, safeStorage = null, platform = process.platform, log = () => {} }) {
+function createCassaforte({ dir, safeStorage = null, platform = process.platform, log = () => {}, scrivi = safeWrite }) {
   const P = {
     chiave: path.join(dir, 'chiave.json'),
+    chiaveBak: path.join(dir, 'chiave.json.bak'),
     indice: path.join(dir, 'indice.dat'),
     bak: path.join(dir, 'indice.dat.bak'),
     blob: path.join(dir, 'blob'),
@@ -149,59 +182,132 @@ function createCassaforte({ dir, safeStorage = null, platform = process.platform
   let ripristinato = false;  // l'indice era danneggiato ed è stato letto dal backup
   let errori = 0;            // password sbagliate di fila (rallentamento)
   let pulizia = false;       // pulizia degli orfani già programmata in questa sessione
+  let riserva = null;        // chiave.json.bak se diversa da chiave.json (ultima risorsa)
+  let creatoOra = false;     // archivio creato in questa sessione
+  let chiaveRecuperata = false; // chiave.json era danneggiato: ripristinato dalla copia di riserva
+  let kdfRafforzato = false; // chiave della 0.3.0 rafforzata in questa sessione
   let coda = Promise.resolve();
   const inCoda = (fn) => { const r = coda.then(fn, fn); coda = r.catch(() => {}); return r; };
 
-  async function assicuraCartelle() {
-    await fsp.mkdir(P.blob, { recursive: true, mode: 0o700 });
+  async function scriviPrivato(p, buf) {
+    try { await scrivi(p, buf); } catch (e) { throw erroreScrittura(e); }
+    try { await fsp.chmod(p, 0o600); } catch { /* FAT, Windows: non essenziale */ }
   }
-  async function leggiInfo() {
-    const b = await leggiSe(P.chiave);
+  async function assicuraCartelle() {
+    try { await fsp.mkdir(P.blob, { recursive: true, mode: 0o700 }); } catch (e) { throw erroreScrittura(e); }
+  }
+  const infoValida = (b) => {
     if (!b) return null;
-    try { const o = JSON.parse(b.toString('utf8')); if (o && o.formato === 'leggio-chiave' && o.versione === 1) return o; } catch { /* sotto */ }
-    throw new ErroreArchivio('Il file della chiave dell\'archivio personale è danneggiato.', 'danneggiato');
+    try {
+      const o = JSON.parse(b.toString('utf8'));
+      if (o && o.formato === 'leggio-chiave' && o.versione === 1 && o.protetta && typeof o.protetta.metodo === 'string' && typeof o.protetta.dati === 'string') return o;
+    } catch { /* sotto */ }
+    return null;
+  };
+  /** Legge chiave.json; se è rovinato usa (e rimette a posto) la copia di riserva. */
+  async function leggiInfo() {
+    const main = await leggiSe(P.chiave);
+    const bak = await leggiSe(P.chiaveBak);
+    const o = infoValida(main); const ob = infoValida(bak);
+    riserva = ob && !(main && bak.equals(main)) ? ob : null;
+    if (o) return o;
+    if (ob) {
+      log('warn', 'chiave dell\'archivio personale danneggiata: uso la copia di riserva');
+      chiaveRecuperata = true; riserva = null;
+      try { await scriviPrivato(P.chiave, bak); } catch (e) { log('warn', 'chiave.json non ripristinato', { error: e.message }); }
+      return ob;
+    }
+    if (main || bak) throw new ErroreArchivio('Il file della chiave dell\'archivio personale (chiave.json) è danneggiato e anche la sua copia di riserva. Senza la chiave i dati non si possono aprire. Puoi mettere da parte questo archivio (non viene cancellato) e ripristinare un backup esportato.', 'chiave-danneggiata');
+    return null;
+  }
+  /** C'è già un archivio cifrato in questa cartella (anche senza chiave)? */
+  async function datiPresenti() {
+    if ((await leggiSe(P.indice)) || (await leggiSe(P.bak))) return true;
+    try { return (await fsp.readdir(P.blob)).some((f) => f.endsWith('.dat')); } catch { return false; }
+  }
+  /** Tiene chiave.json.bak uguale a chiave.json (dopo un'apertura riuscita: la chiave è buona). */
+  async function sincronizzaRiserva() {
+    try {
+      const m = await leggiSe(P.chiave); const b = await leggiSe(P.chiaveBak);
+      if (m && infoValida(m) && !(b && b.equals(m))) await scriviPrivato(P.chiaveBak, m);
+      riserva = null;
+    } catch (e) { log('warn', 'copia di riserva della chiave non aggiornata', { error: e.message }); }
   }
   /** Protegge una stringa con il sistema (se disponibile). → { metodo, dati } */
   function proteggi(testo) {
-    if (sistemaDisponibile(safeStorage, platform)) return { metodo: 'sistema', dati: safeStorage.encryptString(testo).toString('base64') };
+    if (sistemaDisponibile(safeStorage, platform)) {
+      // la si usa solo se si rilegge subito: una chiave che il portachiavi non sa riaprire non va mai scritta
+      try {
+        const dati = safeStorage.encryptString(testo).toString('base64');
+        if (safeStorage.decryptString(Buffer.from(dati, 'base64')) === testo) return { metodo: 'sistema', dati };
+      } catch { /* sotto */ }
+      log('warn', 'il portachiavi del sistema non rilegge la chiave: uso la protezione di base');
+    }
     return { metodo: 'file', dati: Buffer.from(testo, 'utf8').toString('base64') };
   }
   function sproteggi(p) {
     if (p.metodo === 'sistema') {
       if (!safeStorage) throw new ErroreArchivio('Protezione del sistema non disponibile.', 'sistema');
       try { return safeStorage.decryptString(Buffer.from(p.dati, 'base64')); }
-      catch { throw new ErroreArchivio(`Il ${nomeSistema(platform)} non riesce ad aprire la chiave dell'archivio personale (è cambiato l'utente del computer o il portachiavi è stato azzerato?). Puoi ripristinare un file di backup oppure ricominciare con un archivio vuoto.`, 'sistema'); }
+      catch { throw new ErroreArchivio(`Il ${nomeSistema(platform)} non riesce ad aprire la chiave dell'archivio personale (è cambiato l'utente del computer o il portachiavi è stato azzerato?). I dati non sono stati toccati. Puoi riprovare dopo aver sbloccato il portachiavi, oppure mettere da parte questo archivio (non viene cancellato) e ripristinare un backup esportato.`, 'sistema'); }
     }
     if (p.metodo === 'file') return Buffer.from(p.dati, 'base64').toString('utf8');
     throw new ErroreArchivio('Metodo di protezione sconosciuto.', 'danneggiato');
   }
+  /** Scrive chiave.json (atomico) e poi la copia di riserva identica. */
   async function scriviInfo(nuovo) {
-    await scriviPrivato(P.chiave, Buffer.from(JSON.stringify(nuovo, null, 1), 'utf8'));
+    const buf = Buffer.from(JSON.stringify(nuovo, null, 1), 'utf8');
+    await scriviPrivato(P.chiave, buf);
     info = nuovo;
+    try { await scriviPrivato(P.chiaveBak, buf); riserva = null; }
+    catch (e) { log('warn', 'copia di riserva della chiave non scritta', { error: e.message }); }
   }
-  function infoDaDek(chiaveDati, password) {
-    if (password) return { formato: 'leggio-chiave', versione: 1, password: true, protetta: proteggi(JSON.stringify(avvolgiConPassword(chiaveDati, password))) };
-    return { formato: 'leggio-chiave', versione: 1, password: false, protetta: proteggi(chiaveDati.toString('base64')) };
+  /** Nuovo contenuto di chiave.json, verificato: deve restituire la stessa chiave dati prima di essere scritto. */
+  async function infoDaDek(chiaveDati, password) {
+    const testo = password ? JSON.stringify(await avvolgiConPassword(chiaveDati, password)) : chiaveDati.toString('base64');
+    const protetta = proteggi(testo);
+    if (sproteggi(protetta) !== testo) throw new ErroreArchivio('Verifica della nuova chiave non riuscita: nulla è stato cambiato.', 'verifica');
+    return { formato: 'leggio-chiave', versione: 1, password: !!password, protetta };
+  }
+  function leggiAvvolta(inf) {
+    try { return JSON.parse(sproteggi(inf.protetta)); }
+    catch (e) { if (e instanceof ErroreArchivio) throw e; throw new ErroreArchivio('Chiave dell\'archivio danneggiata.', 'danneggiato'); }
+  }
+  function dekSenzaPassword(inf) {
+    const d = Buffer.from(sproteggi(inf.protetta), 'base64');
+    if (d.length !== 32) throw new ErroreArchivio('Il file della chiave dell\'archivio personale è danneggiato.', 'chiave-danneggiata');
+    return d;
   }
 
   async function inizializza() {
+    if (info && dek) return;
     await assicuraCartelle();
     info = await leggiInfo();
     if (!info) {
+      // dati cifrati senza chiave: MAI crearne una nuova sopra (si perderebbe la possibilità di recuperarli)
+      if (await datiPresenti()) throw new ErroreArchivio('Manca il file della chiave dell\'archivio personale (chiave.json), ma i dati cifrati ci sono ancora: senza la chiave non si possono aprire. Se hai una copia della cartella rimetti chiave.json al suo posto; altrimenti puoi mettere da parte questo archivio (non viene cancellato) e ripristinare un backup esportato.', 'chiave-mancante');
       const nuova = crypto.randomBytes(32);
-      await scriviInfo(infoDaDek(nuova, null));
-      dek = nuova;
+      await scriviInfo(await infoDaDek(nuova, null));
+      dek = nuova; creatoOra = true;
       log('info', 'archivio personale creato', { metodo: info.protetta.metodo });
       return;
     }
     if (!info.password && !dek) {
-      dek = Buffer.from(sproteggi(info.protetta), 'base64');
-      if (dek.length !== 32) { dek = null; throw new ErroreArchivio('Chiave dell\'archivio non valida.', 'danneggiato'); }
+      try { dek = dekSenzaPassword(info); }
+      catch (e) {
+        // chiave.json leggibile ma il contenuto non si apre: si prova la copia di riserva, se è diversa
+        if (!riserva || riserva.password) throw e;
+        try { dek = dekSenzaPassword(riserva); } catch { throw e; }
+        log('warn', 'chiave dell\'archivio personale illeggibile: usata la copia di riserva');
+        chiaveRecuperata = true;
+        try { await scriviInfo(riserva); } catch (e2) { log('warn', 'chiave.json non ripristinato', { error: e2.message }); }
+      }
       // il sistema ora offre una protezione migliore del ripiego: si passa a quella, senza chiedere nulla
       if (info.protetta.metodo === 'file' && sistemaDisponibile(safeStorage, platform)) {
-        await scriviInfo(infoDaDek(dek, null));
-        log('info', 'chiave dell\'archivio personale ora protetta dal sistema');
+        try { const n = await infoDaDek(dek, null); if (n.protetta.metodo === 'sistema') { await scriviInfo(n); log('info', 'chiave dell\'archivio personale ora protetta dal sistema'); } }
+        catch (e) { log('warn', 'passaggio alla protezione del sistema rimandato', { error: e.message }); }
       }
+      await sincronizzaRiserva();
       programmaPulizia();
     }
   }
@@ -222,6 +328,11 @@ function createCassaforte({ dir, safeStorage = null, platform = process.platform
       protezione: metodo,               // 'sistema' | 'file'
       sistema: nomeSistema(platform),
       sistemaDisponibile: sistemaDisponibile(safeStorage, platform),
+      // senza portachiavi e senza password l'archivio è protetto solo dai permessi del file: l'interfaccia avvisa
+      avvisoPortachiavi: metodo === 'file' && !info?.password,
+      creatoOra,
+      chiaveRecuperata,
+      kdfRafforzato,
       ripristinato,
       cartella: dir,
     };
@@ -235,28 +346,56 @@ function createCassaforte({ dir, safeStorage = null, platform = process.platform
     if (typeof password !== 'string' || !password) throw new ErroreArchivio('Inserisci la password dell\'archivio personale.', 'password-errata');
     if (errori >= 3) await new Promise((r) => setTimeout(r, Math.min(8000, 500 * 2 ** (errori - 3))));
     let w;
-    try { w = JSON.parse(sproteggi(info.protetta)); } catch (e) { if (e instanceof ErroreArchivio) throw e; throw new ErroreArchivio('Chiave dell\'archivio danneggiata.', 'danneggiato'); }
-    try { dek = svolgiConPassword(w, password); errori = 0; }
-    catch (e) { errori++; throw e; }
-    if (info.protetta.metodo === 'file' && sistemaDisponibile(safeStorage, platform)) await scriviInfo(infoDaDek(dek, password));
+    try { w = leggiAvvolta(info); }
+    catch (e) {
+      // contenuto di chiave.json illeggibile: si prova la copia di riserva (mai per una password sbagliata:
+      // la riserva potrebbe essere di un attimo prima di un cambio di password)
+      if (!riserva?.password) throw e;
+      try { w = leggiAvvolta(riserva); } catch { throw e; }
+      const k = await svolgiConPassword(w, password).catch((e2) => { errori++; throw e2; });
+      log('warn', 'chiave dell\'archivio personale illeggibile: usata la copia di riserva');
+      chiaveRecuperata = true;
+      try { await scriviInfo(riserva); } catch (e2) { log('warn', 'chiave.json non ripristinato', { error: e2.message }); }
+      dek = k;
+    }
+    if (!dek) {
+      try { dek = await svolgiConPassword(w, password); }
+      catch (e) { errori++; throw e; }
+    }
+    errori = 0;
+    if (kdfDebole(paramsKdf(w))) await rafforza(password);
+    else if (info.protetta.metodo === 'file' && sistemaDisponibile(safeStorage, platform)) {
+      try { const n = await infoDaDek(dek, password); if (n.protetta.metodo === 'sistema') await scriviInfo(n); } catch (e) { log('warn', 'passaggio alla protezione del sistema rimandato', { error: e.message }); }
+    }
+    await sincronizzaRiserva();
     programmaPulizia();
     return stato();
+  }
+  /**
+   * Chiave della 0.3.0 (scrypt N=32768): la si riavvolge con i parametri attuali. La nuova chiave è verificata
+   * prima di scriverla e la scrittura è atomica; se qualcosa va storto si tiene quella vecchia (che continua
+   * ad aprirsi) e si riprova al prossimo sblocco. Non fa mai fallire lo sblocco.
+   */
+  async function rafforza(password) {
+    try {
+      await scriviInfo(await infoDaDek(dek, password));
+      kdfRafforzato = true;
+      log('info', 'chiave dell\'archivio personale rafforzata', { N: KDF.N });
+    } catch (e) { log('warn', 'rafforzamento della chiave rimandato', { error: e.message }); }
   }
   function blocca() { if (info?.password) { dek?.fill(0); dek = null; } return stato(); }
 
   async function impostaPassword(attuale, nuova) {
     if (!info) await inizializza();
-    if (info.password) {
-      // verifica della password attuale anche da sbloccato
-      const w = JSON.parse(sproteggi(info.protetta));
-      const k = svolgiConPassword(w, String(attuale || ''));
-      dek = k;
-    } else richiediSbloccato();
     if (nuova) {
       if (typeof nuova !== 'string' || nuova.length < MIN_PASSWORD) throw new ErroreArchivio(`La password deve avere almeno ${MIN_PASSWORD} caratteri.`, 'argomenti');
-      if (nuova.length > 1024) throw new ErroreArchivio('Password troppo lunga.', 'argomenti');
+      if (nuova.length > MAX_PASSWORD) throw new ErroreArchivio('Password troppo lunga.', 'argomenti');
     }
-    await scriviInfo(infoDaDek(dek, nuova || null));
+    if (info.password) {
+      // verifica della password attuale anche da sbloccato
+      dek = await svolgiConPassword(leggiAvvolta(info), String(attuale || ''));
+    } else richiediSbloccato();
+    await scriviInfo(await infoDaDek(dek, nuova || null));
     log('info', nuova ? 'password dell\'archivio personale impostata' : 'password dell\'archivio personale tolta');
     return stato();
   }
@@ -333,24 +472,38 @@ function createCassaforte({ dir, safeStorage = null, platform = process.platform
   }
 
   // ------------------------------------------------------------------------------- backup esportato
-  /** File di backup portabile: cifrato con una password scelta all'esportazione (le chiavi del sistema non viaggiano). */
+  /**
+   * File di backup portabile: TUTTO l'archivio (indice, immagini di firme e timbri, PDF dei modelli), compresso e
+   * cifrato con una password scelta all'esportazione (le chiavi del sistema non viaggiano). Prima di restituirlo
+   * lo si riapre con la stessa password e si controlla che contenga tutto.
+   * → { dati: Buffer, elementi, mancanti: [id] }  (mancanti: elementi citati dall'indice ma illeggibili)
+   */
   async function esportaBackup(password) {
     richiediSbloccato();
     if (typeof password !== 'string' || password.length < MIN_PASSWORD) throw new ErroreArchivio(`Scegli una password di almeno ${MIN_PASSWORD} caratteri per il file di backup.`, 'argomenti');
+    if (password.length > MAX_PASSWORD) throw new ErroreArchivio('Password troppo lunga.', 'argomenti');
     const indice = (await leggiIndice()) || {};
-    const blob = {};
+    const blob = {}; const mancanti = [];
     for (const id of blobUsati(indice)) {
-      try { blob[id] = (await leggiBlob(id)).toString('base64'); } catch (e) { log('warn', 'backup: elemento mancante', { id, error: e.message }); }
+      try { blob[id] = (await leggiBlob(id)).toString('base64'); }
+      catch (e) { mancanti.push(id); log('warn', 'backup: elemento mancante', { id, error: e.message }); }
     }
-    const payload = zlib.gzipSync(Buffer.from(JSON.stringify({ formato: 'leggio-archivio-personale', versione: 1, creato: new Date().toISOString(), indice, blob }), 'utf8'));
+    const creato = new Date().toISOString();
+    const payload = zlib.gzipSync(Buffer.from(JSON.stringify({ formato: 'leggio-archivio-personale', versione: 1, creato, indice, blob, mancanti }), 'utf8'));
     const salt = crypto.randomBytes(16);
-    const key = derivaChiave(password, salt);
-    const head = { formato: 'leggio-backup', versione: 1, kdf: 'scrypt', ...KDF, salt: salt.toString('base64'), creato: new Date().toISOString() };
-    const body = cifra(key, payload, 'leggio-backup');
-    return Buffer.concat([Buffer.from(BACKUP_MAGIC + JSON.stringify(head) + '\n', 'utf8'), body]);
+    const key = await derivaChiave(password, salt);
+    const head = { formato: 'leggio-backup', versione: 1, kdf: 'scrypt', ...KDF, salt: salt.toString('base64'), creato };
+    const dati = Buffer.concat([Buffer.from(BACKUP_MAGIC + JSON.stringify(head) + '\n', 'utf8'), cifra(key, payload, 'leggio-backup')]);
+    // verifica: si riapre con la password scelta e contiene esattamente quello che c'è nell'archivio
+    const prova = await leggiBackup(dati, password);
+    const n = Object.keys(blob).length;
+    if (prova.blob.size !== n || JSON.stringify(prova.indice) !== JSON.stringify(indice) || [...prova.blob].some(([id, b]) => b.toString('base64') !== blob[id])) {
+      throw new ErroreArchivio('Verifica del file di backup non riuscita: il backup non è stato salvato. Riprova.', 'backup');
+    }
+    return { dati, elementi: n, mancanti };
   }
-  /** Legge un file di backup. → { indice, blob: Map(id → Buffer) } (non scrive nulla) */
-  function leggiBackup(buf, password) {
+  /** Legge un file di backup. → { indice, blob: Map(id → Buffer), creato, mancanti } (non scrive nulla) */
+  async function leggiBackup(buf, password) {
     buf = comeBuffer(buf, MAX_BACKUP, 'File di backup');
     const s = buf.subarray(0, Math.min(buf.length, 4096)).toString('utf8');
     if (!s.startsWith(BACKUP_MAGIC)) throw new ErroreArchivio('Il file scelto non è un backup dell\'archivio personale di Leggio.', 'formato');
@@ -358,9 +511,9 @@ function createCassaforte({ dir, safeStorage = null, platform = process.platform
     if (nl < 0) throw new ErroreArchivio('File di backup danneggiato.', 'formato');
     let head;
     try { head = JSON.parse(s.slice(BACKUP_MAGIC.length, nl)); } catch { throw new ErroreArchivio('File di backup danneggiato.', 'formato'); }
-    if (head.formato !== 'leggio-backup' || head.versione !== 1 || head.kdf !== 'scrypt') throw new ErroreArchivio('Versione del file di backup non supportata: aggiorna Leggio.', 'formato');
+    if (head.formato !== 'leggio-backup' || head.versione !== 1 || head.kdf !== 'scrypt' || typeof head.salt !== 'string') throw new ErroreArchivio('Versione del file di backup non supportata: aggiorna Leggio.', 'formato');
     const offset = Buffer.byteLength(s.slice(0, nl + 1), 'utf8');
-    const key = derivaChiave(String(password || ''), Buffer.from(head.salt, 'base64'), { N: num(head.N, 1024, 1 << 20), r: num(head.r, 1, 32), p: num(head.p, 1, 16) });
+    const key = await derivaChiave(String(password || ''), Buffer.from(head.salt, 'base64'), paramsKdf(head, 'File di backup'));
     let payload;
     try { payload = decifra(key, buf.subarray(offset), 'leggio-backup'); }
     catch { throw new ErroreArchivio('Password del backup errata, oppure il file è danneggiato.', 'password-errata'); }
@@ -370,21 +523,23 @@ function createCassaforte({ dir, safeStorage = null, platform = process.platform
     if (!o || o.formato !== 'leggio-archivio-personale') throw new ErroreArchivio('Contenuto del backup non riconosciuto.', 'formato');
     const blob = new Map();
     for (const [id, b64] of Object.entries(o.blob || {})) if (ID_RE.test(id) && typeof b64 === 'string') blob.set(id, Buffer.from(b64, 'base64'));
-    return { indice: o.indice && typeof o.indice === 'object' ? o.indice : {}, blob, creato: o.creato || head.creato || null };
+    const mancanti = Array.isArray(o.mancanti) ? o.mancanti.filter((x) => typeof x === 'string' && ID_RE.test(x)) : [];
+    return { indice: o.indice && typeof o.indice === 'object' ? o.indice : {}, blob, creato: o.creato || head.creato || null, mancanti };
   }
   /** Importa i blob di un backup nell'archivio (cifrati con la chiave locale). L'indice lo unisce il renderer. */
   async function importaBackup(buf, password) {
     richiediSbloccato();
-    const b = leggiBackup(buf, password);
+    const b = await leggiBackup(buf, password);
     for (const [id, dati] of b.blob) await scriviBlob(id, dati);
-    return { indice: b.indice, creato: b.creato, elementi: b.blob.size };
+    return { indice: b.indice, creato: b.creato, elementi: b.blob.size, mancanti: b.mancanti.length };
   }
 
   /** Archivio illeggibile: lo si mette da parte (mai cancellato) e se ne crea uno nuovo. */
   async function azzera() {
     const dest = `${dir}-illeggibile-${new Date().toISOString().replace(/[:.]/g, '-')}`;
-    try { await fsp.rename(dir, dest); } catch (e) { if (e.code !== 'ENOENT') throw e; }
-    dek?.fill(0); dek = null; info = null; ripristinato = false;
+    try { await fsp.rename(dir, dest); }
+    catch (e) { if (e.code !== 'ENOENT') throw new ErroreArchivio(`Non riesco a mettere da parte l'archivio (${e.code || e.message}): forse un altro programma sta usando la cartella. Chiudi gli altri programmi e riprova. Nulla è stato cancellato.`, 'scrittura'); }
+    dek?.fill(0); dek = null; info = null; ripristinato = false; riserva = null; chiaveRecuperata = false; kdfRafforzato = false; errori = 0;
     await inizializza();
     log('warn', 'archivio personale illeggibile messo da parte', { dest });
     return { ...stato(), messoDaParte: dest };
@@ -410,4 +565,4 @@ function createCassaforte({ dir, safeStorage = null, platform = process.platform
   };
 }
 
-module.exports = { createCassaforte, ErroreArchivio, sistemaDisponibile, blobUsati, cifra, decifra, MIN_PASSWORD, ID_RE };
+module.exports = { createCassaforte, ErroreArchivio, sistemaDisponibile, blobUsati, cifra, decifra, derivaChiave, KDF, MIN_PASSWORD, ID_RE };

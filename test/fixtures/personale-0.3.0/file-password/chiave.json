@@ -1,0 +1,9 @@
+{
+ "formato": "leggio-chiave",
+ "versione": 1,
+ "password": true,
+ "protetta": {
+  "metodo": "file",
+  "dati": "eyJrZGYiOiJzY3J5cHQiLCJOIjozMjc2OCwiciI6OCwicCI6MSwic2FsdCI6IlJtUVhGMHNBVHNzMDlZZ0RrVzFkcFE9PSIsImRhdGkiOiJURWRXTWR3ZWV2ZXBYcjJoTy9lYkh4VG81d3JGVTM5RjJkUEkyTnhjc05KaTJuYS95M0lxamlQNzIwYURWdk00NGVBSzBIL3lUTlBDZUREWFJ6bHVTQT09In0="
+ }
+}

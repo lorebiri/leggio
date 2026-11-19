@@ -1,0 +1,9 @@
+{
+ "formato": "leggio-chiave",
+ "versione": 1,
+ "password": false,
+ "protetta": {
+  "metodo": "file",
+  "dati": "NElPTEdNMDd6Y2E3WU1FZXAwNFVtb01VRlVNb3IweVlsdEE2aVdDb3IyND0="
+ }
+}

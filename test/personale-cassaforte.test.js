@@ -137,7 +137,7 @@ describe('backup automatico e scritture', () => {
     await c.inizializza();
     await Promise.all(Array.from({ length: 20 }, (_, i) => c.salvaIndice({ i })));
     expect(await c.leggiIndice()).toEqual({ i: 19 });
-    expect(readdirSync(dir).filter((f) => !['chiave.json', 'indice.dat', 'indice.dat.bak', 'blob'].includes(f))).toEqual([]);
+    expect(readdirSync(dir).filter((f) => !['chiave.json', 'chiave.json.bak', 'indice.dat', 'indice.dat.bak', 'blob'].includes(f))).toEqual([]);
   });
 
   it('nessun limite pratico: 500 firme e un indice di qualche MB', async () => {
@@ -199,7 +199,9 @@ describe('backup esportato', () => {
     await c.scriviBlob('firma-0001', Buffer.from('immagine'));
     await c.salvaIndice({ firme: [{ id: 'f1', blob: 'firma-0001', nome: 'La mia firma' }] });
     await expect(c.esportaBackup('corta')).rejects.toThrow(/8 caratteri/);
-    const buf = await c.esportaBackup('backup-password');
+    const ex = await c.esportaBackup('backup-password');
+    expect(ex).toMatchObject({ elementi: 1, mancanti: [] });
+    const buf = ex.dati;
     expect(buf.includes(Buffer.from('La mia firma'))).toBe(false);
     expect(buf.includes(Buffer.from('immagine'))).toBe(false);
     // altro computer: chiave del sistema diversa

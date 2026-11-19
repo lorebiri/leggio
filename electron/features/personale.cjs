@@ -42,7 +42,7 @@ function register({ ipcMain, app, dialog, getWindow, log }) {
   h('azzera', async (a) => { if (a.conferma !== 'METTI-DA-PARTE') throw new ErroreArchivio('Conferma mancante.', 'argomenti'); return C.azzera(); });
 
   h('esporta', async (a) => {
-    const buf = await C.esportaBackup(testo(a.password));
+    const { dati, elementi, mancanti } = await C.esportaBackup(testo(a.password));
     const oggi = new Date().toISOString().slice(0, 10);
     const r = await dialog.showSaveDialog(getWindow?.(), {
       title: 'Salva il backup dell\'archivio personale', defaultPath: `Leggio-archivio-personale-${oggi}.leggio-backup`,
@@ -50,9 +50,9 @@ function register({ ipcMain, app, dialog, getWindow, log }) {
     });
     if (r.canceled || !r.filePath) return null;
     const { safeWrite } = require('../core/safe-write.cjs');
-    await safeWrite(r.filePath, buf);
-    L('info', 'archivio personale esportato', { byte: buf.length });
-    return { percorso: r.filePath, nome: path.basename(r.filePath), byte: buf.length };
+    await safeWrite(r.filePath, dati); // scrittura atomica e riletta byte per byte
+    L('info', 'archivio personale esportato', { byte: dati.length, elementi, mancanti: mancanti.length });
+    return { percorso: r.filePath, nome: path.basename(r.filePath), byte: dati.length, elementi, mancanti: mancanti.length };
   });
   h('importa-scegli', async () => {
     const r = await dialog.showOpenDialog(getWindow?.(), {
