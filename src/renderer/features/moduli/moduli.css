@@ -126,3 +126,37 @@
 .mod-p12row { display: grid; gap: 6px; margin-top: 8px; padding: 8px 10px; border: 1px dashed var(--border-strong); border-radius: var(--radius); }
 .mod-p12row input[type=password] { height: 34px; padding: 0 10px; border: 1px solid var(--control-border); border-radius: var(--radius-sm); background: var(--surface); }
 .mod-idrow select { flex: 1; height: 32px; }
+
+/* ---------- 0.3: firme, foto, timbri, compila a nome di ---------- */
+.mod-legal { font-size: var(--fs-xs); white-space: nowrap; }
+.sig-meta { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 10px; align-items: start; }
+.sig-meta .field { display: grid; gap: 4px; }
+.sig-meta input[type=text] { min-height: 34px; padding: 5px 8px; border: 1px solid var(--control-border); border-radius: var(--radius-sm); background: var(--surface); }
+.sig-meta .radio-group { display: grid; gap: 4px; }
+.sig-owner { display: flex; align-items: center; gap: 8px; min-height: 34px; }
+.sig-owner-name { font-weight: 600; }
+.sig-note .link-btn, .mod-legal { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; }
+.sig-color.orig { background: conic-gradient(#111 0 33%, #1d3f9a 0 66%, #8a5a2b 0); color: #fff; font: 700 12px/1 var(--font); }
+.foto-panel { display: grid; gap: 10px; }
+.foto-msg { margin: 0; }
+.foto-wrap { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; width: max-content; max-width: 100%; }
+.foto-prev { display: block; max-width: 100%; cursor: crosshair; touch-action: none; }
+.foto-prev:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.foto-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.foto-sens { display: inline-flex; align-items: center; gap: 8px; }
+.tim-dialog { display: grid; gap: 12px; }
+.tim-cols { display: grid; grid-template-columns: 1fr 260px; gap: 16px; align-items: start; }
+.tim-form { display: grid; gap: 10px; }
+.tim-form .field { display: grid; gap: 4px; }
+.tim-form input[type=text], .tim-form textarea, .tim-dialog > .field input { width: 100%; min-height: 34px; padding: 5px 8px; border: 1px solid var(--control-border); border-radius: var(--radius-sm); background: var(--surface); box-sizing: border-box; }
+.tim-dialog > .field { display: grid; gap: 4px; }
+.tim-prev { background: var(--paper); border: 1px solid var(--border); border-radius: var(--radius); min-height: 200px; display: grid; place-items: center; padding: 10px; }
+.tim-prev img { max-width: 100%; }
+.mod-autofill { display: grid; gap: 6px; max-height: calc(60 * var(--vh)); overflow: auto; }
+.mod-autofill-row { display: grid; grid-template-columns: auto minmax(140px, 1fr) 1.4fr; gap: 10px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.mod-af-name { overflow: hidden; text-overflow: ellipsis; display: grid; }
+.mod-af-name small { color: var(--muted); font-size: var(--fs-xs); }
+.mod-af-val { display: grid; gap: 2px; }
+.mod-af-input { min-height: 32px; padding: 4px 8px; border: 1px solid var(--control-border); border-radius: var(--radius-sm); background: var(--surface); }
+.mod-af-warn { color: var(--warning, #b45309); font-size: var(--fs-xs); }
+@media (max-width: 720px) { .sig-meta, .tim-cols { grid-template-columns: 1fr; } }

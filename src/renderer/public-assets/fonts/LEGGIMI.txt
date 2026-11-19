@@ -1,0 +1,5 @@
+Caratteri manoscritti inclusi in Leggio per creare la firma «scritta».
+Entrambi sono distribuiti con la SIL Open Font License 1.1 (testi completi accanto):
+- Dancing Script — Copyright 2016 The Dancing Script Project Authors (https://github.com/googlefonts/DancingScript)
+- Great Vibes — Copyright 2010 The Great Vibes Pro Project Authors (https://github.com/googlefonts/great-vibes)
+Scaricati da https://github.com/google/fonts (cartelle ofl/dancingscript e ofl/greatvibes), non modificati.

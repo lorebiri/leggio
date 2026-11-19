@@ -147,3 +147,61 @@ export function winAnsiSafe(text, canEncode) {
   }
   return out;
 }
+
+// ---------------------------------------------------------------- posizioni «visive» (pagine ruotate)
+function rotNorm(rotation) { return ((Math.round((rotation || 0) / 90) * 90) % 360 + 360) % 360; }
+/** Dimensioni della pagina come la vede l'utente. → { w, h } */
+export function dimensioniVisive(viewBox, rotation = 0) {
+  const W = viewBox[2] - viewBox[0]; const H = viewBox[3] - viewBox[1];
+  return rotNorm(rotation) % 180 ? { w: H, h: W } : { w: W, h: H };
+}
+/** Punto visivo (vx a destra, vy in basso, dall'angolo in alto a sinistra di come si vede la pagina) → punto PDF. */
+export function visivoToPdf(viewBox, rotation, vx, vy) {
+  const [x0, y0, x1, y1] = viewBox;
+  switch (rotNorm(rotation)) {
+    case 90: return [x0 + vy, y0 + vx];
+    case 180: return [x1 - vx, y0 + vy];
+    case 270: return [x1 - vy, y1 - vx];
+    default: return [x0 + vx, y1 - vy];
+  }
+}
+/** Punto PDF → punto visivo (inversa di visivoToPdf). */
+export function pdfToVisivo(viewBox, rotation, x, y) {
+  const [x0, y0, x1, y1] = viewBox;
+  switch (rotNorm(rotation)) {
+    case 90: return [y - y0, x - x0];
+    case 180: return [x1 - x, y - y0];
+    case 270: return [y1 - y, x1 - x];
+    default: return [x - x0, y1 - y];
+  }
+}
+/** Rettangolo visivo (alto a sinistra + larghezza/altezza visive) → rettangolo PDF normalizzato. */
+export function rettangoloDaVisivo(viewBox, rotation, vx, vy, w, h) {
+  const a = visivoToPdf(viewBox, rotation, vx, vy); const b = visivoToPdf(viewBox, rotation, vx + w, vy + h);
+  return normRect([a[0], a[1], b[0], b[1]]);
+}
+/**
+ * Rettangolo di un elemento largo w e alto h (visivi) in una posizione della pagina:
+ * pos = 'br' | 'bl' | 'tr' | 'tl' | 'bc' | 'tc' | 'c' | { fx, fy } (centro in frazioni della pagina visiva).
+ */
+export function rettangoloInPosizione(viewBox, rotation, pos, w, h, margine = 28) {
+  const P = dimensioniVisive(viewBox, rotation);
+  const ww = Math.min(w, P.w); const hh = Math.min(h, P.h);
+  const m = Math.min(margine, (P.w - ww) / 2, (P.h - hh) / 2);
+  let vx; let vy;
+  if (pos && typeof pos === 'object') { vx = pos.fx * P.w - ww / 2; vy = pos.fy * P.h - hh / 2; }
+  else {
+    const p = String(pos || 'br');
+    vx = p.endsWith('l') ? m : p.endsWith('r') ? P.w - m - ww : (P.w - ww) / 2;
+    vy = p.startsWith('t') ? m : p.startsWith('b') ? P.h - m - hh : (P.h - hh) / 2;
+  }
+  vx = Math.max(0, Math.min(P.w - ww, vx)); vy = Math.max(0, Math.min(P.h - hh, vy));
+  return rettangoloDaVisivo(viewBox, rotation, vx, vy, ww, hh);
+}
+/** Dove sta un rettangolo PDF nella pagina visiva. → { fx, fy, w, h } (centro in frazioni, misure visive) */
+export function posizioneRelativa(viewBox, rotation, rect) {
+  const P = dimensioniVisive(viewBox, rotation);
+  const a = pdfToVisivo(viewBox, rotation, rect[0], rect[1]); const b = pdfToVisivo(viewBox, rotation, rect[2], rect[3]);
+  const w = Math.abs(b[0] - a[0]); const h = Math.abs(b[1] - a[1]);
+  return { fx: ((a[0] + b[0]) / 2) / P.w, fy: ((a[1] + b[1]) / 2) / P.h, w, h };
+}

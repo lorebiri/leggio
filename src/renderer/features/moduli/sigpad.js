@@ -1,12 +1,40 @@
-// Creazione della firma (o delle iniziali): disegnata, scritta con un carattere corsivo, o da immagine scansionata.
-import { strokeWidths, smoothSegments, thinPoints, removeBackground, opaqueBounds, initialsOf } from './lib/geom.js';
+// Creazione della firma (o della sigla): disegnata, scritta con un carattere manoscritto incluso nell'app
+// (Dancing Script e Great Vibes, licenza OFL) o con uno installato, oppure da una foto o scansione della
+// firma su carta (sfondo e colore della carta tolti, ritaglio, colore dell'inchiostro: fotoui.js).
+import { strokeWidths, smoothSegments, thinPoints, opaqueBounds, initialsOf } from './lib/geom.js';
+import { fotoPanel } from './fotoui.js';
+
+/** Caratteri manoscritti inclusi (src/renderer/public-assets/fonts, licenza OFL). */
+const INCLUSI = [
+  { family: 'Leggio Dancing Script', file: 'DancingScript.ttf' },
+  { family: 'Leggio Great Vibes', file: 'GreatVibes.ttf' },
+];
+let caricamento = null;
+/** Carica una volta i caratteri inclusi. → nomi delle famiglie disponibili */
+export function caricaCaratteriFirma() {
+  if (caricamento) return caricamento;
+  caricamento = (async () => {
+    const ok = [];
+    for (const f of INCLUSI) {
+      try {
+        if (typeof FontFace === 'undefined') break;
+        const r = await fetch(new URL('./assets-extra/fonts/' + f.file, document.baseURI));
+        if (!r.ok) continue;
+        const face = new FontFace(f.family, await r.arrayBuffer());
+        await face.load(); document.fonts.add(face); ok.push(f.family);
+      } catch { /* resta il carattere installato */ }
+    }
+    return ok;
+  })();
+  return caricamento;
+}
 
 const CURSIVE = [
   'Segoe Script', 'Lucida Handwriting', 'Ink Free', 'Freestyle Script', 'Brush Script MT', 'Mistral', 'Kristen ITC', 'Gabriola',
   'Snell Roundhand', 'Apple Chancery', 'Zapfino', 'Bradley Hand', 'Savoye LET', 'Noteworthy', 'Chalkboard SE', 'Marker Felt',
   'URW Chancery L', 'Z003', 'Comic Neue',
 ];
-const COLORS = [{ v: '#111111', l: 'Nero' }, { v: '#1d3f9a', l: 'Blu' }];
+export const COLORS = [{ v: '#111111', l: 'Nero' }, { v: '#1d3f9a', l: 'Blu' }];
 
 let fontCache = null;
 /** Caratteri corsivi davvero installati (confronto delle larghezze con un carattere di riserva). */
@@ -46,35 +74,26 @@ function drawStrokes(ctx, strokes, scale, color) {
   }
 }
 
-/** Carica un file immagine in una tela, togliendo lo sfondo chiaro. */
-async function imageFileToCanvas(bytes, mime) {
-  const blob = new Blob([bytes], { type: mime || 'image/png' });
-  const bmp = await createImageBitmap(blob).catch(() => { throw new Error('Immagine non leggibile. Usa un file PNG o JPG.'); });
-  const maxSide = 1600; const s = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
-  const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(bmp.width * s)); cv.height = Math.max(1, Math.round(bmp.height * s));
-  const ctx = cv.getContext('2d', { willReadFrequently: true });
-  ctx.drawImage(bmp, 0, 0, cv.width, cv.height);
-  bmp.close?.();
-  const data = ctx.getImageData(0, 0, cv.width, cv.height);
-  removeBackground(data.data, cv.width, cv.height);
-  ctx.putImageData(data, 0, 0);
-  return cv;
-}
+export const NOTA_FIRMA_SEMPLICE = 'La firma disegnata, scritta o fotografata è una firma elettronica semplice (un\'immagine): va bene per moduli e comunicazioni interne, ma non sostituisce la firma digitale.';
 
 /**
- * Dialogo «Crea firma». → { dataUrl, w, h, kind, save } | null
- * opts: { kind: 'signature'|'initials', name }
+ * Dialogo «Crea firma». → { dataUrl, w, h, kind, save, nome, proprietario, origine } | null
+ * opts: { kind: 'signature'|'initials', name (per proporre il testo e le iniziali), proprietario: 'io'|id,
+ *         nomeProprietario, scegliProprietario: async () → { id, nome } | 'io' | null, salva: true }
  */
-export function createSignatureDialog(app, { kind = 'signature', name = '' } = {}) {
+export async function createSignatureDialog(app, { kind = 'signature', name = '', proprietario = 'io', nomeProprietario = '', scegliProprietario = null, salva = true } = {}) {
   const { h, dialog } = app.ui;
-  const state = { tab: 'draw', color: COLORS[0].v, strokes: [], text: kind === 'initials' ? initialsOf(name) : name, font: null, image: null, kind };
-  const fonts = availableCursiveFonts();
+  const inclusi = await caricaCaratteriFirma().catch(() => []);
+  const state = { tab: 'draw', color: COLORS[0].v, strokes: [], kind, proprietario, nomeProprietario };
+  const fonts = [...inclusi, ...availableCursiveFonts().filter((f) => f !== 'cursive' || !inclusi.length)];
   state.font = fonts[0];
+  const testoIniziale = () => (state.kind === 'initials' ? initialsOf(name) : name);
 
   const W = 560; const H = 200;
   const pad = h('canvas', { class: 'sig-pad', width: W * 2, height: H * 2, style: { width: W + 'px', height: H + 'px' }, 'aria-label': 'Area per disegnare la firma con il mouse, la penna o il dito' });
   const pctx = pad.getContext('2d');
-  const redrawPad = () => { pctx.clearRect(0, 0, pad.width, pad.height); drawStrokes(pctx, state.strokes, 2, state.color); hint.hidden = state.strokes.length > 0; };
+  const hint = h('div', { class: 'sig-hint' }, '');
+  const redrawPad = () => { pctx.clearRect(0, 0, pad.width, pad.height); drawStrokes(pctx, state.strokes, 2, state.color); hint.hidden = state.strokes.length > 0; hint.textContent = state.kind === 'initials' ? 'Scrivi qui la sigla' : 'Firma qui con il mouse, la penna o il dito'; };
   let cur = null;
   pad.addEventListener('pointerdown', (e) => {
     e.preventDefault(); pad.setPointerCapture(e.pointerId);
@@ -91,67 +110,79 @@ export function createSignatureDialog(app, { kind = 'signature', name = '' } = {
   });
   const end = () => { if (cur) { const i = state.strokes.indexOf(cur); state.strokes[i] = thinPoints(cur); cur = null; redrawPad(); } };
   pad.addEventListener('pointerup', end); pad.addEventListener('pointercancel', end);
-  const hint = h('div', { class: 'sig-hint' }, kind === 'initials' ? 'Scrivi qui le iniziali' : 'Firma qui con il mouse, la penna o il dito');
   const line = h('div', { class: 'sig-line' });
 
-  const colorBtns = h('div', { class: 'sig-colors', role: 'radiogroup', 'aria-label': 'Colore' }, COLORS.map((c) => {
-    const b = h('button', { type: 'button', class: 'sig-color' + (c.v === state.color ? ' on' : ''), title: c.l, 'aria-label': c.l, style: { background: c.v }, onclick: () => { state.color = c.v; colorBtns.querySelectorAll('.sig-color').forEach((x) => x.classList.toggle('on', x === b)); redrawPad(); renderTyped(); } });
-    return b;
-  }));
+  const colorGroup = () => {
+    const g = h('div', { class: 'sig-colors', role: 'radiogroup', 'aria-label': 'Colore dell\'inchiostro' }, COLORS.map((c) => h('button', {
+      type: 'button', role: 'radio', 'aria-checked': String(c.v === state.color), class: 'sig-color' + (c.v === state.color ? ' on' : ''), title: c.l, 'aria-label': c.l, style: { background: c.v },
+      onclick: () => { state.color = c.v; document.querySelectorAll('.sig-dialog .sig-colors.ink .sig-color').forEach((x) => { const on = x.title === c.l; x.classList.toggle('on', on); x.setAttribute('aria-checked', String(on)); }); redrawPad(); renderTyped(); },
+    })));
+    g.classList.add('ink');
+    return g;
+  };
 
   // scritta
-  const textInput = h('input', { type: 'text', class: 'sig-text', value: state.text, placeholder: kind === 'initials' ? 'Iniziali' : 'Nome e cognome', maxlength: 80 });
-  const fontList = h('div', { class: 'sig-fonts', role: 'radiogroup', 'aria-label': 'Stile' });
+  const textInput = h('input', { type: 'text', class: 'sig-text', value: testoIniziale(), placeholder: 'Nome e cognome', maxlength: 80, 'aria-label': 'Testo della firma' });
+  const fontList = h('div', { class: 'sig-fonts', role: 'radiogroup', 'aria-label': 'Stile della scrittura' });
   const renderTyped = () => {
     fontList.textContent = '';
     for (const f of fonts) {
-      const b = h('button', { type: 'button', class: 'sig-font' + (f === state.font ? ' on' : ''), style: { fontFamily: `"${f}", cursive`, color: state.color }, onclick: () => { state.font = f; renderTyped(); } }, textInput.value || 'Firma');
-      fontList.append(b);
+      fontList.append(h('button', { type: 'button', role: 'radio', 'aria-checked': String(f === state.font), class: 'sig-font' + (f === state.font ? ' on' : ''), style: { fontFamily: `"${f}", cursive`, color: state.color }, onclick: () => { state.font = f; renderTyped(); } }, textInput.value || 'Firma'));
     }
   };
   textInput.addEventListener('input', renderTyped);
 
-  // immagine
-  const imgPreview = h('div', { class: 'sig-imgprev' }, h('p', { class: 'muted' }, 'Scegli la foto o la scansione della firma su carta bianca: lo sfondo verrà tolto da solo.'));
-  const pickBtn = h('button', { type: 'button', class: 'btn', onclick: async () => {
-    try {
-      const files = await app.platform.openFiles({ filters: [{ name: 'Immagini', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif'] }], raw: true, title: 'Scegli l\'immagine della firma' });
-      const f = files?.[0]; if (!f) return;
-      if (f.bytes.length > 25 * 1024 * 1024) throw new Error('L\'immagine è troppo grande (oltre 25 MB).');
-      const ext = (f.name.split('.').pop() || 'png').toLowerCase();
-      state.image = await imageFileToCanvas(f.bytes, ext === 'jpg' ? 'image/jpeg' : 'image/' + ext);
-      imgPreview.textContent = '';
-      state.image.className = 'sig-imgcanvas';
-      imgPreview.append(state.image);
-    } catch (err) { app.ui.toast(err.message || String(err), { kind: 'error' }); }
-  } }, 'Scegli immagine…');
-
+  const foto = fotoPanel(app, { colori: COLORS, colore: state.color });
   const panels = {
-    draw: h('div', { class: 'sig-panel' }, h('div', { class: 'sig-pad-wrap' }, pad, line, hint), h('div', { class: 'sig-row' }, colorBtns, h('button', { type: 'button', class: 'btn small', onclick: () => { state.strokes = []; redrawPad(); } }, 'Cancella'), h('button', { type: 'button', class: 'btn small', onclick: () => { state.strokes.pop(); redrawPad(); } }, 'Annulla tratto'))),
-    type: h('div', { class: 'sig-panel', hidden: true }, textInput, fontList, h('div', { class: 'sig-row' }, colorBtns.cloneNode(false))),
-    image: h('div', { class: 'sig-panel', hidden: true }, pickBtn, imgPreview),
+    draw: h('div', { class: 'sig-panel' }, h('div', { class: 'sig-pad-wrap' }, pad, line, hint), h('div', { class: 'sig-row' }, colorGroup(), h('button', { type: 'button', class: 'btn small', onclick: () => { state.strokes = []; redrawPad(); } }, 'Cancella'), h('button', { type: 'button', class: 'btn small', onclick: () => { state.strokes.pop(); redrawPad(); } }, 'Togli l\'ultimo tratto'))),
+    type: h('div', { class: 'sig-panel', hidden: true }, textInput, fontList, h('div', { class: 'sig-row' }, colorGroup())),
+    image: h('div', { class: 'sig-panel', hidden: true }, foto.el),
   };
-  // i pulsanti colore servono anche nella scheda «Scrivi»
-  const colorBtns2 = panels.type.querySelector('.sig-colors');
-  COLORS.forEach((c) => colorBtns2.append(h('button', { type: 'button', class: 'sig-color', title: c.l, 'aria-label': c.l, style: { background: c.v }, onclick: () => { state.color = c.v; renderTyped(); } })));
-  const tabs = h('div', { class: 'sig-tabs', role: 'tablist' }, [['draw', 'Disegna'], ['type', 'Scrivi'], ['image', 'Immagine']].map(([k, l]) => h('button', { type: 'button', role: 'tab', class: 'sig-tab' + (k === 'draw' ? ' on' : ''), 'data-tab': k, onclick: (e) => {
-    state.tab = k;
-    tabs.querySelectorAll('.sig-tab').forEach((t) => t.classList.toggle('on', t === e.currentTarget));
-    for (const [pk, p] of Object.entries(panels)) p.hidden = pk !== k;
-    if (k === 'type') { renderTyped(); textInput.focus(); }
-  } }, l)));
-  const saveChk = h('input', { type: 'checkbox', checked: true, id: 'sig-save' });
+  const tabs = h('div', { class: 'sig-tabs', role: 'tablist', 'aria-label': 'Come vuoi creare la firma' }, [['draw', 'Disegna'], ['type', 'Scrivi'], ['image', 'Foto o scansione']].map(([k, l]) => h('button', {
+    type: 'button', role: 'tab', 'aria-selected': String(k === 'draw'), class: 'sig-tab' + (k === 'draw' ? ' on' : ''), 'data-tab': k,
+    onclick: (e) => {
+      state.tab = k;
+      tabs.querySelectorAll('.sig-tab').forEach((t) => { t.classList.toggle('on', t === e.currentTarget); t.setAttribute('aria-selected', String(t === e.currentTarget)); });
+      for (const [pk, p] of Object.entries(panels)) p.hidden = pk !== k;
+      if (k === 'type') { renderTyped(); textInput.focus(); }
+    },
+  }, l)));
+
+  // nome, tipo, proprietario
+  const nomeDefault = () => {
+    const chi = state.proprietario === 'io' ? '' : state.nomeProprietario;
+    return state.kind === 'initials' ? (chi ? 'Sigla di ' + chi : 'La mia sigla') : (chi ? 'Firma di ' + chi : 'La mia firma');
+  };
+  let nomeToccato = false;
+  const nomeInput = h('input', { type: 'text', value: nomeDefault(), maxlength: 80, oninput: () => { nomeToccato = true; } });
+  const aggiornaNome = () => { if (!nomeToccato) nomeInput.value = nomeDefault(); };
+  const tipo = h('div', { class: 'radio-group', role: 'radiogroup', 'aria-label': 'Tipo' }, [['signature', 'Firma'], ['initials', 'Sigla (iniziali)']].map(([v, l]) => h('label', { class: 'radio' }, h('input', { type: 'radio', name: 'sig-tipo', value: v, checked: v === kind, onchange: () => { state.kind = v; if (!textInput.dataset.toccato) textInput.value = testoIniziale(); aggiornaNome(); redrawPad(); renderTyped(); } }), h('span', {}, l))));
+  textInput.addEventListener('input', () => { textInput.dataset.toccato = '1'; });
+  const chiOut = h('span', { class: 'sig-owner-name' });
+  const mostraChi = () => { chiOut.textContent = state.proprietario === 'io' ? 'Mia' : 'Di ' + (state.nomeProprietario || 'un\'altra persona'); };
+  const chiBtn = scegliProprietario ? h('button', { type: 'button', class: 'btn small', onclick: async () => {
+    const r = await scegliProprietario();
+    if (!r) return;
+    if (r === 'io') { state.proprietario = 'io'; state.nomeProprietario = ''; } else { state.proprietario = r.id; state.nomeProprietario = r.nome; }
+    mostraChi(); aggiornaNome();
+  } }, 'Cambia…') : null;
+  mostraChi();
+  const saveChk = h('input', { type: 'checkbox', checked: salva, id: 'sig-save' });
   const body = h('div', { class: 'sig-dialog' }, tabs, panels.draw, panels.type, panels.image,
-    h('label', { class: 'chk sig-save', for: 'sig-save' }, saveChk, 'Salva per usarla di nuovo (resta solo su questo computer)'),
-    h('p', { class: 'sig-note' }, 'Questa è una firma grafica (un\'immagine): non è una firma digitale con valore legale. Per firmare con certificato usa «Usa un certificato».'));
+    h('div', { class: 'sig-meta' },
+      h('div', { class: 'field' }, h('label', {}, 'Nome'), nomeInput),
+      h('div', { class: 'field' }, h('label', {}, 'Tipo'), tipo),
+      h('div', { class: 'field' }, h('label', {}, 'Di chi è'), h('div', { class: 'sig-owner' }, chiOut, chiBtn))),
+    h('label', { class: 'chk sig-save', for: 'sig-save' }, saveChk, 'Salva nell\'archivio personale (cifrato, resta solo su questo computer)'),
+    h('p', { class: 'sig-note' }, NOTA_FIRMA_SEMPLICE + ' ', h('button', { type: 'button', class: 'link-btn', onclick: () => { app.tools.run('digital-sign'); } }, 'Firma digitale con certificato…')));
   redrawPad();
 
   const produce = () => {
     if (state.tab === 'draw') {
-      if (!state.strokes.length) return { error: 'Disegna la firma nel riquadro.' };
+      if (!state.strokes.length) return { error: state.kind === 'initials' ? 'Disegna la sigla nel riquadro.' : 'Disegna la firma nel riquadro.' };
       const cv = document.createElement('canvas'); cv.width = W * 3; cv.height = H * 3;
       drawStrokes(cv.getContext('2d'), state.strokes, 3, state.color);
-      return trimCanvas(cv, 8);
+      const r = trimCanvas(cv, 8); return r && { ...r, origine: 'disegno' };
     }
     if (state.tab === 'type') {
       const t = textInput.value.trim(); if (!t) return { error: 'Scrivi il nome.' };
@@ -161,16 +192,16 @@ export function createSignatureDialog(app, { kind = 'signature', name = '' } = {
       cv.width = Math.ceil(m.width + size); cv.height = Math.ceil(size * 1.9);
       ctx.font = `${size}px "${state.font}", cursive`; ctx.fillStyle = state.color; ctx.textBaseline = 'middle';
       ctx.fillText(t, size / 2, cv.height / 2);
-      return trimCanvas(cv, 8);
+      const r = trimCanvas(cv, 8); return r && { ...r, origine: 'scritta' };
     }
-    if (!state.image) return { error: 'Scegli un\'immagine.' };
-    const r = trimCanvas(state.image, 4);
-    return r || { error: 'Nell\'immagine non si vede nessuna firma: prova con una foto più contrastata.' };
+    const r = foto.produce();
+    return r?.error ? r : r && { ...r, origine: 'foto' };
   };
 
   let result = null;
-  return dialog({
-    title: kind === 'initials' ? 'Crea le iniziali' : 'Crea la firma', body, okLabel: 'Usa questa firma', width: 640,
+  const v = await dialog({
+    title: kind === 'initials' ? 'Crea una sigla' : 'Crea una firma', body, okLabel: 'Usa questa firma', width: 660,
     validate: () => { const r = produce(); if (!r) return 'Non c\'è niente da salvare.'; if (r.error) return r.error; result = r; return null; },
-  }).then((v) => (v && result ? { ...result, kind, save: saveChk.checked } : null));
+  });
+  return v && result ? { ...result, kind: state.kind, save: saveChk.checked, nome: nomeInput.value.trim() || nomeDefault(), proprietario: state.proprietario } : null;
 }

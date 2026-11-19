@@ -1,5 +1,9 @@
-// Archivio locale (localStorage) di firme, iniziali e profilo personale per la compilazione automatica.
+// Preferenze dell'area «moduli» (localStorage: colore, dimensione del testo…) e riconoscimento dei campi.
+// Dalla 0.3 firme, sigle e profilo personale stanno nell'archivio personale cifrato (area «personale»):
+// qui restano la lettura delle chiavi della 0.2 (migrate in silenzio da personale/lib/archivio.js) e, per chi
+// legge il profilo in modo sincrono (es. il profilo dell'ente), una vista sul profilo dell'archivio aperto.
 // Logica pura con archivio iniettabile (per i test). Nessun dato lascia il computer.
+import { archivioPersonale } from '../../personale/lib/condiviso.js';
 
 const KEY_SIGS = 'leggio.moduli.firme.v1';
 const KEY_PROFILE = 'leggio.moduli.profilo.v1';
@@ -58,7 +62,9 @@ export function profileValueFor(fieldName, profile, today) {
   return null;
 }
 
-export function createStore(storage = defaultStorage()) {
+export function createStore(storage = defaultStorage(), { archivio } = {}) {
+  // senza argomenti (nell'app) il profilo viene dall'archivio personale condiviso, se aperto
+  const arch = () => (archivio !== undefined ? archivio : arguments.length === 0 ? archivioPersonale() : null);
   return {
     /** kind: 'signature' | 'initials' */
     list(kind) {
@@ -85,7 +91,8 @@ export function createStore(storage = defaultStorage()) {
       if (i > 0) { const [x] = all.splice(i, 1); all.unshift(x); storage.setItem(KEY_SIGS, JSON.stringify(all)); }
     },
     getProfile() {
-      const p = readJson(storage, KEY_PROFILE, {});
+      const a = arch();
+      const p = a?.aperto ? a.profilo() : readJson(storage, KEY_PROFILE, {});
       const out = {};
       for (const f of PROFILE_FIELDS) if (typeof p[f.key] === 'string') out[f.key] = p[f.key];
       return out;
@@ -93,6 +100,8 @@ export function createStore(storage = defaultStorage()) {
     setProfile(p) {
       const out = {};
       for (const f of PROFILE_FIELDS) { const v = p?.[f.key]; if (typeof v === 'string' && v.trim()) out[f.key] = v.trim().slice(0, 300); }
+      const a = arch();
+      if (a?.aperto) { a.salvaProfilo({ ...a.profilo(), ...out }); return out; }
       storage.setItem(KEY_PROFILE, JSON.stringify(out));
       return out;
     },

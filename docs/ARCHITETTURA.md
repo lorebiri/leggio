@@ -5,7 +5,8 @@ Leggio è un'app **Electron** (Windows e macOS). Tutto il lavoro sui PDF avviene
 ```
 electron/main.cjs        processo principale: finestra, menu, dialoghi file, file recenti
 electron/preload.cjs     ponte sicuro: window.leggio.invoke('file:*' | 'app:*' | 'feat:*')
-electron/features/*.cjs  moduli lato main delle aree (caricati in automatico): register({ ipcMain, app, dialog, getWindow })
+electron/features/*.cjs  moduli lato main delle aree (caricati in automatico): register({ ipcMain, app, dialog, getWindow, grants, pathAllowed, log })
+electron/personale/      archivio personale cifrato (firme, timbri, rubrica, modelli): solo nel main, vedi docs/aree/personale.md
 src/renderer/core/       nucleo (NON modificare senza accordo col coordinatore)
 src/renderer/features/<area>/index.js   ogni area registra qui i propri strumenti
 src/renderer/public-assets/             risorse statiche extra → dist/assets-extra/ (es. lingue OCR)
@@ -128,6 +129,7 @@ e chiude solo il processo che ha avviato (mai «tutti gli Electron sulla porta X
 | robustezza | 5207 | 9407 |
 | avanzati | 5208 | 9408 |
 | archivio | 5209 | 9409 |
+| personale | 5211 | 9411 |
 | estetica | 5210 | 9410 |
 | coordinatore | 5199 | 9400 |
 

@@ -1,9 +1,13 @@
 // Operazioni sui moduli compilabili: lettura/scrittura valori, appiattisci, reimposta, esporta/importa dati,
 // compila con i dati personali, esporta più moduli in un unico CSV, barra informativa.
 import { serialize, parseAny, textToBytes, bytesToText, toCSV } from './lib/formdata.js';
-import { profileValueFor } from './lib/store.js';
 import { todayIt } from './lib/geom.js';
 import { editProfileDialog } from './profile.js';
+import { apriArchivio, nomeContatto } from './personale.js';
+import { scegliContatto } from '../personale/ui/scegli.js';
+import { datiDaContatto, datiDaProfilo, proponiCompilazione, etichettaCampo, chiavePerCampo } from '../personale/lib/campi.js';
+import { modelloPerDocumento, corrispondenzeModello, compilaConModello, valoreChiave } from '../personale/lib/modelli.js';
+import { validaCodiceFiscale } from '../personale/lib/validatori.js';
 
 const TRUE_WORDS = /^(true|s[iì]|yes|on|1|x|v|vero|checked)$/i;
 const FALSE_WORDS = /^(false|no|off|0|falso|unchecked)?$/i;
@@ -268,40 +272,11 @@ export function registerFormTools(app, store) {
   });
 
   app.registerTool({
-    id: 'autofill-profile', name: 'Compila con i miei dati', category: 'moduli', icon: 'sparkles',
-    description: 'Riempie i campi riconosciuti (nome, codice fiscale, ufficio, data…) con il tuo profilo personale',
-    keywords: 'compila automaticamente profilo dati personali autocompletamento riempi',
-    async run() {
-      let profile = store.getProfile();
-      if (!Object.keys(profile).length) {
-        /* profilo */
-        profile = await editProfileDialog(app, store); if (!profile) return;
-      }
-      // campi vuoti e nomi riconosciuti
-      const doc = app.activeDoc;
-      const pdfDoc = await app.lib.openPdfLib(await app.currentBytes(doc), doc.password);
-      const { values } = readValues(app.lib.PDFLib, pdfDoc);
-      const today = todayIt();
-      const proposals = [];
-      for (const [name, cur] of Object.entries(values)) {
-        if (typeof cur !== 'string' || cur.trim()) continue;
-        const m = profileValueFor(name, profile, today);
-        if (m) proposals.push({ name, value: m.value });
-      }
-      if (!proposals.length) { app.ui.toast(Object.keys(values).length ? 'Nessun campo vuoto riconosciuto tra i tuoi dati personali.' : 'Questo documento non contiene campi compilabili: usa «Compila e firma» → «Dati personali».', { kind: 'warning', timeout: 6000 }); return; }
-      const { h } = app.ui;
-      const rows = proposals.map((p) => ({ p, c: h('input', { type: 'checkbox', checked: true }) }));
-      const body = h('div', { class: 'mod-autofill' }, rows.map(({ p, c }) => h('label', { class: 'mod-autofill-row' }, c, h('span', { class: 'mod-af-name' }, p.name), h('span', { class: 'mod-af-val' }, p.value))));
-      const ok = await app.ui.dialog({ title: 'Compila con i miei dati', message: 'Controlla i valori proposti e togli la spunta a quelli che non vanno bene.', body, okLabel: 'Compila', width: 560 });
-      if (!ok) return;
-      const data = Object.fromEntries(rows.filter((r) => r.c.checked).map((r) => [r.p.name, r.p.value]));
-      if (!Object.keys(data).length) return;
-      await app.editWithPdfLib('Campi compilati con i miei dati', async (pdfDoc2, PDFLib) => {
-        const res = writeValues(PDFLib, pdfDoc2, data);
-        if (!res.set) return false;
-        await safeAppearances(PDFLib, pdfDoc2, safeGetForm(pdfDoc2));
-      });
-    },
+    id: 'autofill-profile', name: 'Compila a nome di…', category: 'moduli', icon: 'sparkles',
+    acrobatName: 'Compilazione automatica',
+    description: 'Scegli te stesso o un contatto della rubrica: i campi riconosciuti (nome, codice fiscale, IBAN, data…) si riempiono, con anteprima e correzione prima di applicare',
+    keywords: 'compila automaticamente profilo dati personali autocompletamento riempi rubrica contatto a nome di per conto di miei dati',
+    run: () => compilaANomeDi(app, store),
   });
 
   app.registerTool({
@@ -399,7 +374,7 @@ export function installInfoBar(app, { onVerify }) {
         btn.classList.toggle('on', on); btn.setAttribute('aria-pressed', String(on)); app.settings.set('moduli.highlight', on);
       } }, 'Evidenzia campi');
       parts.push(h('span', { class: 'mod-ib-item' }, isXfa ? 'Questo è un modulo XFA: si può compilare, ma alcune funzioni (Prepara modulo, appiattisci) non sono disponibili.' : fillable.partial ? 'Questo documento contiene campi compilabili.' : `Questo documento contiene campi compilabili (${fillable.length}).`), btn,
-        sigs.length ? null : h('button', { class: 'btn small', onclick: () => app.tools.run('autofill-profile') }, 'Compila con i miei dati'));
+        sigs.length ? null : h('button', { class: 'btn small', onclick: () => app.tools.run('autofill-profile') }, 'Compila a nome di…'));
     } else if (isXfa) parts.push(h('span', { class: 'mod-ib-item' }, 'Modulo XFA (formato Adobe dinamico): la visualizzazione può essere incompleta.'));
     if (!parts.length) return;
     bar.append(h('span', { class: 'mod-ib-icon', 'aria-hidden': 'true' }, sigs.length ? '✔' : '✎'), ...parts,
@@ -412,4 +387,85 @@ export function installInfoBar(app, { onVerify }) {
   app.bus.on('document:changed', update);
   app.bus.on('document:closed', () => { if (!app.activeDoc) { bar.hidden = true; } });
   return { update, el: bar };
+}
+
+/**
+ * «Compila a nome di»: scegli «io» o un contatto della rubrica, Leggio propone i valori per i campi
+ * riconosciuti (o quelli di un modello salvato per questo modulo), li fai correggere e poi li scrive.
+ */
+export async function compilaANomeDi(app, store, { persona = null } = {}) {
+  const a = await apriArchivio(app); if (!a) return;
+  const doc = app.activeDoc;
+  const bytes = await app.currentBytes(doc);
+  const pdfDoc = await app.lib.openPdfLib(bytes, doc.password);
+  const PDFLib = app.lib.PDFLib;
+  const { values } = readValues(PDFLib, pdfDoc);
+  const modello = await modelloPerDocumento(a, bytes, { PDFLib, pdfDoc }).catch(() => null);
+  const zone = modello?.tipo === 'zone';
+  if (!Object.keys(values).length && !zone) {
+    app.ui.toast('Questo documento non contiene campi compilabili: usa «Compila e firma» → «Dati», oppure definisci le zone da compilare e salvalo come modello.', { kind: 'warning', timeout: 8000 });
+    return;
+  }
+  let scelta = persona;
+  if (!scelta) {
+    const last = store.getPref('compilaPersona', 'io');
+    scelta = await scegliContatto(app, a, { titolo: 'Compila a nome di…', messaggio: `Di chi sono i dati da mettere nel modulo «${doc.name}»?`, consentiIo: true, testoIo: 'Io (i miei dati personali)', preselezione: last });
+    if (!scelta) return;
+  }
+  const contatto = scelta === 'io' ? null : scelta;
+  store.setPref('compilaPersona', contatto ? contatto.id : 'io');
+  let dati = contatto ? datiDaContatto(contatto) : datiDaProfilo(a.profilo());
+  if (!contatto && !Object.keys(dati).length) {
+    const p = await editProfileDialog(app, store); if (!p) return;
+    dati = datiDaProfilo(p);
+  }
+  const chi = contatto ? nomeContatto(contatto) : 'i tuoi dati';
+  const oggi = todayIt();
+  // proposte: campi vuoti del modulo (o zone del modello)
+  let proposte;
+  if (zone) {
+    proposte = (modello.zone || []).map((z, i) => ({ campo: z.etichetta || etichettaCampo(z.chiave) || 'Zona ' + (i + 1), zona: z, key: z.chiave, value: valoreChiave(z.chiave, dati, oggi) || '', origine: 'modello' })).filter((p) => p.key && !p.key.startsWith('colonna:'));
+  } else {
+    const corr = modello ? corrispondenzeModello(modello) : null;
+    proposte = proponiCompilazione(Object.keys(values), dati, { oggi, corrispondenze: corr, soloVuoti: (n) => typeof values[n] === 'string' && !values[n].trim() });
+    // campi riconosciuti ma senza dato: mostrati vuoti, così si possono completare a mano
+    for (const n of Object.keys(values)) {
+      if (typeof values[n] !== 'string' || values[n].trim() || proposte.some((p) => p.campo === n)) continue;
+      const k = corr && Object.prototype.hasOwnProperty.call(corr, n) ? corr[n] : chiavePerCampo(n);
+      if (k && !k.startsWith('fisso:') && !k.startsWith('colonna:')) proposte.push({ campo: n, key: k, value: '', origine: corr && n in corr ? 'modello' : 'automatico' });
+    }
+  }
+  if (!proposte.length) {
+    app.ui.toast(Object.keys(values).length ? 'Nessun campo vuoto riconosciuto: i campi sono già compilati o hanno nomi che Leggio non riconosce (puoi salvare il modulo come modello e abbinarli a mano).' : 'Nessun campo da compilare.', { kind: 'warning', timeout: 8000 });
+    return;
+  }
+  const { h } = app.ui;
+  const righe = proposte.map((p) => {
+    const c = h('input', { type: 'checkbox', checked: !!p.value, 'aria-label': 'Compila ' + p.campo });
+    const inp = h('input', { type: 'text', class: 'mod-af-input', value: p.value, 'aria-label': `Valore per «${p.campo}»`, oninput: () => { c.checked = !!inp.value.trim(); avviso(); } });
+    const nota = h('small', { class: 'mod-af-warn', role: 'status' });
+    const avviso = () => { nota.textContent = p.key === 'codiceFiscale' && inp.value.trim() ? (validaCodiceFiscale(inp.value).avviso || '') : ''; };
+    avviso();
+    return { p, c, inp, el: h('label', { class: 'mod-autofill-row' }, c, h('span', { class: 'mod-af-name', title: p.campo }, p.campo, h('small', {}, etichettaCampo(p.key) + (p.origine === 'modello' ? ' · dal modello' : ''))), h('span', { class: 'mod-af-val' }, inp, nota)) };
+  });
+  const body = h('div', { class: 'mod-autofill' },
+    modello ? h('p', { class: 'muted' }, `Modulo riconosciuto: modello «${modello.nome}».`) : null,
+    righe.map((r) => r.el));
+  const ok = await app.ui.dialog({ title: 'Compila a nome di: ' + chi, message: 'Controlla e correggi i valori; togli la spunta a quelli da lasciare vuoti. Niente viene scritto finché non premi «Compila».', body, okLabel: 'Compila', width: 640 });
+  if (!ok) return;
+  const scelti = righe.filter((r) => r.c.checked && r.inp.value.trim());
+  if (!scelti.length) return;
+  if (modello) a.usaModello(modello.id);
+  await app.editWithPdfLib('Compilato a nome di ' + (contatto ? nomeContatto(contatto) : 'me'), async (pdfDoc2, Lib) => {
+    if (zone) {
+      // ogni zona riceve il valore corretto dall'utente
+      const m2 = { ...modello, zone: scelti.map((r) => ({ ...r.p.zona, chiave: 'fisso:' + r.inp.value.trim() })), firma: null, timbro: null };
+      await compilaConModello(Lib, pdfDoc2, m2, {}, { oggi });
+      return;
+    }
+    const res = writeValues(Lib, pdfDoc2, Object.fromEntries(scelti.map((r) => [r.p.campo, r.inp.value.trim()])));
+    if (!res.set) return false;
+    await safeAppearances(Lib, pdfDoc2, safeGetForm(pdfDoc2));
+  });
+  app.ui.toast(`Compilati ${scelti.length} campi a nome di ${contatto ? nomeContatto(contatto) : 'te'}`, { kind: 'success' });
 }

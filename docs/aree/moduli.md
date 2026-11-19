@@ -3,13 +3,14 @@
 ## Strumenti (categoria `moduli`)
 | id | Nome (come Acrobat) | Cosa fa |
 |---|---|---|
-| `fill-sign` (rapido) | Compila e firma | Clic ovunque per scrivere (anche su moduli non compilabili); ✓ ✗ ●, data di oggi, iniziali, firma, «Dati personali». Il testo si aggancia alle righe `____`, i segni si centrano nelle caselle ☐. Elementi spostabili/ridimensionabili; «Applica» o «Fine» li scrive nel contenuto della pagina (annullabile). |
-| `sign` (rapido) | Firma | Firma in due clic: la firma salvata compare subito al centro della pagina, si trascina e basta. |
+| `fill-sign` (rapido) | Compila e firma | Clic ovunque per scrivere (anche su moduli non compilabili); ✓ ✗ ●, data di oggi, sigla, firma (anche di altre persone, con conferma e registro), «Dati ▾» (i miei o di un contatto della rubrica), **Firme rapide e timbri ▾**: «Sigla tutte le pagine» (posizione scelta una volta, anche «dove l'ho messa io»), «Luogo, data e firma» (data automatica), timbri (modelli pronti, timbro dell'ente, colore, rotazione, una pagina o più). Il testo si aggancia alle righe `____`, i segni si centrano nelle caselle ☐. Elementi spostabili/ridimensionabili; «Applica» o «Fine» li scrive nel contenuto della pagina (annullabile). Posizioni corrette anche sulle pagine ruotate (`lib/geom.js`: `rettangoloInPosizione`, `posizioneRelativa`). |
+| `sign` (rapido) | Firma | Firma in due clic: la propria firma usata più di recente compare subito al centro della pagina, si trascina e basta. La freccia ▾ elenca tutte le firme (mie e di altre persone, con miniatura) e «Crea una nuova firma…»: disegnata, scritta con un carattere manoscritto incluso (Dancing Script, Great Vibes — OFL) o da foto/scansione (sfondo e colore della carta tolti, ritaglio, colore dell'inchiostro: `fotoui.js`, `lib/foto.js`). |
 | `form-editor` | Prepara modulo | Crea campi (testo con formato importo/data/email, casella, pulsanti di opzione, elenco a discesa, casella di riepilogo, pulsante, campo firma); sposta/ridimensiona/elimina/rinomina campi esistenti; proprietà. **Riconosci campi** dal testo (`____`, `☐`/`[ ]`, «Nome:», «Data:», «Firma»). |
 | `flatten-form`, `reset-form` | Appiattisci / Reimposta modulo | |
 | `export-form-data`, `import-form-data` | Esporta / Importa dati | CSV (punto e virgola, per Excel italiano), JSON, XFDF, FDF. |
 | `export-forms-csv` | Esporta dati di più moduli | Un CSV con una riga per modulo. |
-| `autofill-profile`, `personal-data` | Compila con i miei dati | Profilo locale (nome, CF, ufficio, ente…) → campi riconosciuti dal nome, con conferma. |
+| `autofill-profile` | Compila a nome di… | Scegli «io» o un contatto della rubrica → i campi vuoti riconosciuti dal nome (`personale/lib/campi.js`: stesso riconoscimento di `PROFILE_FIELDS`, esteso a ragione sociale, P.IVA, PEC, IBAN, codice SDI, nazione…) o abbinati in un **modello** salvato per quel modulo; anteprima con valori modificabili e avvisi sul codice fiscale prima di applicare. Funziona anche con i modelli «a zone» su PDF non compilabili. |
+| `personal-data` | I miei dati personali | Profilo «io» nell'archivio personale cifrato (con IBAN). |
 | `digital-sign` | Usa un certificato | Certificato del sistema o della smart card («Firmatario di sistema»), file .p12/.pfx, oppure il programma di firma installato → PAdES (ETSI.CAdES.detached o adbe.pkcs7.detached) visibile (riquadro trascinato, con firma grafica facoltativa) o invisibile; oppure busta CAdES `.p7m`. |
 | `sign-batch` | Firma più file | Un solo PIN/password per molti file (le firme sono chieste in un'unica operazione); copie `_firmato.pdf` / `.p7m` accanto agli originali, mai sovrascritti. |
 | `create-digital-id` | Crea ID digitale | Certificato autofirmato RSA 2048 → .p12. |
@@ -18,7 +19,7 @@
 
 I file `.p7m` (apertura, trascinamento) sono gestiti dall'area «avanzati»; la verifica CAdES è `feat:moduli:verify-p7m`.
 
-Barra informativa sopra il documento: campi compilabili (Evidenzia campi, Compila con i miei dati) e documento firmato (avviso prima di modificarlo, Pannello firme).
+Barra informativa sopra il documento: campi compilabili (Evidenzia campi, Compila a nome di…) e documento firmato (avviso prima di modificarlo, Pannello firme).
 
 ## Servizio per le altre aree: `app.services.firmaFile(files, opzioni)`
 - `files`: `[{ path, name }]` (o percorsi come stringhe) già scelti, per esempio i documenti selezionati nell'archivio.
@@ -36,9 +37,11 @@ Barra informativa sopra il documento: campi compilabili (Evidenzia campi, Compil
   dall'archivio vero né con una smart card.
 
 ## Struttura
-- `lib/` logica pura testata: `formdata.js` (formati dati), `detect.js` (riconoscimento campi), `geom.js` (rotazioni, tratti, sfondo firma), `store.js` (firme e profilo in localStorage).
+- `lib/` logica pura testata: `formdata.js` (formati dati), `detect.js` (riconoscimento campi), `geom.js` (rotazioni, tratti, sfondo firma, posizioni visive), `foto.js` (firma/timbro da foto: carta e ombre tolte, ricolorazione), `timbri.js` (modelli e spec dei timbri), `store.js` (preferenze; profilo letto dall'archivio personale se aperto, altrimenti dal localStorage della 0.2).
+- **Dalla 0.3 firme, sigle, timbri e profilo stanno nell'archivio personale cifrato** dell'area «personale» (vedi `docs/aree/personale.md`); `personale.js` collega le due aree (apertura con password, scelta del proprietario, conferma e registro delle firme altrui). La migrazione dalla 0.2 è automatica e silenziosa.
+- `timbri.js` (disegno su tela, finestra «Timbro dell'ente»), `fotoui.js` (pannello «Foto o scansione» con ritaglio da mouse o tastiera).
 - `board.js` elementi posizionati sugli overlay (modello in coordinate PDF, ridisegno su `page:rendered`).
-- `fillsign.js`, `sigpad.js`, `profile.js`, `formeditor.js`, `formtools.js`, `digital.js`, `bridge.js`.
+- `fillsign.js`, `sigpad.js`, `profile.js`, `formeditor.js`, `formtools.js` (anche `compilaANomeDi`), `digital.js`, `bridge.js`.
 - `electron/features/moduli.cjs` (main): canali `feat:moduli:sign | sign-p7m | sign-batch | sign-files | describe-id | list-system-ids | create-id | verify | verify-p7m | external-apps | external-choose | external-sign | external-cancel` (evento `feat:moduli:external-result`); le richieste di firma portano `credential: { type:'p12', p12, password } | { type:'system', id }`; risposta sempre `{ok, result}` o `{ok:false, error, code}`.
 
 ## Firma digitale: garanzie
