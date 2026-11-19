@@ -249,7 +249,9 @@ function sameCell(last, ln) {
 function prepareRules(raw, rows) {
   const out = { v: [], h: [] };
   if (!raw || !raw.length || !rows.length) return out;
-  const angles = [...new Set(rows.map((r) => r.angle))];
+  // le tabelle sono dritte o girate di 90°: il testo ad altri angoli (etichette di mappe e disegni) non usa i
+  // filetti, e ogni angolo in più costava un'altra passata su migliaia di tratti (interfaccia bloccata)
+  const angles = [...new Set(rows.map((r) => r.angle))].filter((a) => ((a % 90) + 90) % 90 === 0);
   for (const ang of angles) {
     const v = [], h = [];
     for (const r of raw) {
@@ -271,7 +273,13 @@ function mergeCollinear(list, pos, a, b) {
   list.sort((p, q) => p[pos] - q[pos] || p[a] - q[a]);
   const out = [];
   for (const s of list) {
-    const m = out.find((o) => Math.abs(o[pos] - s[pos]) < 0.75 && s[a] <= o[b] + 2.5 && s[b] >= o[a] - 2.5);
+    // out è ordinato per posizione: si guardano solo gli ultimi tratti allineati (al più 64), non tutto l'elenco,
+    // così migliaia di tratti (tratteggi, disegni tecnici) non bloccano l'interfaccia
+    let m = null;
+    for (let k = out.length - 1, n = 0; k >= 0 && n < 64 && out[k][pos] > s[pos] - 0.75; k--, n++) {
+      const o = out[k];
+      if (s[a] <= o[b] + 2.5 && s[b] >= o[a] - 2.5) { m = o; break; }
+    }
     if (m) { m[a] = Math.min(m[a], s[a]); m[b] = Math.max(m[b], s[b]); } else out.push({ ...s });
   }
   return out;

@@ -377,3 +377,18 @@ describe('tabelle: modificare una cella non sposta le altre', () => {
     await othersUnchanged(q.blocksBefore, q.out, q.b, []);
   });
 });
+
+describe('pagine con migliaia di tratti disegnati', () => {
+  it('20.000 tratti e testo a 21 angoli: il raggruppamento non blocca l\'interfaccia', () => {
+    // mappa o disegno tecnico: tratteggi sparsi ed etichette ruotate (prima: oltre 20 secondi nel thread principale)
+    const rules = [];
+    for (let i = 0; i < 20000; i++) { const x = (i * 7.31) % 600, y = (i * 13.7) % 800; rules.push({ x0: x, y0: y, x1: x, y1: y + 3 }); }
+    const items = [];
+    for (let r = 0; r < 60; r++) for (let c = 0; c < 6; c++) items.push({ str: `Testo ${r} ${c}`, transform: [10, 0, 0, 10, 30 + c * 90, 780 - r * 12], width: 60, fontName: 'f' });
+    for (let k = 0; k < 20; k++) { const g = k * 0.3; items.push({ str: 'etichetta', transform: [10 * Math.cos(g), 10 * Math.sin(g), -10 * Math.sin(g), 10 * Math.cos(g), 100, 100], width: 40, fontName: 'f' }); }
+    const t0 = performance.now();
+    const blocks = groupTextItems(items, {}, { rules });
+    expect(performance.now() - t0).toBeLessThan(4000);
+    expect(blocks.length).toBeGreaterThan(20);
+  });
+});
