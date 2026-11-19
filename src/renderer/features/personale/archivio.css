@@ -23,3 +23,4 @@
 .pers-sig-info span { color: var(--muted); font-size: var(--fs-xs); }
 .pers-sig-act { display: flex; gap: 6px; flex-wrap: wrap; }
 @media (max-width: 860px) { .pers-layout { grid-template-columns: 1fr; } .pers-nav { grid-auto-flow: column; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); } .pers-sig { grid-template-columns: 1fr; } }
+.pers-actions select { min-height: 34px; padding: 4px 8px; border: 1px solid var(--control-border); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; }

@@ -295,7 +295,11 @@ export class FillSignSession {
     // a sinistra «Luogo, data», a destra la firma con la dicitura sopra (nell'ultima parte visibile della pagina)
     const c = this.#visibleCenter(pi);
     const cy = c ? pdfToVisivo(box, rot, c[0], c[1])[1] : P.h * 0.75;
-    const vy = Math.max(40, Math.min(P.h - 90, cy));
+    // sotto l'ultima riga di testo della pagina, se c'è posto; altrimenti dove l'utente sta guardando
+    const testi = await this.#textItems(pi);
+    const fondo = testi.reduce((m, it) => Math.max(m, pdfToVisivo(box, rot, it.x, it.y)[1]), 0);
+    const ALTO = 90;
+    const vy = testi.length && fondo + 24 + ALTO < P.h - 20 ? fondo + 24 : Math.max(40, Math.min(P.h - ALTO, cy));
     if (testo) this.board.add({ kind: 'text', pageIndex: pi, text: testo, size, color: this.color, rect: rettangoloDaVisivo(box, rot, 56, vy + 22, Math.max(size * 4, size * 0.6 * (testo.length + 1)), size * LINE_H) }, { select: false });
     const xFirma = P.w * 0.58;
     if (v.dicitura !== '(niente)') this.board.add({ kind: 'text', pageIndex: pi, text: v.dicitura, size, color: this.color, rect: rettangoloDaVisivo(box, rot, xFirma, vy, Math.max(size * 4, size * 0.6 * (v.dicitura.length + 1)), size * LINE_H) }, { select: false });
