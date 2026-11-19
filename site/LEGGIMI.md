@@ -4,6 +4,7 @@ Pagina statica in italiano da pubblicare su GitHub Pages. Dall'alto: la promessa
 italiano. Gratis, per sempre, senza Internet»), cinque vantaggi con icone e il pulsante di download per il computer
 di chi la visita · confronto **per categorie** (Leggio, lettori PDF gratuiti, editor PDF a pagamento) con i punti di
 forza di Leggio evidenziati · «Quanto risparmi» (0 € per ogni postazione e conto fatto con i numeri di chi visita) ·
+«Novità» della 0.3 (`#novita`: firme e sigle salvate, timbri, rubrica con «Compila a nome di», compilazione in serie) ·
 «Pensato per i documenti italiani» con schermate vere (.p7m, fatture XML, Titulus e U-GOV, copia fronte/retro,
 oscuramento con filigrana) · fascia di fiducia · tutte le altre funzioni · tutti i file con le impronte SHA-256 ·
 domande frequenti · contatti. Vicino al pulsante di download c'è il riquadro «Al primo avvio Windows o macOS
@@ -54,6 +55,10 @@ python3 -m http.server 5300 -d site   # poi apri http://localhost:5300/ (va bene
 ```
 
 ## Rifare le schermate
+
+Le schermate della 0.3 (`img/firma-*.webp`, `timbro-ricevuto`, `luogo-data-firma`, `rubrica*`, `compila-a-nome-di`,
+`serie-*`) vengono da `marketing/0.3/`, prese dall'app vera con `scripts/schermate-0.3.mjs` (dati inventati) e
+convertite in WebP 1280 px. Le altre:
 
 ```bash
 npx vite build && mkdir -p dist/fixtures && cp test/fixtures/*.pdf dist/fixtures/
