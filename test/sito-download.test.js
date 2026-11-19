@@ -160,6 +160,8 @@ describe('scegliPrincipale', () => {
   it('Linux → AppImage solo se pubblicata', () => {
     expect(scegliPrincipale('linux', {}).chiavi).toEqual([]);
     expect(scegliPrincipale('linux', { 'linux-appimage': {} }).chiavi).toEqual(['linux-appimage']);
+    // GitHub non risponde (elenco sconosciuto): si propone l'AppImage, non «presto disponibile»
+    expect(scegliPrincipale('linux', null).chiavi).toEqual(['linux-appimage']);
   });
   it('telefoni e sistemi sconosciuti → nessun file', () => {
     expect(scegliPrincipale('mobile').chiavi).toEqual([]);

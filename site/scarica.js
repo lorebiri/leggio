@@ -128,11 +128,12 @@ export function leggiSomme(testo) {
 /**
  * Quali file proporre come pulsante principale.
  * @param {string} sistema  risultato di rilevaSistema
- * @param {object} file     release.file (può essere vuoto se l'API non ha risposto)
+ * @param {object|null} file  release.file; null se l'API non ha risposto (elenco dei file sconosciuto)
  * @param {string} [arch]   architettura dichiarata dal browser ('arm', 'x86'), se nota
  * @returns {{ sistema: string, chiavi: string[] }} chiavi nell'ordine di importanza
  */
 export function scegliPrincipale(sistema, file = {}, arch = '') {
+  const noto = file != null;
   if (sistema === 'windows') return { sistema, chiavi: ['win-installer'] };
   if (sistema === 'mac') {
     // dal browser spesso non si sa che chip ha il Mac: di regola si propone Apple Silicon,
@@ -140,7 +141,8 @@ export function scegliPrincipale(sistema, file = {}, arch = '') {
     const intel = String(arch).toLowerCase().startsWith('x86');
     return { sistema, chiavi: intel ? ['mac-x64-dmg', 'mac-arm64-dmg'] : ['mac-arm64-dmg', 'mac-x64-dmg'] };
   }
-  if (sistema === 'linux') return { sistema, chiavi: file['linux-appimage'] ? ['linux-appimage'] : [] };
+  // senza risposta da GitHub si propone comunque l'AppImage (pubblicata dalla 0.2): il link porta alla pagina delle versioni
+  if (sistema === 'linux') return { sistema, chiavi: !noto || file['linux-appimage'] ? ['linux-appimage'] : [] };
   return { sistema, chiavi: [] };
 }
 

@@ -105,7 +105,7 @@ function pulsante(chiave, release, primario) {
 
 function disegnaPrincipale(sistema, arch, release, errore) {
   const box = $('#principale');
-  const { chiavi } = scegliPrincipale(sistema, release?.file || {}, arch);
+  const { chiavi } = scegliPrincipale(sistema, release ? release.file : null, arch);
   const pezzi = [];
   if (sistema === 'windows') {
     pezzi.push(crea('div', { class: 'cta' }, pulsante('win-installer', release, true),
