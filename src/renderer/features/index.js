@@ -2,6 +2,7 @@
 // Non modificare l'ordine senza motivo: determina l'ordine nella barra rapida a parità di quickOrder.
 import pagine from './pagine/index.js';
 import commenti from './commenti/index.js';
+import personale from './personale/index.js';
 import moduli from './moduli/index.js';
 import conversione from './conversione/index.js';
 import sicurezza from './sicurezza/index.js';
@@ -10,7 +11,7 @@ import avanzati from './avanzati/index.js';
 import aggiornamenti from './aggiornamenti/index.js';
 import archivio from './archivio/index.js';
 
-const AREE = { pagine, commenti, moduli, conversione, sicurezza, modifica, avanzati, aggiornamenti, archivio };
+const AREE = { pagine, commenti, personale, moduli, conversione, sicurezza, modifica, avanzati, aggiornamenti, archivio };
 
 // Ordine della barra rapida deciso dal coordinatore, dalle funzioni più usate in ufficio
 // (vedi docs/CONFRONTO-ACROBAT.md e le priorità dell'utente di riferimento). Gli strumenti

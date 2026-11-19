@@ -587,7 +587,7 @@ function registerFeatureModules() {
   // percorsi che un modulo ha fatto scegliere all'utente (cartelle dell'archivio, dialoghi delle aree)
   const pathAllowed = (p) => loaded.some((m) => { try { return typeof m.pathAllowed === 'function' && m.pathAllowed(p); } catch { return false; } });
   for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.cjs')).sort()) {
-    try { const m = require(path.join(dir, f)); loaded.push(m); m.register({ ipcMain: featureIpc, app, BrowserWindow, dialog, getWindow: () => mainWindow, grants, pathAllowed }); }
+    try { const m = require(path.join(dir, f)); loaded.push(m); m.register({ ipcMain: featureIpc, app, BrowserWindow, dialog, getWindow: () => mainWindow, grants, pathAllowed, log: (lvl, msg, data) => L(lvl, msg, data, f.replace(/\.cjs$/, '')) }); }
     catch (err) { console.error('[leggio] modulo main non caricato:', f, err); L('error', 'modulo main non caricato: ' + f, { error: err.message }); }
   }
 }
