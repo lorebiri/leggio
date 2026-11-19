@@ -56,7 +56,8 @@ export function toCSV(data, sep = ';') {
 }
 export function parseCSVRows(text) {
   const s = guard(text);
-  const firstLine = s.split(/\r?\n/, 1)[0] || '';
+  // il separatore si conta fuori dalle virgolette: «"Cognome, Nome";Città» è separato da «;»
+  const firstLine = (s.split(/\r?\n/, 1)[0] || '').replace(/"(?:[^"]|"")*"/g, '');
   const count = (ch) => firstLine.split(ch).length - 1;
   const sep = count(';') > count(',') ? ';' : count('\t') > count(',') ? '\t' : ',';
   const rows = []; let row = []; let cell = ''; let q = false;

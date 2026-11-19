@@ -20,6 +20,11 @@ describe('CSV', () => {
     const t = tabellaDaCsv('Nome;Note\n"Rossi; Mario";"riga 1\nriga 2 ""citata"""\n');
     expect(t.righe).toEqual([{ Nome: 'Rossi; Mario', Note: 'riga 1\nriga 2 "citata"' }]);
   });
+  it('separatore giusto anche se l\'intestazione ha una virgola tra virgolette', () => {
+    const t = tabellaDaCsv('"Cognome, Nome";Città\n"Rossi, Mario";Roma\n');
+    expect(t.intestazioni).toEqual(['Cognome, Nome', 'Città']);
+    expect(t.righe).toEqual([{ 'Cognome, Nome': 'Rossi, Mario', 'Città': 'Roma' }]);
+  });
   it('BOM UTF-8 e UTF-16', async () => {
     const t = await tabellaDaFile({ name: 'a.csv', bytes: enc('﻿Nome;Città\nNiccolò;Forlì\n') });
     expect(t.intestazioni).toEqual(['Nome', 'Città']);
