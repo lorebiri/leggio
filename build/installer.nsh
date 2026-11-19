@@ -22,7 +22,9 @@
 ; Leggio in «Apri con» e, se l'estensione non ha ancora un programma, come predefinito.
 !macro LeggioEstensione EXT CLASSE
   WriteRegNone SHELL_CONTEXT "Software\Classes\.${EXT}\OpenWithProgids" "${CLASSE}"
-  ReadRegStr $0 SHELL_CONTEXT "Software\Classes\.${EXT}" ""
+  ; HKCR è la vista unita di utente (HKCU) e computer (HKLM): con l'installazione «solo per me» un programma
+  ; installato per tutti (Dike, Acrobat… in HKLM) non si vede in HKCU, e scrivere lì lo scavalcherebbe
+  ReadRegStr $0 HKCR ".${EXT}" ""
   StrCmp $0 "" 0 +2
     WriteRegStr SHELL_CONTEXT "Software\Classes\.${EXT}" "" "${CLASSE}"
   WriteRegStr SHELL_CONTEXT "Software\Classes\Applications\${APP_EXECUTABLE_FILENAME}\SupportedTypes" ".${EXT}" ""

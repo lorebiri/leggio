@@ -97,5 +97,10 @@ describe('associazioni dei file nell\'installer', () => {
     expect(nsh).not.toMatch(/\.p7m[^\n]*Leggio\.PDF/);
     // disinstallazione: si tolgono le chiavi aggiunte
     expect(nsh).toMatch(/customUnInstall/);
+    // il predefinito si scrive solo se l'estensione non ha un programma né per l'utente né per il computer:
+    // il controllo legge HKCR (vista unita), non solo SHELL_CONTEXT (che per «solo per me» è HKCU)
+    const est = nsh.split('!macro LeggioEstensione')[1].split('!macroend')[0];
+    expect(est).toMatch(/ReadRegStr \$0 HKCR "\.\$\{EXT\}" ""/);
+    expect(est).not.toMatch(/ReadRegStr \$0 SHELL_CONTEXT/);
   });
 });
