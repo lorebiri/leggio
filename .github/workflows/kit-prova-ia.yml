@@ -1,0 +1,76 @@
+# Kit per provare l'assistente IA (locale) di Leggio sui PC Windows dell'ufficio.
+# Non pubblica nulla: prepara lo zip come ARTEFATTO del run, da scaricare dalla pagina del run
+# (Actions → «Kit prova IA (Windows)» → ultimo run → «Kit-prova-IA-Windows»). Istruzioni: docs/PROVA-IA-SUL-PC.md
+#
+# Cosa fa:
+#   1. scarica i programmi ufficiali di llama.cpp per Windows (CPU), versione fissata, e ne scrive l'impronta SHA-256;
+#   2. fa girare il kit in modalità -Breve (modello piccolissimo, 2 documenti) su Windows per controllare che funzioni;
+#   3. carica il kit (senza modelli: si scaricano sul PC, con verifica SHA-256).
+name: Kit prova IA (Windows)
+
+on:
+  push:
+    branches: ['claude/ia-**']
+    paths:
+      - 'kit-prova-ia/**'
+      - '.github/workflows/kit-prova-ia.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # stessa versione di llama.cpp usata nello studio di fattibilità (commit 8043748)
+  LLAMA_TAG: b12538
+
+jobs:
+  kit:
+    name: Prepara e prova il kit
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scarica llama.cpp per Windows (CPU)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download $env:LLAMA_TAG -R ggml-org/llama.cpp -p "llama-$env:LLAMA_TAG-bin-win-cpu-x64.zip" -D scaricati
+          $zip = Get-ChildItem scaricati/*.zip | Select-Object -First 1
+          Expand-Archive $zip.FullName -DestinationPath kit-prova-ia/llama -Force
+          # alcune versioni mettono i file in una sottocartella: li riporta in llama/
+          $exe = Get-ChildItem kit-prova-ia/llama -Recurse -Filter llama-server.exe | Select-Object -First 1
+          if ($exe.DirectoryName -ne (Resolve-Path kit-prova-ia/llama).Path) {
+            Get-ChildItem $exe.DirectoryName | Move-Item -Destination kit-prova-ia/llama -Force
+          }
+          if (-not (Test-Path kit-prova-ia/llama/llama-bench.exe)) { throw 'llama-bench.exe mancante' }
+          $h = (Get-FileHash -Algorithm SHA256 $zip.FullName).Hash.ToLower()
+          "llama.cpp $env:LLAMA_TAG (https://github.com/ggml-org/llama.cpp, licenza MIT)`r`n$h  $($zip.Name)" |
+            Out-File -Encoding utf8 kit-prova-ia/llama/VERSIONE.txt
+          Get-Content kit-prova-ia/llama/VERSIONE.txt
+
+      - name: Prova il kit (modalità breve, Windows PowerShell 5.1)
+        shell: cmd
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File kit-prova-ia\prova.ps1 -Breve
+
+      - name: Mostra i risultati della prova
+        if: always()
+        shell: pwsh
+        run: |
+          Get-Content kit-prova-ia/ultimi-risultati.txt -ErrorAction SilentlyContinue
+          Get-Content kit-prova-ia/registro-prova.txt -ErrorAction SilentlyContinue | Select-Object -Last 20
+          Get-Content kit-prova-ia/registro-server.txt -ErrorAction SilentlyContinue | Select-Object -Last 30
+
+      - name: Togli dal kit i file della prova
+        shell: pwsh
+        run: |
+          Remove-Item kit-prova-ia/modelli/*.gguf, kit-prova-ia/registro-*, kit-prova-ia/ultimi-risultati.txt -Force -ErrorAction SilentlyContinue
+          Remove-Item kit-prova-ia/.gitignore, kit-prova-ia/.gitattributes -Force -ErrorAction SilentlyContinue
+          Copy-Item docs/PROVA-IA-SUL-PC.md kit-prova-ia/ISTRUZIONI.md
+          Get-ChildItem -Recurse kit-prova-ia | Measure-Object -Property Length -Sum | ForEach-Object { "Kit: {0:N1} MB" -f ($_.Sum / 1MB) }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kit-prova-IA-Windows
+          path: kit-prova-ia/
+          retention-days: 30

@@ -1,0 +1,3 @@
+Qui la prova salva i modelli scaricati (circa 4,4 GB).
+Se il PC non riesce a scaricarli, copia qui a mano i due file .gguf
+(vedi le istruzioni, passo "Se il download non parte").

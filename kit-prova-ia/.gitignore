@@ -1,0 +1,5 @@
+llama/
+modelli/*.gguf
+modelli/*.part
+registro-*
+ultimi-risultati.txt
