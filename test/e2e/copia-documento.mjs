@@ -143,6 +143,47 @@ try {
   check('un file non valido nel gruppo non ferma gli altri: le due foto buone sono aggiunte', st3.length === 2 && st3.every((s) => /^Documento trovato/.test(s)), st3.join(' | '));
   check('i file scartati sono elencati tutti in un solo messaggio', /nota\.txt/.test(msg3) && /rovinata\.jpg/.test(msg3), msg3);
   await page.keyboard.press('Escape');
+
+  // ---------- 4) due documenti nello stesso PDF: «Togli» una coppia, poi si aggiunge una foto ----------
+  await page.evaluate(async (SC) => {
+    const scan = eval(SC);
+    const app = __leggio; for (const d of [...app.docs]) { d.dirty = false; await app.closeDoc(d); }
+    const L = app.lib.PDFLib; const d = await L.PDFDocument.create();
+    for (const lato of ['fronte', 'retro', 'fronte', 'retro']) {
+      const c = scan(lato, { cx: 100, cy: 120, angolo: 3, fondo: '#fbfbf8' }); const jpg = new Uint8Array(await (await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.9))).arrayBuffer());
+      d.addPage([595.28, 841.89]).drawImage(await d.embedJpg(jpg), { x: 0, y: 0, width: 595.28, height: 841.89 });
+    }
+    await app.openBytes(await d.save(), { name: 'due-documenti.pdf' });
+    await new Promise((r) => setTimeout(r, 800));
+    app.tools.run('copia-documento');
+  }, SCANSIONE);
+  await page.waitForFunction(() => document.querySelectorAll('.cd-coppia').length === 2, null, { timeout: 30000 });
+  await page.locator('.cd-coppia').nth(1).getByRole('button', { name: 'Togli' }).click();
+  await page.evaluate(async (SC) => {
+    const scan = eval(SC); const dt = new DataTransfer();
+    const c = scan('fronte', { cx: 100, cy: 120, angolo: 0, fondo: '#ffffff' }); dt.items.add(new File([await new Promise((r) => c.toBlob(r, 'image/png'))], 'altra.png', { type: 'image/png' }));
+    document.querySelector('.av-pane').dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+  }, SCANSIONE);
+  await page.waitForFunction(() => [...document.querySelectorAll('.cd-coppia select')].some((s) => s.selectedOptions[0]?.textContent === 'altra.png'), null, { timeout: 30000 }).catch(() => {});
+  const coppie4 = await page.$$eval('.cd-coppia', (els) => els.map((e) => [...e.querySelectorAll('select')].map((s) => s.selectedOptions[0]?.textContent)));
+  check('una coppia tolta non ricompare quando si aggiunge un altro file', coppie4.length === 2 && coppie4[1][0] === 'altra.png' && !coppie4.flat().some((t) => /pagina [34]$/.test(t || '')), JSON.stringify(coppie4));
+
+  // ---------- 5) angoli trascinati uno sull'altro: avviso, l'elenco resta intero ----------
+  const man = page.locator('.cd-coppia').first().locator('.cd-maniglia');
+  const pos = async (n) => { const b = await man.nth(n).boundingBox(); return [b.x + b.width / 2, b.y + b.height / 2]; };
+  // i quattro angoli trascinati oltre il bordo superiore dell'anteprima: finiscono tutti sulla stessa linea
+  const sopra = (await page.locator('.cd-coppia').first().locator('.cd-quad').first().boundingBox()).y - 30;
+  for (const n of [0, 1, 2, 3]) {
+    const [x0, y0] = await pos(n);
+    await page.mouse.move(x0, y0); await page.mouse.down(); await page.mouse.move(x0 + (n === 2 ? -20 : n === 3 ? 20 : 0), sopra, { steps: 4 }); await page.mouse.up();
+  }
+  await page.waitForTimeout(300);
+  const st5 = await page.locator('.cd-coppia').first().locator('.cd-stato').first().textContent();
+  const n5 = await page.$$eval('.cd-coppia', (els) => els.length);
+  check('angoli impossibili: avviso nel riquadro, nessuna eccezione, le coppie restano', /Angoli non validi/.test(st5) && n5 === 2, `${st5} — ${n5} coppie`);
+  await page.locator('.cd-coppia').first().getByRole('button', { name: 'Rileva di nuovo' }).first().click();
+  const st5b = await page.locator('.cd-coppia').first().locator('.cd-stato').first().textContent();
+  check('«Rileva di nuovo» rimette a posto gli angoli', /^Documento trovato/.test(st5b), st5b);
   check('nessun errore nella pagina', errors.length === 0, errors.join(' | '));
 } catch (e) { check('collaudo completato', false, e.message); }
 await browser.close();

@@ -3,6 +3,7 @@
 // Tutto in locale: nessun dato esce dal computer. I file di partenza non vengono toccati.
 import { openPane } from '../../avanzati/pane.js';
 import { openPdfJs, destroyPdf } from '../../../core/pdf.js';
+import { fitScale } from '../../../core/printplan.js';
 import { preparaImmagine, eImmagine, ePdf } from './comune.js';
 import { drawWatermark } from '../../sicurezza/codec.js';
 import { testoFiligrana, dataItaliana } from '../../sicurezza/logica/documenti-identita.js';
@@ -18,7 +19,11 @@ const MAX_PAGINE = 40;
 async function renderPdfPage(pdf, i, dpi) {
   const page = await pdf.getPage(i + 1);
   try {
-    const vp = page.getViewport({ scale: dpi / 72 });
+    // pagine enormi (foto salvate in PDF a 1 pixel = 1 punto, 4000 × 3000 pt e oltre): risoluzione limitata, oltre
+    // i limiti Chromium crea un canvas vuoto senza errori e la memoria finisce
+    const base = page.getViewport({ scale: 1 });
+    const limiti = dpi >= DPI_STAMPA ? { maxSide: 8000, maxPixels: 40e6 } : { maxSide: 3000, maxPixels: 8e6 };
+    const vp = page.getViewport({ scale: fitScale(base.width, base.height, dpi / 72, limiti) });
     const c = document.createElement('canvas'); c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
     const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
     await page.render({ canvasContext: ctx, canvas: c, viewport: vp, intent: 'print' }).promise;
@@ -39,7 +44,7 @@ const imageData = (c) => c.getContext('2d').getImageData(0, 0, c.width, c.height
 
 export async function apriCopiaDocumento(app) {
   const { h } = app.ui;
-  const S = { pagine: [], coppie: [], aperti: [], seq: 0, opz: { formato: 'id1', carta: 'A4', scala: 'reale', colore: 'colore', contrasto: false, destinatario: '', finalita: '', data: dataItaliana() } };
+  const S = { pagine: [], coppie: [], scartate: new Set(), aperti: [], seq: 0, opz: { formato: 'id1', carta: 'A4', scala: 'reale', colore: 'colore', contrasto: false, destinatario: '', finalita: '', data: dataItaliana() } };
   Object.assign(S.opz, app.settings.get('copiaDoc.opz', {}), { destinatario: '', finalita: '', data: dataItaliana() });
   const pane = openPane(app, { title: 'Copia documento fronte/retro', subtitle: 'Fronte e retro di una tessera su un solo foglio, in dimensione reale', id: 'copia-documento',
     onClose: () => { for (const p of S.aperti) destroyPdf(p); S.aperti = []; } });
@@ -140,7 +145,8 @@ export async function apriCopiaDocumento(app) {
   const tuttaLaPagina = () => [[0, 0], [1, 0], [1, 1], [0, 1]];
   function finePagine() {
     // coppie: dalle pagine non ancora usate, in ordine (1-2, 3-4…)
-    const usate = new Set(S.coppie.flatMap((c) => c));
+    // le pagine di una coppia tolta dall'utente non vengono riproposte
+    const usate = new Set([...S.coppie.flatMap((c) => c), ...S.scartate]);
     const libere = S.pagine.filter((p) => !usate.has(p.id));
     // una coppia rimasta senza retro prende la prima pagina nuova (es. due foto aggiunte una alla volta)
     const ultima = S.coppie[S.coppie.length - 1];
@@ -152,7 +158,8 @@ export async function apriCopiaDocumento(app) {
   // ---------- coppie ----------
   const pagina = (id) => S.pagine.find((p) => p.id === id);
   function ridisegnaTutto(rilevaDiNuovo) {
-    if (rilevaDiNuovo) for (const p of S.pagine) rileva(p);
+    // cambiando il tipo di documento si cerca di nuovo la tessera, ma gli angoli sistemati a mano restano
+    if (rilevaDiNuovo) for (const p of S.pagine) if (!p.manuale) rileva(p);
     vuoto.hidden = S.pagine.length > 0;
     elenco.innerHTML = '';
     S.coppie.forEach((cp, i) => elenco.append(rigaCoppia(cp, i)));
@@ -169,7 +176,7 @@ export async function apriCopiaDocumento(app) {
     };
     return h('section', { class: 'cd-coppia', 'aria-label': `Coppia ${i + 1}` },
       h('div', { class: 'cd-coppia-tit' }, h('strong', {}, `Documento ${i + 1}`),
-        S.coppie.length > 1 ? h('button', { class: 'btn small', onclick: () => { S.coppie.splice(i, 1); ridisegnaTutto(false); } }, 'Togli') : null),
+        S.coppie.length > 1 ? h('button', { class: 'btn small', onclick: () => { for (const id of S.coppie[i]) if (id != null) S.scartate.add(id); S.coppie.splice(i, 1); ridisegnaTutto(false); } }, 'Togli') : null),
       h('div', { class: 'cd-lati' }, lato(0), lato(1)));
   }
 
@@ -194,8 +201,18 @@ export async function apriCopiaDocumento(app) {
       const f = FORMATI_DOCUMENTO[S.opz.formato];
       ritaglio.height = Math.round(214 * f.h / f.w);
       const src = imageData(pg.anteprima);
-      const out = raddrizza(src, pg.corners.map(([x, y]) => [x * pg.anteprima.width, y * pg.anteprima.height]), ritaglio.width, ritaglio.height);
-      ritaglio.getContext('2d').putImageData(new ImageData(out.data, out.width, out.height), 0, 0);
+      pg.angoliValidi = true;
+      try {
+        const out = raddrizza(src, pg.corners.map(([x, y]) => [x * pg.anteprima.width, y * pg.anteprima.height]), ritaglio.width, ritaglio.height);
+        ritaglio.getContext('2d').putImageData(new ImageData(out.data, out.width, out.height), 0, 0);
+      } catch {
+        // angoli impossibili (tre sulla stessa linea, due sovrapposti): avviso nel riquadro, l'elenco resta usabile
+        pg.angoliValidi = false;
+        const g = ritaglio.getContext('2d'); g.fillStyle = '#eee'; g.fillRect(0, 0, ritaglio.width, ritaglio.height);
+        stato.textContent = 'Angoli non validi: allargali sui quattro angoli della tessera, oppure usa «Rileva di nuovo».';
+        stato.className = 'cd-stato warn';
+        return;
+      }
       stato.textContent = pg.confidenza >= 0.75 ? 'Documento trovato. Controlla il ritaglio; se serve, sposta gli angoli.' : pg.confidenza > 0 ? 'Documento trovato con qualche dubbio: controlla gli angoli.' : 'Documento non trovato: trascina gli angoli sui bordi della tessera.';
       stato.className = 'cd-stato ' + (pg.confidenza >= 0.75 ? 'ok' : 'warn');
     };
@@ -207,20 +224,20 @@ export async function apriCopiaDocumento(app) {
         const d = (e.shiftKey ? 10 : 1) / W; const mv = { ArrowLeft: [-d, 0], ArrowRight: [d, 0], ArrowUp: [0, -d], ArrowDown: [0, d] }[e.key];
         if (!mv) return; e.preventDefault();
         pg.corners[n] = [Math.min(1, Math.max(0, pg.corners[n][0] + mv[0])), Math.min(1, Math.max(0, pg.corners[n][1] + mv[1]))];
-        pg.confidenza = Math.max(pg.confidenza, 0.75); aggiorna();
+        pg.confidenza = Math.max(pg.confidenza, 0.75); pg.manuale = true; aggiorna();
       });
     });
     svg.addEventListener('pointermove', (e) => { if (drag < 0) return; pg.corners[drag] = punto(e); poly.setAttribute('points', pg.corners.map(([x, y]) => `${x * W},${y * H}`).join(' ')); maniglie[drag].setAttribute('cx', pg.corners[drag][0] * W); maniglie[drag].setAttribute('cy', pg.corners[drag][1] * H); });
-    svg.addEventListener('pointerup', () => { if (drag >= 0) { drag = -1; pg.confidenza = Math.max(pg.confidenza, 0.75); aggiorna(); } });
+    svg.addEventListener('pointerup', () => { if (drag >= 0) { drag = -1; pg.confidenza = Math.max(pg.confidenza, 0.75); pg.manuale = true; aggiorna(); } });
     const btn = (t, title, fn) => h('button', { class: 'btn small', title, onclick: () => { fn(); aggiorna(); } }, t);
     const ed = h('div', { class: 'cd-editor' },
       h('div', { class: 'cd-area' }, base, svg),
       h('div', { class: 'cd-destra' }, ritaglio, stato,
         h('div', { class: 'cd-bottoni' },
-          btn('Ruota ↻', 'Ruota il documento di 90° in senso orario', () => { pg.corners = ruotaAngoli(pg.corners, 3); }),
-          btn('Capovolgi', 'Gira il documento di 180°', () => { pg.corners = ruotaAngoli(pg.corners, 2); }),
-          btn('Rileva di nuovo', 'Cerca di nuovo il documento nella pagina', () => rileva(pg)),
-          btn('Tutta la pagina', 'Usa tutta la pagina (se la scansione è già ritagliata)', () => { pg.corners = tuttaLaPagina(); pg.confidenza = 1; }))));
+          btn('Ruota ↻', 'Ruota il documento di 90° in senso orario', () => { pg.corners = ruotaAngoli(pg.corners, 3); pg.manuale = true; }),
+          btn('Capovolgi', 'Gira il documento di 180°', () => { pg.corners = ruotaAngoli(pg.corners, 2); pg.manuale = true; }),
+          btn('Rileva di nuovo', 'Cerca di nuovo il documento nella pagina', () => { rileva(pg); pg.manuale = false; }),
+          btn('Tutta la pagina', 'Usa tutta la pagina (se la scansione è già ritagliata)', () => { pg.corners = tuttaLaPagina(); pg.confidenza = 1; pg.manuale = true; }))));
     aggiorna();
     return ed;
   }
@@ -243,6 +260,10 @@ export async function apriCopiaDocumento(app) {
   async function creaPdf() {
     const coppie = S.coppie.filter((c) => c[0] != null || c[1] != null);
     if (!coppie.length) return;
+    if (coppie.some((c) => c.some((id) => pagina(id)?.angoliValidi === false))) {
+      app.ui.dialog({ title: 'Copia documento', message: 'In una delle pagine gli angoli della tessera non sono validi: sistemali o usa «Rileva di nuovo», poi riprova.', cancelLabel: null, okLabel: 'Ho capito' });
+      return;
+    }
     const L = impagina({ formato: S.opz.formato, carta: S.opz.carta, scala: S.opz.scala });
     const { PDFLib } = app.lib;
     const bytes = await app.ui.withProgress('Creazione della copia del documento…', async (p) => {
