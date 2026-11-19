@@ -7,7 +7,7 @@
 .serie-errore { padding: 0 22px; }
 .serie-intro { margin: 0 0 14px; color: var(--ink-2); line-height: var(--lh); font-size: var(--fs-md); }
 .serie-nota { margin: 6px 0 0; color: var(--muted); font-size: var(--fs-xs); line-height: var(--lh); }
-.serie-ok { margin: 8px 0 0; color: var(--success); font-size: var(--fs-sm); }
+.serie-ok { margin: 0; color: var(--success); font-size: var(--fs-sm); }
 .serie-avviso { margin: 12px 0 0; padding: 10px 12px; border: 1px solid var(--warning-line); background: var(--warning-soft); color: var(--ink); border-radius: var(--radius); font-size: var(--fs-sm); line-height: var(--lh); display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
 .serie-avviso[hidden] { display: none; }
 .serie-riga { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -71,7 +71,7 @@
 .serie-anteprima-chi strong { font-size: var(--fs-sm); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .serie-anteprima-chi small { color: var(--muted); font-size: var(--fs-xs); }
 .serie-anteprima-pagina { min-height: 220px; background: var(--viewer-bg); border-radius: var(--radius); padding: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
-.serie-anteprima-pagina canvas { background: var(--paper); box-shadow: var(--page-shadow); max-height: 420px; object-fit: contain; }
+.serie-anteprima-pagina canvas { background: var(--paper); box-shadow: var(--page-shadow); max-height: 380px; object-fit: contain; }
 .serie-anteprima-pag { display: flex; align-items: center; gap: 8px; font-size: var(--fs-xs); color: var(--ink-2); }
 .serie-avvisi { margin: 0; padding: 8px 12px 8px 28px; background: var(--warning-soft); border: 1px solid var(--warning-line); border-radius: var(--radius); font-size: var(--fs-xs); line-height: var(--lh); color: var(--ink); }
 
@@ -122,3 +122,4 @@
 .serie-zone-conta { color: var(--ink-2); font-size: var(--fs-sm); }
 
 @media (max-width: 900px) { .serie-abbina { grid-template-columns: 1fr; } .serie-abbina-dx { position: static; } }
+.serie-riepilogo { display: flex; flex-direction: column; gap: 10px; }

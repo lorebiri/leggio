@@ -52,9 +52,9 @@ export const platform = {
   },
   /** Sceglie una cartella (solo app). Nel browser restituisce '__download__'. */
   async chooseFolder(title) { return native ? native.invoke('file:choose-folder', { title }) : '__download__'; },
-  /** Scrive più file in una cartella scelta con chooseFolder. */
-  async writeInFolder(folder, name, bytes) {
-    if (native && folder !== '__download__') return native.invoke('file:write-in-folder', { folder, name, bytes });
+  /** Scrive più file in una cartella scelta con chooseFolder. { unico: true } = mai sovrascrivere («nome (2).pdf»). */
+  async writeInFolder(folder, name, bytes, { unico = false } = {}) {
+    if (native && folder !== '__download__') return native.invoke('file:write-in-folder', { folder, name, bytes, unico: !!unico });
     download(bytes, name); return name;
   },
   async readFile(path) { return native ? native.invoke('file:read', path) : null; },

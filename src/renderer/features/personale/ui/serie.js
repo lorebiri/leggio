@@ -155,7 +155,7 @@ export async function avviaSerie(app, ctx, opts = {}) {
       s.disco = { name: f.name, bytes: f.bytes }; nomeDisco.textContent = f.name; segna('disco');
     } }, 'Scegli il PDF…');
     const cont = h('div', { class: 'serie-scelte', role: 'radiogroup', 'aria-label': 'Modulo da compilare' });
-    const segna = (v) => { s.sorgente = v; cont.querySelector(`input[value="${v}"]`).checked = true; aggiornaScelte(cont, 'serie-sorgente'); };
+    const segna = (v) => { s.sorgente = v; cont.querySelector(`input[value="${v}"]`).checked = true; aggiornaScelte(cont, 'serie-sorgente'); if (nonCompilabile) nonCompilabile.hidden = true; };
     cont.append(
       scelta('serie-sorgente', 'doc', s.sorgente, 'Il documento aperto', doc ? doc.name : 'Nessun documento aperto', null, { disabled: !doc, onSelect: segna }),
       scelta('serie-sorgente', 'modello', s.sorgente, 'Un modello salvato', modelli.length ? 'Con i campi già abbinati ai dati' : (archivio.aperto ? 'Non hai ancora modelli: li crei con «Salva come modello» o «Zone da compilare»' : 'L\'archivio personale è chiuso'), modelli.length ? selModello : null, { disabled: !modelli.length, onSelect: segna }),
@@ -343,7 +343,7 @@ export async function avviaSerie(app, ctx, opts = {}) {
         h('div', { class: 'serie-abbina-sx' },
           h('div', { class: 'serie-tabella-wrap' }, h('table', { class: 'serie-tabella' }, h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, s.modello.tipo === 'zone' ? 'Zona' : 'Campo del modulo'), h('th', { scope: 'col' }, 'Dato'))), h('tbody', {}, righe))),
           h('div', { class: 'serie-salva-modello' }, h('label', { class: 'serie-check' }, salva, h('span', {}, s.salvato ? `Aggiorna il modello «${s.salvato.nome}» con questo abbinamento` : 'Salva questo abbinamento come modello')), s.salvato ? null : nomeIn)),
-        h('div', { class: 'serie-abbina-dx' }, navEl, anteprimaEl, avvisiEl)));
+        h('div', { class: 'serie-abbina-dx' }, navEl, avvisiEl, anteprimaEl)));
     pianificaAnteprima(0);
   }
   function pianificaAnteprima(ritardo = 300) { clearTimeout(timerAnteprima); timerAnteprima = setTimeout(() => anteprima().catch((e) => { if (anteprimaEl) anteprimaEl.textContent = 'Anteprima non disponibile: ' + e.message; }), ritardo); }
@@ -542,7 +542,7 @@ export async function avviaSerie(app, ctx, opts = {}) {
           for (const e of esiti) {
             if (!e.bytes) continue;
             try {
-              const percorso = await app.platform.writeInFolder(cartella, e.nome, e.bytes);
+              const percorso = await app.platform.writeInFolder(cartella, e.nome, e.bytes, { unico: true });
               scritti.set(e.n, percorso); ultimoPercorso = percorso;
               if (firmaAltrui) archivio.registra({ firma: firmaAltrui, documento: typeof percorso === 'string' ? percorso : e.nome, pagine: String(paginaEffettiva(pagina ?? -1, s.modello.pagine || 1) + 1), azione: 'compilazione in serie' });
             } catch (err) { falliti.set(e.n, err?.userMessage || err?.message || String(err)); }

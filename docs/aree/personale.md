@@ -103,9 +103,45 @@ Nell'anteprima web e nei test il backend è in memoria / localStorage (`lib/back
 | `mail-merge` | Compilazione in serie | vedi sotto. |
 | `save-template`, `template-zones`, `templates` | Modelli | vedi sotto. |
 
-<!-- RUBRICA -->
+## Rubrica (`rubrica`)
+- Persone ed enti con nome, cognome, ragione sociale, codice fiscale, partita IVA, data e luogo di nascita, PEC, email,
+  telefono, IBAN, codice destinatario SDI, indirizzo (via, CAP, città, provincia, nazione), ruolo, note, gruppi.
+- Validazione (`lib/validatori.js`): codice fiscale con omocodie e controllo del giorno sul mese, partita IVA, IBAN
+  (lunghezza per paese e mod 97), codice SDI (7 caratteri, 6 per la PA, `0000000`, `XXXXXXX` estero), email, PEC (dal
+  dominio), CAP. Sempre **avvisi**, mai blocchi. Dal codice fiscale si propone la data di nascita.
+- Import da CSV ed Excel `.xlsx` (`lib/tabelle.js`, lettore ZIP/XML senza dipendenze: stringhe condivise, rich text, date
+  con stile data → gg/mm/aaaa, codici lunghi senza notazione esponenziale; CSV con separatore riconosciuto, BOM,
+  Windows-1252) con la **finestra di corrispondenza delle colonne** (`ui/importa.js`), e da vCard 2.1/3.0/4.0
+  (`lib/vcard.js`). Doppioni con i contatti già presenti: salta, aggiorna i campi vuoti o aggiungi. Export CSV (tutti,
+  filtrati o selezionati), con protezione dalle formule di Excel.
+- Ricerca istantanea senza accenti (1–4 ms per tasto con 5000 contatti), filtro per gruppo, doppioni segnalati (stesso CF,
+  P.IVA, email/PEC o nome compatibile) e **unibili** (firme, registro e modelli passano al contatto che resta:
+  `archivio.riassegnaProprietario`).
+- **Fatture elettroniche**: aprendo una FatturaPA compare il riquadro «Rubrica» (`ui/fattura-rubrica.js`) per salvare
+  fornitore (gruppo «fornitori») e cliente (gruppo «clienti»); se c'è già (stessa P.IVA o CF) dice «Già in rubrica» e
+  offre di completare i dati mancanti. L'archivio si apre (e chiede la password) solo al clic.
+- **GDPR** nella scheda del contatto: esporta tutti i dati della persona (JSON con firme e registro), cancella la persona
+  e tutto ciò che la riguarda (firme comprese, anche dal backup automatico); «Archivio personale» → «Cosa c'è
+  archiviato» elenca tutto.
+- `ui/scegli.js` → `scegliContatto(app, archivio, { titolo, messaggio, consentiIo, testoIo })` → `'io' | contatto | null`,
+  usato da «Compila a nome di», proprietario delle firme e serie.
 
-<!-- SERIE -->
+## Modelli (`save-template`, `template-zones`, `templates`)
+- Un modello è un modulo con le **corrispondenze** campo → dato (`lib/modelli.js`): `tipo: 'acroform'` (campi del PDF)
+  o `'zone'` (PDF non compilabile con rettangoli disegnati a mano dallo strumento «Zone da compilare», ognuno con dato,
+  dimensione e allineamento). Il PDF di base è salvato cifrato nell'archivio.
+- Riconoscimento: `modelloPerDocumento` confronta l'impronta SHA-256 del PDF e, per i moduli compilabili, l'impronta dei
+  campi (riconosce anche una copia già compilata). «Compila a nome di» e la serie usano le corrispondenze salvate.
+
+## Compilazione in serie (`mail-merge`)
+Procedura guidata (`ui/serie.js`): 1) modulo (documento aperto, modello salvato o PDF dal disco); 2) dati (gruppo o
+selezione della rubrica, oppure CSV/Excel); 3) abbinamento campi ↔ colonne con proposta automatica e **anteprima sul primo
+record** (scorribile); 4) opzioni: firma o timbro su tutti (firme di altre persone: conferma e una voce di registro per
+ogni documento), schema dei nomi (`{cognome}_{nome}_domanda.pdf`, anche `{n}`, `{data}`, `{Nome colonna}`), un PDF per
+persona in una cartella (mai sovrascritti: `nome (2).pdf`) oppure un PDF unico, campi appiattiti a scelta.
+Generazione in un **Web Worker** (`serie.worker.js`, ripiego sul thread principale), a gruppi, con barra e «Interrompi»;
+un record con errori (campi abbinati vuoti, codice fiscale non valido, errori di scrittura) non ferma gli altri e finisce
+nel riepilogo, esportabile in CSV. Misure: 500 record ≈ 4 s nell'app con scrittura su disco, interfaccia sempre reattiva.
 
 ## Test
 - `test/personale-cassaforte.test.js` — cifratura, nessun dato in chiaro, protezione del sistema e ripiego, password
@@ -115,6 +151,11 @@ Nell'anteprima web e nei test il backend è in memoria / localStorage (`lib/back
   firme altrui e registro, timbri, GDPR (esporta/cancella), unione dei backup, campi per «Compila a nome di».
 - `test/moduli-firme-timbri.test.js` — firma da foto (carta colorata, ombra, inchiostro blu, tratto a matita), timbri,
   posizioni sulle pagine ruotate e su formati diversi, profilo dall'archivio.
-- Collaudo nell'app vera: `npx vite build && node test/e2e/archivio-personale.mjs` (migrazione reale dal localStorage,
+- `test/personale-rubrica.test.js`, `test/personale-validatori.test.js`, `test/personale-tabelle.test.js` — ricerca,
+  doppioni e unione, mappatura colonne, import con doppioni, vCard, CSV, fatture; validatori; CSV ed Excel (anche deflate).
+- `test/personale-serie.test.js` — nomi dei file, abbinamenti, controlli per record, 100 PDF veri riletti, PDF unico,
+  zone su PDF non compilabile, firma, interruzione, modelli e riconoscimento.
+- Collaudi nell'app vera: `npx vite build && node test/e2e/serie-100.mjs` (100 record dalla rubrica, `RECORD=500` per 500)
+  e `npx vite build && node test/e2e/archivio-personale.mjs` (migrazione reale dal localStorage,
   file cifrati su disco, conferma e registro di una firma altrui, password al riavvio con dialogo vero, backup esportato e
   reimportato con i dialoghi di sistema).

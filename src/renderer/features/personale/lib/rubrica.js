@@ -70,7 +70,10 @@ const stessiOggetti = (a, b) => { if (a.length !== b.length) return false; for (
  */
 export function cercaContatti(contatti, query = '', { gruppo = '' } = {}) {
   const lista = contatti || [];
-  if (!stessiOggetti(ordineCache.copia, lista)) ordineCache = { copia: lista.slice(), ordinati: ordinaContatti(lista) };
+  if (!stessiOggetti(ordineCache.copia, lista)) {
+    ordineCache = { copia: lista.slice(), ordinati: ordinaContatti(lista) };
+    for (const c of lista) testoRicerca(c); // prepara subito il testo di ricerca: il primo tasto resta istantaneo
+  }
   const parole = paroleRicerca(query);
   if (!parole.length && !gruppo) return ordineCache.ordinati.slice();
   return ordineCache.ordinati.filter((c) => corrisponde(c, parole, gruppo));
@@ -208,17 +211,8 @@ export async function applicaUnione(archivio, unione) {
   const { risultato, tieni, elimina } = unione;
   if (!archivio.contatto(tieni)) throw new Error('Il contatto da tenere non è più in rubrica.');
   const contatto = archivio.salvaContatto({ ...risultato, id: tieni });
-  const nome = nomeContatto(contatto);
   let firmeSpostate = 0; let registroSpostato = 0;
-  for (const id of elimina) {
-    for (const f of archivio.firme({ proprietario: id })) { archivio.aggiornaFirma(f.id, { proprietario: tieni }); firmeSpostate++; }
-    // il registro non ha una funzione di modifica: le voci sono oggetti dell'indice, si aggiornano sul posto
-    // (il salvataggio successivo di eliminaContatto le scrive)
-    for (const r of archivio.registro({ proprietario: id })) { r.proprietario = tieni; r.proprietarioNome = nome; registroSpostato++; }
-    for (const m of archivio.indice?.modelli || []) {
-      if (Array.isArray(m.selezione) && m.selezione.includes(id)) m.selezione = [...new Set(m.selezione.map((x) => (x === id ? tieni : x)))];
-    }
-  }
+  for (const id of elimina) { const r = archivio.riassegnaProprietario(id, tieni); firmeSpostate += r.firme; registroSpostato += r.registro; }
   const eliminati = [];
   for (const id of elimina) { if (await archivio.eliminaContatto(id, { registro: false })) eliminati.push(id); }
   return { contatto: archivio.contatto(tieni) || contatto, eliminati, firmeSpostate, registroSpostato };

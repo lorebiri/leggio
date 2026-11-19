@@ -407,9 +407,14 @@ function registerCoreIpc() {
     cleanStaleTemps(target);
     return true;
   });
-  handle('file:write-in-folder', async (_e, { folder, name, bytes } = {}) => {
+  handle('file:write-in-folder', async (_e, { folder, name, bytes, unico = false } = {}) => {
     const dir = V.absPath(folder, 'cartella');
-    const p = path.join(dir, V.fileName(name));
+    let p = path.join(dir, V.fileName(name));
+    // unico: un file con lo stesso nome già presente non viene sovrascritto («nome (2).pdf», …)
+    if (unico === true) {
+      const ext = path.extname(p); const base = p.slice(0, p.length - ext.length);
+      for (let i = 2; fs.existsSync(p) && i < 10000; i++) p = `${base} (${i})${ext}`;
+    }
     const why = grants.whyNotWriteInFolder(dir, p);
     if (why) throw Object.assign(new Error(why), { userMessage: why });
     V.bytes(bytes);

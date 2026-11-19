@@ -324,6 +324,18 @@ export function createArchivio({ backend, legacyStorage = null, chiediPassword =
       for (const f of firme) { immagini.delete(f.blob); await backend.cancellaBlob(f.blob).catch(() => {}); }
       return res;
     },
+    /** Sposta firme, voci di registro e riferimenti nei modelli da un contatto a un altro (unione dei doppioni). */
+    riassegnaProprietario(daId, aId) {
+      if (!api.contatto(aId) || daId === aId) return { firme: 0, registro: 0 };
+      const nome = nomeContatto(api.contatto(aId));
+      return cambia('firme', (i) => {
+        let firme = 0; let registro = 0;
+        for (const f of i.firme) if (f.proprietario === daId) { f.proprietario = aId; f.modificato = ora(); firme++; }
+        for (const r of i.registro) if (r.proprietario === daId) { r.proprietario = aId; r.proprietarioNome = nome; registro++; }
+        for (const m of i.modelli) if (Array.isArray(m.selezione) && m.selezione.includes(daId)) m.selezione = [...new Set(m.selezione.map((x) => (x === daId ? aId : x)))];
+        return { firme, registro };
+      });
+    },
     /** Tutto ciò che riguarda una persona (diritto di accesso GDPR). Le firme con l'immagine. */
     async datiPersona(id) {
       const c = api.contatto(id); if (!c) return null;
