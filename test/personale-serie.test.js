@@ -64,6 +64,8 @@ describe('nomi dei file', () => {
     expect(pulisciNomeFile('CON')).toBe('_CON');
     expect(pulisciNomeFile('')).toBe('documento');
     expect(pulisciNomeFile('x'.repeat(400)).length).toBe(150);
+    expect(pulisciNomeFile('a'.repeat(149) + '😀b')).toBe('a'.repeat(149)); // mai mezza emoji
+    expect(pulisciNomeFile('COM¹')).toBe('_COM¹');
     expect(nomeFileDaSchema('{inesistente}', {})).toBe('documento.pdf');
     expect(nomeFileDaSchema('Domanda.PDF', {})).toBe('Domanda.pdf');
     expect(nomeFileDaSchema('{cognome}', { cognome: "D'Angelo Gaetà" })).toBe("D'Angelo Gaetà.pdf");

@@ -17,7 +17,8 @@ const cedi = () => new Promise((r) => { coda.push(r); canale.port2.postMessage(0
 
 self.onmessage = async (ev) => {
   const m = ev.data || {};
-  if (m.t === 'interrompi') { stato.aborted = true; ack?.(); return; }
+  // il gruppo in corso lo sblocca solo l'«ack»: arriva quando il thread principale ha finito di scriverne i file
+  if (m.t === 'interrompi') { stato.aborted = true; return; }
   if (m.t === 'ack') { const a = ack; ack = null; a?.(); return; }
   if (m.t !== 'genera') return;
   stato.aborted = false;

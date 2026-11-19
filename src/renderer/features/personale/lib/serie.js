@@ -7,7 +7,7 @@ import { compilaConModello, corrispondenzeModello, valoreChiave, etichettaChiave
 import { todayIt } from '../../moduli/lib/geom.js';
 
 // ------------------------------------------------------------------------------------------- nomi file
-const RISERVATI = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+const RISERVATI = /^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])$/i;
 const MAX_NOME = 150;
 
 /** Ripulisce un nome di file (senza estensione): caratteri non validi, spazi, punti finali, nomi riservati. */
@@ -17,7 +17,7 @@ export function pulisciNomeFile(s) {
     .replace(/\s+/g, ' ')
     .replace(/_[\s_]*_/g, '_') // segnaposto vuoti: «Rossi__domanda» → «Rossi_domanda»
     .replace(/(^[\s._-]+|[\s._-]+$)/g, '');
-  if (n.length > MAX_NOME) n = n.slice(0, MAX_NOME).replace(/[\s._-]+$/, '');
+  if (n.length > MAX_NOME) n = n.slice(0, MAX_NOME).replace(/[\ud800-\udbff]$/, '').replace(/[\s._-]+$/, ''); // mai mezza emoji
   if (!n) n = 'documento';
   if (RISERVATI.test(n.split('.')[0])) n = '_' + n;
   return n;
