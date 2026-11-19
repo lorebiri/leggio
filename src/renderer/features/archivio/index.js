@@ -90,8 +90,9 @@ export default function register(app) {
         h('div', { class: 'ar-home-head' }, h('h2', {}, 'Archivio d\'ufficio'), await linkOggi(h),
           h('button', { class: 'btn', onclick: () => apri({ scheda: 'documenti' }) }, 'Cerca nei documenti')));
       if (inner.querySelector('.ar-home')) return;
-      const hero = inner.querySelector('.home-hero');
-      if (hero) hero.after(sec); else inner.prepend(sec);
+      // dopo i recenti (che restano in alto, subito sotto i pulsanti), altrimenti dopo l'intestazione
+      const anchor = inner.querySelector('.home-recent') || inner.querySelector('.home-hero');
+      if (anchor) anchor.after(sec); else inner.prepend(sec);
     } finally { disegnando = false; }
   }
   new MutationObserver(() => inserisciOggi()).observe(home, { childList: true });

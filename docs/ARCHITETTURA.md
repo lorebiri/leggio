@@ -46,7 +46,9 @@ apertura di file protetti), **@pdf-lib/fontkit**, **tesseract.js** (OCR), **docx
 | Liberare un documento pdf.js | **pdf.js 6 non ha più `pdf.destroy()`**: usare `pdf.loadingTask.destroy()` (il nucleo ripristina comunque `pdf.destroy()` sui documenti che apre) |
 | Librerie | `app.lib.PDFLib`, `app.lib.pdfjs`, `app.lib.openPdfLib(bytes, pw)`, `app.lib.savePdfLib(doc)`, `app.lib.renderPageToCanvas(pdf, i, scale, opts)` |
 | Piattaforma | `app.platform.openFiles({ multiple, filters })`, `saveAs`, `chooseFolder`, `writeInFolder`, `invokeFeature('canale', …)` (→ `feat:canale` nel main) |
-| Impostazioni | `app.settings.get(k, def)`, `app.settings.set(k, v)`; campi extra nel dialogo: `app.bus.on('settings:fields', arr => arr.push({ key, field }))` |
+| Schermata iniziale | pulsanti accanto ad «Apri un PDF»: `app.bus.on('home:actions', ({ recent, actions }) => actions.push({ el }))`; `app.refreshHome()` la ridisegna (se non ci sono documenti aperti) |
+| Chiusura dell'app e recupero | `app:quitting` ({ docs }, prima di chiudere le schede), `app:quit-cancelled`, `app:quit-confirmed` (chiusura regolare confermata); `recovery:collect` (array da riempire con `[{ path, page, active }]` o promesse): documenti da proporre nella domanda «Sessione interrotta» dopo un crash |
+| Impostazioni | `app.settings.get(k, def)`, `app.settings.set(k, v)`, `app.settings.remove(k)`; campi extra nel dialogo: `app.bus.on('settings:fields', arr => arr.push({ key, field }))` |
 | Errori | `app.reportError(err, 'Contesto')`; registro locale: `app.log('info'|'warn'|'error', 'messaggio', dati)` (file ruotato nell'app, Aiuto › Apri cartella dei log) |
 | Leggibilità | `app.setUiPrefs({ large, zoom, labels })`, `app.uiZoom`. Lo zoom dell'interfaccia scala barre, pannelli, finestre, menu e avvisi (non la pagina). Nel CSS delle aree: niente testo sotto 13 px, usare le variabili del tema; in modalità grande `html.ui-large` |
 

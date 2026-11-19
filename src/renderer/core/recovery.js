@@ -1,7 +1,8 @@
 // Salvataggio di recupero automatico: i documenti modificati e non salvati vengono copiati
 // in una cartella di recupero (nell'app: userData/recupero, nel browser: IndexedDB) dopo ogni
 // modifica (con attesa) e periodicamente. Dopo un arresto anomalo, al riavvio Leggio propone
-// di ripristinarli. Chiudendo normalmente (salvando o scartando) le copie vengono eliminate.
+// di ripristinarli (insieme agli altri documenti aperti nella sessione interrotta, se un'area li indica:
+// vedi 'recovery:collect'). Chiudendo normalmente (salvando o scartando) le copie vengono eliminate.
 import { platform } from './platform.js';
 import { h, dialog, toast, formatBytes } from './ui.js';
 import { log } from './guard.js';
@@ -89,20 +90,41 @@ export class Recovery {
     clearInterval(this.interval);
   }
 
-  /** Propone di ripristinare i documenti rimasti da una sessione interrotta. */
+  /**
+   * Propone di ripristinare i documenti di una sessione interrotta (crash, chiusura forzata): è sempre una
+   * domanda, mai un'apertura automatica. Comprende le copie di recupero (modifiche non salvate) e, all'avvio,
+   * i documenti che le aree indicano con l'evento 'recovery:collect' (array di [{path, page, active}] o di
+   * promesse): per esempio quelli che erano aperti nella sessione interrotta, senza modifiche da recuperare.
+   * force: chiamata dal menu Aiuto (solo le copie di recupero, con un avviso se non ce ne sono).
+   */
   async offer(force) {
     const list = (await this.backend.list()) || [];
-    if (!list.length) { if (force) toast('Nessun documento da recuperare'); return; }
+    const extra = [];
+    if (!force) this.app.bus.emit('recovery:collect', extra);
+    const collected = (await Promise.all(extra.map((x) => Promise.resolve(x).catch(() => [])))).flat();
+    const drafts = new Set(list.map((e) => e.path).filter(Boolean));
+    const seen = new Set();
+    // documenti senza bozza: si riaprono dal disco così com'erano salvati
+    const plain = collected.filter((d) => d && typeof d.path === 'string' && !drafts.has(d.path) && !seen.has(d.path) && seen.add(d.path));
+    if (!list.length && !plain.length) { if (force) toast('Nessun documento da recuperare'); return; }
     const fmt = (t) => new Date(t).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' });
+    const n = list.length + plain.length;
+    const intro = plain.length
+      ? `Leggio non è stato chiuso correttamente. Vuoi ripristinare ${n === 1 ? 'il documento' : `i ${n} documenti`} della sessione interrotta?`
+      : (list.length === 1 ? 'Leggio non è stato chiuso correttamente. Questo documento aveva modifiche non salvate:' : `Leggio non è stato chiuso correttamente. Questi ${list.length} documenti avevano modifiche non salvate:`);
     const body = h('div', {},
-      h('p', {}, list.length === 1 ? 'Leggio non è stato chiuso correttamente. Questo documento aveva modifiche non salvate:' : `Leggio non è stato chiuso correttamente. Questi ${list.length} documenti avevano modifiche non salvate:`),
-      h('ul', { class: 'recovery-list' }, list.map((e) => h('li', {}, h('strong', {}, e.name), h('small', {}, ` — ${fmt(e.time)}, ${formatBytes(e.size)}${e.path ? ' · ' + e.path : ''}`)))));
+      h('p', {}, intro),
+      h('ul', { class: 'recovery-list' },
+        list.map((e) => h('li', {}, h('strong', {}, e.name), h('small', {}, ` — modifiche non salvate, ${fmt(e.time)}, ${formatBytes(e.size)}${e.path ? ' · ' + e.path : ''}`))),
+        plain.map((d) => h('li', {}, h('strong', {}, d.path.split(/[\\/]/).pop()), h('small', {}, ` — ${d.path}`)))));
+    const options = [
+      { value: 'restore', label: list.length ? 'Ripristina (quelli con modifiche non salvate si aprono come documenti modificati, da salvare)' : 'Ripristina i documenti' },
+      { value: 'later', label: list.length ? 'Non ora (le copie con le modifiche restano: potrai ripristinarle dal menu Aiuto)' : 'Non ora' },
+    ];
+    if (list.length) options.push({ value: 'discard', label: 'Elimina le copie di recupero' });
     const v = await dialog({
-      title: 'Recupero documenti', body, width: 560, okLabel: 'Continua', cancelLabel: null,
-      fields: [{ name: 'a', type: 'radio', value: 'restore', options: [
-        { value: 'restore', label: 'Ripristina (si aprono come documenti modificati, da salvare)' },
-        { value: 'later', label: 'Non ora (le copie restano, potrai ripristinarle dal menu Aiuto)' },
-        { value: 'discard', label: 'Elimina le copie di recupero' }] }],
+      title: plain.length ? 'Sessione interrotta' : 'Recupero documenti', body, width: 560, okLabel: 'Continua', cancelLabel: null,
+      fields: [{ name: 'a', type: 'radio', value: 'restore', options }],
     });
     const a = v?.a || 'later';
     if (a === 'later') return;
@@ -126,8 +148,22 @@ export class Recovery {
       } catch (err) { log('error', 'recupero: ripristino non riuscito', { name: e.name, error: String(err?.message || err) }); }
     }
     // le vecchie copie si eliminano solo se tutto è stato ripristinato (e ricopiato in questa sessione)
-    if (ok === list.length) for (const s of sessions) await this.backend.discard(s);
-    toast(ok === list.length ? `Ripristinati ${ok} documenti. Ricordati di salvarli.` : `Ripristinati ${ok} documenti su ${list.length}; gli altri restano nella cartella di recupero.`, { kind: ok === list.length ? 'success' : 'warning', timeout: 8000 });
+    if (list.length && ok === list.length) for (const s of sessions) await this.backend.discard(s);
+    let reopened = 0; const missing = [];
+    for (const d of plain) {
+      let f = null;
+      try { f = await platform.readFile(d.path); } catch { f = null; }
+      if (!f) { missing.push(d.path); continue; }
+      if (await this.app.openFile(f, d.page > 1 ? { page: d.page } : {})) reopened++;
+    }
+    const active = collected.find((d) => d?.active)?.path;
+    const activeDoc = active && this.app.docs.find((d) => d.path === active);
+    if (activeDoc) this.app.activate(activeDoc);
+    const parts = [];
+    if (list.length) parts.push(ok === list.length ? `${ok} con modifiche da salvare` : `${ok} su ${list.length} con modifiche (gli altri restano nella cartella di recupero)`);
+    if (plain.length) parts.push(`${reopened} dal disco${missing.length ? ` (${missing.length} non ${missing.length === 1 ? 'trovato' : 'trovati'})` : ''}`);
+    const allOk = ok === list.length && !missing.length;
+    toast(`Documenti ripristinati: ${parts.join(', ')}.${list.length ? ' Ricordati di salvarli.' : ''}`, { kind: allOk ? 'success' : 'warning', timeout: 8000 });
   }
 }
 

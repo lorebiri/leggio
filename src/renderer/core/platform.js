@@ -59,6 +59,10 @@ export const platform = {
   },
   async readFile(path) { return native ? native.invoke('file:read', path) : null; },
   async recent() { return native ? native.invoke('file:recent') : []; },
+  /** Sessione per l'avvio (solo app): stato precedente e inizio della nuova. → { previous, interrupted, withFiles } | null */
+  async sessionStart() { return native ? native.invoke('app:session-start') : null; },
+  /** Aggiorna la sessione salvata dal main (documenti aperti, ultimo documento, chiusura regolare). */
+  async sessionUpdate(state) { return native ? native.invoke('app:session-update', state) : false; },
   async showInFolder(p) { if (native && p) return native.invoke('file:show-in-folder', p); },
   async openExternal(url) { if (native) return native.invoke('app:open-external', url); window.open(url, '_blank', 'noopener'); },
   async info() { return native ? native.invoke('app:info') : { version: 'web', platform: platformName, packaged: false }; },

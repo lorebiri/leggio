@@ -13,9 +13,13 @@ const { pathToFileURL } = require('node:url');
 const { safeWrite, friendly, cleanStaleTemps } = require('./core/safe-write.cjs');
 const { createLogger } = require('./core/log.cjs');
 const V = require('./core/validate.cjs');
+const { createSessionStore } = require('./core/sessione.cjs');
 
 const isMac = process.platform === 'darwin';
 const pendingOpen = [];
+let openedAtLoad = 0; // file passati dal sistema e consegnati al caricamento della finestra (doppio clic, «Apri con»)
+let sessionStore = null;
+const sessions = () => (sessionStore ||= createSessionStore(path.join(app.getPath('userData'), 'sessione.json')));
 let mainWindow = null;
 let logger = null;
 let forceClose = false;
@@ -162,9 +166,10 @@ function createWindow() {
   else mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
 
   const wc = mainWindow.webContents;
-  wc.on('did-start-navigation', (d) => { if (d.isMainFrame && !d.isSameDocument) { newRecoverySession(); rendererGone = false; rendererHung = false; } });
+  wc.on('did-start-navigation', (d) => { if (d.isMainFrame && !d.isSameDocument) { newRecoverySession(); rendererGone = false; rendererHung = false; openedAtLoad = 0; } });
   wc.on('did-finish-load', () => {
     const files = pendingOpen.splice(0);
+    openedAtLoad += files.length;
     for (const p of files) openInRenderer(p);
   });
   wc.on('render-process-gone', async (_e, details) => {
@@ -450,7 +455,16 @@ function registerCoreIpc() {
   });
   handle('app:set-theme', (_e, t) => { if (['system', 'light', 'dark'].includes(t)) nativeTheme.themeSource = t; });
   handle('app:set-title', (_e, t) => { if (mainWindow) mainWindow.setTitle(V.str(t, 'titolo', 500)); });
-  handle('app:confirm-close', () => { forceClose = true; if (mainWindow) mainWindow.close(); });
+  handle('app:confirm-close', async () => {
+    // impostazioni (localStorage) su disco prima di chiudere: Chromium altrimenti le scrive più tardi
+    await session.defaultSession.flushStorageData?.();
+    forceClose = true; if (mainWindow) mainWindow.close();
+  });
+
+  // --- sessione per l'avvio (userData/sessione.json, vedi core/sessione.cjs) ---
+  // withFiles: la finestra si è aperta con dei file (doppio clic, «Apri con»): si apre solo quello
+  handle('app:session-start', () => ({ ...sessions().start(), withFiles: openedAtLoad + pendingOpen.length > 0 }));
+  handle('app:session-update', (_e, s) => { sessions().update(s); return true; });
 
   // --- registro ---
   handle('app:log', (_e, entry = {}) => {

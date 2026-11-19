@@ -141,6 +141,7 @@ li.open > .outline-row .twisty { transform: none; }
 .home-hero h1 { font: 500 var(--fs-3xl)/1.05 var(--font-display); margin: 4px 0 12px; letter-spacing: -.012em; }
 .lead { font-size: 16.5px; color: var(--ink-2); max-width: 37em; margin: 0 auto 24px; line-height: 1.55; text-wrap: pretty; }
 .home-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.home-last small { color: var(--muted); font-weight: 400; max-width: 18em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .drop-hint { color: var(--muted); font-size: var(--fs-xs); margin: 14px 0 0; }
 .home-sec { margin-top: 32px; }
 .home-sec h2 { display: flex; align-items: center; gap: var(--sp-3); margin: 0 0 14px; font: 500 var(--fs-xl)/1.2 var(--font-display); color: var(--ink); letter-spacing: 0; text-transform: none; }

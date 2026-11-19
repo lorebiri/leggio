@@ -674,12 +674,17 @@ export class App {
     }
   }
 
+  /** Ridisegna la schermata iniziale (se non ci sono documenti aperti), es. dopo un cambio dei recenti. */
+  refreshHome() { if (!this.docs.length) this.#renderHome(); }
+
   async #renderHome() {
     const token = (this.homeToken = (this.homeToken || 0) + 1);
     const home = this.el.home;
     const recent = await platform.recent().catch(() => []);
     if (token !== this.homeToken) return; // nel frattempo è partito un altro disegno
     home.innerHTML = '';
+    // pulsanti aggiunti dalle aree accanto ad «Apri un PDF» (es. «Riapri l'ultimo documento»): [{ el, primary }]
+    const extra = []; this.bus.emit('home:actions', { recent, actions: extra });
     const featured = ['create-pdf', 'merge', 'compress', 'ocr', 'sign', 'protect', 'redact', 'convert-word', 'compare', 'fill-sign', 'organize'];
     const quick = featured.map((id) => this.tools.get(id)).filter(Boolean);
     home.append(h('div', { class: 'home-inner' },
@@ -689,12 +694,14 @@ export class App {
         h('p', { class: 'lead' }, 'Leggi, commenta, modifica, firma e converti i PDF. Tutte le funzioni, nessun abbonamento, nessun account. I tuoi file non lasciano mai il computer.'),
         h('div', { class: 'home-actions' },
           h('button', { class: 'btn primary big', onclick: () => this.openDialog(), html: icon('open') + `<span>Apri un PDF</span>` }),
+          ...extra.map((x) => x.el),
           h('button', { class: 'btn big', onclick: () => this.tools.openHub(), html: icon('tools') + '<span>Tutti gli strumenti</span>' })),
         h('p', { class: 'drop-hint' }, 'oppure trascina qui i file')),
+      // i recenti vengono subito dopo i pulsanti: sono il modo normale di riprendere un documento
+      recent.length ? h('section', { class: 'home-sec home-recent' }, h('h2', {}, 'Recenti'),
+        h('ul', { class: 'recent' }, recent.slice(0, 8).map((p) => h('li', {}, h('button', { class: 'recent-item', onclick: () => this.openPath(p) }, h('span', { html: icon('file', 16) }), h('span', { class: 'recent-name' }, p.split(/[\\/]/).pop()), h('small', {}, p)))))) : null,
       quick.length ? h('section', { class: 'home-sec' }, h('h2', {}, 'Strumenti più usati'),
-        h('div', { class: 'home-tools' }, quick.map((t) => h('button', { class: 'home-tool', onclick: () => this.tools.run(t.id) }, h('span', { class: 'hub-ico', html: icon(t.icon || 'tools', 22) }), h('strong', {}, t.name), h('small', {}, t.description || ''))))) : null,
-      recent.length ? h('section', { class: 'home-sec' }, h('h2', {}, 'Recenti'),
-        h('ul', { class: 'recent' }, recent.slice(0, 8).map((p) => h('li', {}, h('button', { class: 'recent-item', onclick: () => this.openPath(p) }, h('span', { html: icon('file', 16) }), h('span', { class: 'recent-name' }, p.split(/[\\/]/).pop()), h('small', {}, p)))))) : null));
+        h('div', { class: 'home-tools' }, quick.map((t) => h('button', { class: 'home-tool', onclick: () => this.tools.run(t.id) }, h('span', { class: 'hub-ico', html: icon(t.icon || 'tools', 22) }), h('strong', {}, t.name), h('small', {}, t.description || ''))))) : null));
   }
 
   #scheduleToolsChanged() {
@@ -902,6 +909,8 @@ export class App {
       this.bus.emit('app:quitting', { docs: [...this.docs] });
       for (const d of [...this.docs]) if (!(await this.closeDoc(d))) { this.bus.emit('app:quit-cancelled'); return; }
       await this.recovery?.cleanExit();
+      // chiusura regolare confermata: le aree salvano ciò che serve alla prossima apertura (es. la sessione)
+      this.bus.emit('app:quit-confirmed');
       window.leggio.invoke('app:confirm-close');
     });
     platform.on('app:notify', ({ kind = 'info', message, title } = {}) => {

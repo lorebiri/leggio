@@ -22,7 +22,15 @@ Tutto funziona senza rete (tranne «Crea PDF da pagina web», che scarica la pag
 | `portfolio` | File del portfolio PDF | Avviso automatico all'apertura dei portfolio. |
 | `accessibility-prepare` | Prepara per l'accessibilità | Titolo, lingua, testo alternativo, struttura di tag di base (H1/H2/P/Figure/Artifact). Non sostituisce la verifica dell'area che fa il controllo. |
 
-Pannelli: `p7m` (Firme .p7m), `fattura` (Fattura elettronica), `layers` (Livelli). I pannelli `p7m` e `fattura` appartengono al loro documento: passando a un altro documento si torna alle miniature. Impostazione: «riapri i documenti dell'ultima volta» (`avanzati.restoreSession`, attiva).
+Pannelli: `p7m` (Firme .p7m), `fattura` (Fattura elettronica), `layers` (Livelli). I pannelli `p7m` e `fattura` appartengono al loro documento: passando a un altro documento si torna alle miniature. Avvio e sessione (`ui/session.js`, logica in `lib/session.js`, stato nel main in `userData/sessione.json` via `electron/core/sessione.cjs`):
+- all'avvio normale Leggio apre la **schermata iniziale** con i recenti subito sotto i pulsanti e **«Riapri l'ultimo documento»** (solo se il file è ancora fra i recenti); nessun documento si riapre da solo;
+- aperto con un file (doppio clic, «Apri con»: il main lo segnala con `withFiles`) si apre **solo quel file**;
+- un documento chiuso dall'utente esce subito dalla sessione e non ricompare più;
+- impostazione «All'avvio riapri i documenti lasciati aperti» (`avanzati.reopenAtStartup`, **disattivata**): riapre solo i documenti ancora aperti alla chiusura regolare;
+- dopo un crash o una chiusura forzata (`running` rimasto vero nel file di sessione) i documenti aperti allora si propongono con la **domanda** «Sessione interrotta» del recupero automatico (evento `recovery:collect`), insieme alle bozze non salvate; mai in automatico;
+- pagina, zoom e scorrimento si ricordano per ogni file (`avanzati.viewMemory`, ultimi 100 file): riaprendolo (recenti, «Riapri», doppio clic) si torna dove si era;
+- migrazione dalla 0.2: `avanzati.session` e `avanzati.restoreSession` si tolgono (il vecchio documento attivo diventa «l'ultimo documento»); i recenti restano.
+Collaudo: `test/avvio-sessione.test.js` e, nell'app vera, `test/e2e/avvio-pulito.mjs` (casi a–d e migrazione).
 
 ## Quinto ciclo: semplicità e niente lavoro perso
 - **Mai perdere lavoro**: ogni risultato creato (pratica di missione e sue parti, fascicolo con indice, PDF da web/Office/scansioni) si apre
