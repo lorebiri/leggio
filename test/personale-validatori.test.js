@@ -56,6 +56,11 @@ describe('partita IVA', () => {
   it('estera: accettata con un avviso', () => {
     expect(validaPartitaIva('DE123456789')).toMatchObject({ valido: true, estera: true, avviso: expect.stringMatching(/estera/) });
   });
+  it('con IT davanti e cifre sbagliate non passa per «estera»', () => {
+    expect(validaPartitaIva('IT0111460100')).toMatchObject({ valido: false, avviso: expect.stringMatching(/11 cifre \(qui 10\)/) });
+    expect(validaPartitaIva('IT01114601007')).toMatchObject({ valido: false, avviso: expect.stringMatching(/ultima cifra/) });
+    expect(validaPartitaIva('IT0111460100').estera).toBeUndefined();
+  });
 });
 
 describe('IBAN', () => {

@@ -161,6 +161,17 @@ describe('campi per «Compila a nome di»', () => {
     expect(valorePerCampo('data', d, '19/11/2026')?.value).toBe('19/11/2026');
     expect(valorePerCampo('importo', d)).toBe(null);
     expect(chiavePerCampo('Codice fiscale')).toBe('codiceFiscale');
+    // nomi dei campi con punti e trattini (ripuliti in spazi) e parole che contengono «vat»
+    expect(chiavePerCampo('C.F.')).toBe('codiceFiscale');
+    expect(chiavePerCampo('E-mail')).toBe('email');
+    expect(chiavePerCampo('indirizzo_e-mail')).toBe('email');
+    expect(chiavePerCampo('C.A.P.')).toBe('cap');
+    expect(chiavePerCampo('P.IVA')).toBe('partitaIva');
+    expect(chiavePerCampo('VAT number')).toBe('partitaIva');
+    expect(chiavePerCampo('VATNumber')).toBe('partitaIva');
+    expect(chiavePerCampo('indirizzo privato')).toBe('indirizzo');
+    expect(chiavePerCampo('Comune di nascita')).toBe('luogoNascita');
+    expect(chiavePerCampo('Comune di residenza')).toBe('citta');
     expect(datiDaProfilo({ nome: 'Io', cognome: 'Me', qualifica: 'Segretaria' })).toMatchObject({ nomeCompleto: 'Io Me', ruolo: 'Segretaria' });
   });
   it('le corrispondenze del modello vincono sul riconoscimento automatico', () => {

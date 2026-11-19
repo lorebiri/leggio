@@ -65,7 +65,7 @@ export function validaPartitaIva(v) {
   let n = String(v ?? '').toUpperCase().replace(/[\s.-]/g, '');
   if (!n) return vuoto();
   if (/^IT\d{11}$/.test(n)) n = n.slice(2);
-  else if (/^[A-Z]{2}[0-9A-Z]{2,13}$/.test(n)) return { valido: true, normalizzato: n, estera: true, avviso: 'Partita IVA estera: Leggio non può controllarla.' };
+  else if (!n.startsWith('IT') && /^[A-Z]{2}[0-9A-Z]{2,13}$/.test(n)) return { valido: true, normalizzato: n, estera: true, avviso: 'Partita IVA estera: Leggio non può controllarla.' };
   if (!/^\d{11}$/.test(n)) return { valido: false, normalizzato: n, avviso: `La partita IVA italiana ha 11 cifre (qui ${n.replace(/\D/g, '').length}).` };
   let s = 0;
   for (let i = 0; i < 10; i++) {
