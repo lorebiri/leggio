@@ -10,8 +10,9 @@ import modifica from './modifica/index.js';
 import avanzati from './avanzati/index.js';
 import aggiornamenti from './aggiornamenti/index.js';
 import archivio from './archivio/index.js';
+import ia from './ia/index.js';
 
-const AREE = { pagine, commenti, personale, moduli, conversione, sicurezza, modifica, avanzati, aggiornamenti, archivio };
+const AREE = { pagine, commenti, personale, moduli, conversione, sicurezza, modifica, avanzati, aggiornamenti, archivio, ia };
 
 // Ordine della barra rapida deciso dal coordinatore, dalle funzioni più usate in ufficio
 // (vedi docs/CONFRONTO-ACROBAT.md e le priorità dell'utente di riferimento). Gli strumenti

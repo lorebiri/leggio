@@ -1,0 +1,34 @@
+/* Area «ia»: assistente IA locale */
+.ia-conf h3 { font-size: 14px; margin: 14px 0 6px; }
+.ia-avviso { margin: 0 0 8px; padding: 8px 10px; border-radius: var(--radius, 6px); background: var(--surface); border: 1px solid var(--border); font-size: 13px; }
+.ia-motivo { font-weight: 600; margin: 0 0 8px; }
+.ia-pc { margin: 0; padding-left: 18px; font-size: 13px; }
+.ia-modelli { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.ia-modello { align-items: flex-start; gap: 8px; }
+.ia-comp { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ia-comp th, .ia-comp td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.ia-ok { color: var(--success, #1a7f37); }
+.ia-azioni { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
+.ia-blocco { color: var(--danger, #b42318); font-size: 13px; }
+.ia-attenzione { color: var(--warning, #9a6700); font-size: 13px; }
+.ia-barra { height: 8px; border-radius: var(--radius-pill, 99px); background: var(--surface); overflow: hidden; border: 1px solid var(--border); margin: 6px 0; flex: 1 1 160px; }
+.ia-barra > div { height: 100%; background: var(--accent); width: 0; }
+.ia-pannello { display: flex; flex-direction: column; gap: 8px; padding: 10px; font-size: 13px; }
+.ia-domanda { width: 100%; resize: vertical; font: inherit; box-sizing: border-box; }
+.ia-stato { min-height: 18px; color: var(--muted, inherit); }
+.ia-risposte { display: flex; flex-direction: column; gap: 10px; }
+.ia-risposta { border: 1px solid var(--border); border-radius: var(--radius, 6px); padding: 8px 10px; background: var(--surface); }
+.ia-q { font-weight: 600; margin-bottom: 4px; }
+.ia-a { white-space: pre-wrap; }
+.ia-vuota { font-style: italic; }
+.ia-fonte { margin-top: 6px; display: flex; align-items: center; gap: 6px; }
+.ia-nota { margin-top: 6px; font-size: 13px; opacity: .8; }
+.ia-archivio { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.ia-cerca { display: flex; gap: 8px; }
+.ia-cerca input { flex: 1; }
+.ia-indice { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ia-risultati { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow: auto; }
+.ia-risultato { text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius, 6px); background: var(--surface); cursor: pointer; font: inherit; color: inherit; }
+.ia-risultato:hover, .ia-risultato:focus-visible { border-color: var(--accent); }
+.ia-meta { opacity: .8; }
+.ia-estratto { opacity: .9; }

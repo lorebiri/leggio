@@ -83,7 +83,7 @@ export const ordina = (punteggi, { soloPositivi = false } = {}) => punteggi.map(
 export function fondi(ordinamenti, k = 60) {
   const s = new Map();
   for (const ord of ordinamenti) ord.forEach((idx, r) => s.set(idx, (s.get(idx) || 0) + 1 / (k + r + 1)));
-  return [...s.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]).map((x) => x[0]);
+  return [...s.entries()].sort((a, b) => b[1] - a[1]).map((x) => x[0]); // a parità resta l'ordine di arrivo (sort stabile)
 }
 
 /** Similarità del coseno tra un vettore e ogni riga (vettori normalizzati o no). */

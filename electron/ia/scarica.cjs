@@ -47,7 +47,7 @@ async function scarica(url, dest, { sha256, byte, fetchFn = globalThis.fetch, on
     try { res = await fetchFn(url, { headers, signal, redirect: 'follow' }); }
     catch (e) {
       if (signal?.aborted) throw new ErroreDownload('Download interrotto.', 'annullato');
-      throw new ErroreDownload('Rete non raggiungibile: controlla la connessione o il proxy dell\'ufficio. ' + (e?.message || ''), 'rete');
+      throw new ErroreDownload('Rete non raggiungibile: controlla la connessione o il proxy dell\'ufficio, poi riprova. ' + (e?.message || ''), 'rete');
     }
     if (res.url && !hostAmmesso(res.url, hostExtra)) throw new ErroreDownload('Il download è stato reindirizzato verso un indirizzo non ammesso.', 'host');
     if (res.status === 416 && byte && gia === byte) { /* già completo */ }
